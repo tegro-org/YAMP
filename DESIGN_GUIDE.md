@@ -59,8 +59,9 @@ A new primitive goes into `presentation/hifi/` with a screenshot test, not into 
   `steeringWheelOnLeft` (driver panel on the driver's side).
 - **Touch targets ≥ 56 dp after scaling**: clamp car control sizes so scale ≤ 1 never yields
   < 56 dp (today 56 → ~31 dp possible at ×0.55).
-- **Tap budget** (D12): from car home → play a pinned/recent folder or switch queue in **1 tap**; any folder
-  in **≤ 3 taps**. Every new car flow states its tap count in its design doc.
+- **Tap budget** (D12): from car home → play a pinned/recent folder in **1 tap**; any folder in **≤ 3 taps**;
+  switch queue in **2 taps** via the queue popup (D26 — done once per trip, not repeatedly). Every new car
+  flow states its tap count in its design doc.
 - Big tiles, short labels (one line, ellipsized), covers over text. No text input while driving except the
   optional filter box (search is a parked-car action).
 - Add a **1920×720** screenshot qualifier for the user's head unit (alongside `w1280dp-h720dp` and

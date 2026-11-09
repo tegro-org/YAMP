@@ -98,12 +98,12 @@ resolver (E6) — today only its pure helpers are tested.
 | Table | Columns |
 |---|---|
 | `queues` | `id`, `name`, `kind` (`STATIC`, `WAVE`, `RADIO`, `MIX` — behaviour), `origin` (where it came from: album, playlist, search… — display only), `seed` (JSON: what a radio/mix was started from), `cursorEntryId`, `positionMs`, `shuffle`, `repeat`, `updatedAt`, `sortOrder` (app-wide; `account` only on `WAVE` queues) |
-| `queue_entries` | `entryId`, `queueId`, `position`, `ref` (`TrackRef` as `"<provider>:<id>"`, C1), `originalPosition` (for un-shuffle), cached title/artist/cover/duration |
+| `queue_entries` | `entryId`, `queueId`, `position`, `ref` (`TrackRef` as `"<provider>:track:<id>"`, C1), `originalPosition` (for un-shuffle), cached title/artist/cover/duration |
 
 - The cursor is an **entry id, never a track lookup** — the same track may be in a queue twice (today's
   lookup by track id breaks on duplicates).
 - `kind` and `origin` replace today's `PlaylistSource`, which mixes behaviour and origin.
-- Entries store a provider-scoped `TrackRef` (`yandex:12345`) from day one so Phase 3 needs no data migration.
+- Entries store a provider-scoped `TrackRef` (`yandex:track:12345`) from day one so Phase 3 needs no data migration.
 - The whole queue is stored (no 50/150 window); a queue is a list of refs, so 5 000 tracks is small.
 - **Write-through** (E3): every mutation (add / remove / reorder / cursor move) is written to Room in the same
   call path; position every 15 s and on pause, queue switch and `onTaskRemoved`.
@@ -154,7 +154,8 @@ resolver (E6) — today only its pure helpers are tested.
 
 - **Module `:core:domain`** (pure Kotlin, D17): neutral `Track`, `Album`, `Artist`, `Playlist`, `Folder`,
   `Genre` with only the fields the UI and player need (C2). Tracks are identified by
-  `TrackRef(provider, id)` (C1); the other entities carry a provider-scoped id of the same form.
+  `TrackRef`; albums, artists, playlists, folders and genres by a ref of the same form
+  `<provider>:<kind>:<id>` (C1, D27) — also used for radio seeds, pins, mix sources and navigation.
 - **`MusicProvider`** per account/server, grouped by capability (C3): `Library`, `Search`, `Favorites`,
   `Radio`, `Folders`, `PlaylistEdit`, `Lyrics`… The UI asks for capabilities and hides what is missing.
   The interface must not assume a server, an account or a network (local files, D25).
@@ -338,12 +339,7 @@ Paths are today's; after Phase 0 the package root is `org/tegro/yamp/`.
 
 ## Open questions
 
-Found while aligning with the approved rules (2026-11-09):
-
-1. **Ids of albums, artists, playlists, folders.** ARCHITECTURE C1 defines `TrackRef` for tracks only. The
-   other entities need a provider-scoped id too — one generic ref type for all, or one type per entity; to be
-   fixed in ARCHITECTURE before Phase 3.
-2. Local files provider — everything in Phase 4d is deliberately deferred.
+1. Local files provider — everything in Phase 4d is deliberately deferred.
 
 ## Resolved questions
 
@@ -353,6 +349,8 @@ Found while aligning with the approved rules (2026-11-09):
 4. Updates → `tegro-org/YAMP` GitHub releases (public repo; own `applicationId` + signing key).
 5. Library → one music library, flat hand-named top folders (see Phase 4b).
 6. Queue switch in the car → the popup, 2 taps; no queue tiles on car home (D26).
+7. Ids → one form for everything, `<provider>:<kind>:<id>` (`yandex:track:12345`, `jellyfin:folder:…`);
+   one server per provider type for now (D27, ARCHITECTURE C1).
 
 ## Decisions
 

@@ -85,12 +85,19 @@ di/                     Hilt modules
 
 ### C. Domain model & providers
 
-- **C1 `TrackRef(provider: ProviderId, id: String)`** is the only track identity in new code.
-  Persisted form: `"<provider>:<id>"` (e.g. `yandex:12345`, `jellyfin:3f2a…`). Used as Room key, file name
-  stem (sanitised), Media3 media id.
-- **C2 Neutral models**: `Track`, `Album`, `Artist`, `Playlist`, `Folder`, `Genre` — only fields the UI and
-  player need (title, artists, album, duration, cover URL, explicit, loudness gain, …). Provider extras stay
-  in the provider.
+- **C1 References** (D27). Every item of a provider is identified by `MediaRef(provider, kind, id)`.
+  Persisted form: `"<provider>:<kind>:<id>"`, `kind` being a lowercase word — `track`, `album`, `artist`,
+  `playlist`, `folder`, `genre`, … — e.g. `yandex:track:12345`, `yandex:playlist:1234567:1003`,
+  `jellyfin:folder:3f2a…`. Parsing splits at the **first two colons**; the rest is the provider's own id,
+  opaque, and may itself contain colons. No letter-prefix or kind-less short forms.
+  `TrackRef` is a reference of kind `track` and the only track identity in new code (queue entries, player,
+  downloads). Refs are used as Room keys, file name stems (sanitised), Media3 media ids, radio/mix seeds,
+  pins and navigation arguments.
+  Known limit: the provider part names the provider type, so **one server per provider type** (a second
+  Jellyfin server would need the provider part extended, e.g. `jellyfin@home`).
+- **C2 Neutral models**: `Track`, `Album`, `Artist`, `Playlist`, `Folder`, `Genre` — each carries its ref
+  (C1) and only the fields the UI and player need (title, artists, album, duration, cover URL, explicit,
+  loudness gain, …). Provider extras stay in the provider.
 - **C3 `MusicProvider` interface** per account/server, grouped by capability (`Library`, `Search`,
   `Favorites`, `Radio`, `Folders`, `PlaylistEdit`, `Lyrics`…). The UI asks `capabilities` and hides what is
   missing — no `if (provider == YANDEX)` in UI code.

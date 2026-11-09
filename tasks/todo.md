@@ -20,8 +20,7 @@
 - [x] Align `docs/multi-source-player.md` with `ARCHITECTURE.md` (`TrackRef`, entry-id cursor, queue kinds,
       several providers at once, `org.tegro.yamp`, phone + car) — done 2026-11-09
 - [x] Queue switch in the car: popup, 2 taps (D26)
-- [ ] Open question: id type for albums/artists/playlists/folders (ARCHITECTURE C1 covers tracks only) —
-      needed from Phase 2 (radio seeds)
+- [x] Ids: one form `<provider>:<kind>:<id>` for tracks, albums, artists, playlists, folders (D27, C1)
 - [ ] **Design canvas** (like Vantage `Design/`): `Design/YAMP.html` + `design-canvas.jsx` / `tweaks-panel.jsx`
       copied from `~/Projects/Tegro/Vantage/Design/`, screens as React artboards in `Design/yamp/*.jsx`,
       Hi-Fi tokens mirrored from `presentation/hifi/HiFi.kt`. Sections:
