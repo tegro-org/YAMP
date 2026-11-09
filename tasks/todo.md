@@ -24,14 +24,19 @@
 - [ ] **Design canvas** (like Vantage `Design/`): `Design/YAMP.html` + `design-canvas.jsx` / `tweaks-panel.jsx`
       copied from `~/Projects/Tegro/Vantage/Design/`, screens as React artboards in `Design/yamp/*.jsx`,
       Hi-Fi tokens mirrored from `presentation/hifi/HiFi.kt`. Sections:
-  - [ ] Tokens & components (colours, type scale, buttons, rows, dialogs, states)
-  - [ ] Existing screens as reference (Home/My Wave, Library, Search, Player, Car) — phone portrait + head unit
-  - [ ] New: queue switcher popup, folder browser (phone + car tiles, A–Z rail, breadcrumbs), Jellyfin sign-in,
-        merged search with provider badges, capability-driven Home/car home, mix builder
+  - [x] Canvas shell `Design/YAMP.html` (branch `feature/design-canvas`), EN/RU switch, `?only=` / `?print=1`
+  - [x] Tokens & components (colours, type scale, buttons, rows, dialogs) — states (empty/error/skeleton) to add
+  - [x] Existing screens as reference — real golden screenshots (phone, landscape, head unit, car)
+  - [x] New: queue switcher (phone sheet, actions, new/delete, player entry, track menu, add to queue; head unit
+        car pill + side panel) — **awaiting the user's review of the style before the rest**
+  - [ ] New: folder browser (phone + car tiles, A–Z rail, breadcrumbs), Jellyfin sign-in, merged search with
+        provider badges, capability-driven Home/car home, mix builder, unavailable-provider states
+  - [ ] Decide: split-screen frame (960×720) for the head unit — does the user run YAMP in split screen?
+  - [ ] Decide: `design-canvas.jsx` is copied from Vantage and has no licence header — OK for the public repo?
   - [ ] Frames: phone 412×915, head unit 1920×720 (user's unit) and the 1280×720 car grid
   - [ ] PDF export script (like Vantage `build-design-*-pdf.sh`)
   - [ ] Canvas = behaviour + layout source of truth; code deviations logged in `kb/design-deviations.md`
-- [ ] Approve `docs/multi-source-player.md`
+- [x] `docs/multi-source-player.md` approved (2026-11-09, D28)
 - [ ] Later: local files provider (D25, Phase 4d) — design discussion (scanning, index, track identity) when
       we get to it; until then only keep the provider abstraction server/account-free
 - [ ] Phase 0 — fork identity (applicationId, name, signing, updater repo, CI for `android/`)

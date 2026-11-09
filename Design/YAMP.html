@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>YAMP — design canvas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700;800&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400..700,0..1,0&display=block" />
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js"
+          integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L"
+          crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"
+          integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm"
+          crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"
+          integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y"
+          crossorigin="anonymous"></script>
+
+  <style>
+    html, body, #root { margin: 0; padding: 0; height: 100%; }
+    body { font-family: Roboto, system-ui, sans-serif; color: #1c1814; background: #f0eee9; -webkit-font-smoothing: antialiased; }
+    .lang-bar { position: fixed; top: 12px; right: 12px; z-index: 50; display: flex; gap: 2px; padding: 3px; border-radius: 10px;
+      background: rgba(255,255,255,0.9); box-shadow: 0 2px 10px rgba(0,0,0,0.15); font: 600 12px Roboto, sans-serif; }
+    .lang-bar button { border: 0; background: transparent; padding: 6px 10px; border-radius: 7px; cursor: pointer; color: #5a5048; font: inherit; }
+    .lang-bar button.on { background: #1c1814; color: #fff; }
+  </style>
+
+  <script src="design-canvas.jsx" type="text/babel"></script>
+  <script src="yamp/hifi.jsx" type="text/babel"></script>
+  <script src="yamp/foundations.jsx" type="text/babel"></script>
+  <script src="yamp/reference.jsx" type="text/babel"></script>
+  <script src="yamp/queues.jsx" type="text/babel"></script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel" data-presets="env,react">
+    // View with the bundled server (no-cache, and it serves the reference screenshots under /shots/):
+    //   python3 Design/serve.py      → http://localhost:5520/YAMP.html   (?lang=ru for Russian)
+    const P = FRAMES.phone, H = FRAMES.head;
+
+    // Every artboard is declared once here; the canvas, the single-artboard view (?only=<id>) and the
+    // print view (?print=1, used by the PDF export) are all rendered from this list.
+    function buildSections() {
+      const shots = (list) => list.map(([file, label, w, h]) => ({ id: 'ref-' + file, label, w, h, el: <Shot file={file} w={w} h={h} /> }));
+      return [
+        { id: 'foundations', title: '1 · Foundations',
+          subtitle: 'Hi-Fi tokens and components as they exist in the app (presentation/hifi). New screens are built only from these. DESIGN_GUIDE §2–§3.',
+          boards: [
+            { id: 'f-tokens', label: 'Tokens — colour, type, space, shape', w: 1180, h: 860, el: <TokensSheet /> },
+            { id: 'f-components', label: 'Components', w: 1180, h: 980, el: <ComponentsSheet /> },
+          ] },
+        { id: 'ref-phone', title: '2 · As built — phone',
+          subtitle: 'The app today (upstream 1.12.2), real test screenshots. This look is the reference for every new screen (D23). Russian only until the localization pass.',
+          boards: shots(REF_PHONE) },
+        { id: 'ref-wide', title: '3 · As built — landscape, head unit, car mode',
+          subtitle: "Real test screenshots. There is no 1920×720 capture yet — the user's head unit size is added as a screenshot qualifier in Phase 1 (ARCHITECTURE I2).",
+          boards: shots(REF_WIDE) },
+        { id: 'queues-phone', title: '4 · Queues — phone (Phase 1)',
+          subtitle: 'Several persistent queues; one is active. Queue button → sheet → tap a queue = switch (2 taps, D26). Hold a queue for rename / duplicate / clear / delete. No full-screen queue manager (D8).',
+          boards: [
+            { id: 'q-home', label: 'Home · queue button (count of queues)', ...sz(P), el: <Frame kind="phone"><PhoneHome /></Frame> },
+            { id: 'q-sheet', label: 'Queues sheet · active queue anodized', ...sz(P), el: <PhoneQueueSheet /> },
+            { id: 'q-menu', label: 'Hold a queue · actions', ...sz(P), el: <PhoneQueueMenu /> },
+            { id: 'q-new', label: 'New queue', ...sz(P), el: <PhoneQueueNew /> },
+            { id: 'q-delete', label: 'Delete queue · confirm', ...sz(P), el: <PhoneQueueDelete /> },
+            { id: 'q-player', label: 'Player · track list of the active queue → Queues', ...sz(P), el: <PhonePlayerQueue /> },
+            { id: 'q-track-menu', label: 'Track menu · queue actions', ...sz(P), el: <PhoneTrackMenu /> },
+            { id: 'q-add', label: 'Add to queue… · pick a queue', ...sz(P), el: <PhoneAddToQueue /> },
+          ] },
+        { id: 'queues-car', title: '5 · Queues — head unit 1920×720 (Phase 1)',
+          subtitle: "Car mode names the active queue in a pill; tapping it opens the panel on the driver's side. Rows are 100 dp. No text input while driving: “+” creates “Queue N”, renaming is a parked / phone action.",
+          boards: [
+            { id: 'qc-home', label: 'Car mode · active queue pill', ...sz(H), el: <Frame kind="head" tint="#8A5A22" glowY="40%"><CarHome /></Frame> },
+            { id: 'qc-panel', label: 'Car mode · queues panel (tap = switch)', ...sz(H), el: <CarQueuePanel /> },
+          ] },
+      ];
+    }
+    function sz(f) { return { w: f.w, h: f.h }; }
+
+    function App() {
+      const q = new URLSearchParams(location.search);
+      const [lang, setLang] = React.useState(q.get('lang') === 'ru' ? 'ru' : 'en');
+      const sections = buildSections();
+      const only = q.get('only');
+
+      // Single artboard at its natural size (used to check and to screenshot one screen).
+      if (only) {
+        const b = sections.flatMap((s) => s.boards).find((x) => x.id === only);
+        document.body.style.background = '#05060A';
+        return <LangCtx.Provider value={lang}>{b ? <div style={{ width: b.w, height: b.h }}>{b.el}</div> : <div style={{ color: '#fff', padding: 20 }}>No artboard “{only}”</div>}</LangCtx.Provider>;
+      }
+      // All artboards stacked, one per block (PDF export).
+      if (q.get('print')) {
+        return (
+          <LangCtx.Provider value={lang}>
+            <div style={{ padding: 24 }}>
+              {sections.map((s) => (
+                <div key={s.id}>
+                  <h2 style={{ font: '700 22px Roboto', margin: '28px 0 4px' }}>{s.title}</h2>
+                  <p style={{ font: '400 13px Roboto', color: '#5a5048', margin: '0 0 16px', maxWidth: 900 }}>{s.subtitle}</p>
+                  {s.boards.map((b) => (
+                    <div key={b.id} data-board={b.id} style={{ breakInside: 'avoid', marginBottom: 28 }}>
+                      <div style={{ font: '600 12px Roboto', color: '#5a5048', marginBottom: 6 }}>{b.label}</div>
+                      <div style={{ width: b.w, height: b.h }}>{b.el}</div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </LangCtx.Provider>
+        );
+      }
+      return (
+        <LangCtx.Provider value={lang}>
+          <div className="lang-bar">
+            <button className={lang === 'en' ? 'on' : ''} onClick={() => setLang('en')}>EN</button>
+            <button className={lang === 'ru' ? 'on' : ''} onClick={() => setLang('ru')}>RU</button>
+          </div>
+          <DesignCanvas>
+            {sections.map((s) => (
+              <DCSection key={s.id} id={s.id} title={s.title} subtitle={s.subtitle}>
+                {s.boards.map((b) => <DCArtboard key={b.id} id={b.id} label={b.label} width={b.w} height={b.h}>{b.el}</DCArtboard>)}
+              </DCSection>
+            ))}
+          </DesignCanvas>
+        </LangCtx.Provider>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

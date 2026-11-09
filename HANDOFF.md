@@ -25,7 +25,7 @@
 
 The user found YandexMusicLite and its fork YML (Ozo-bro), asked for a privacy audit
 (`kb/privacy-audit.md`) and whether more backends (Jellyfin) could be added. The design discussion produced
-`docs/multi-source-player.md` (phases, still **draft, not approved**) and the decisions in
+`docs/multi-source-player.md` (phases; **approved 2026-11-09**, D28) and the decisions in
 `kb/decisions.md`. The doc was first written against YML, then moved here and re-based on upstream
 `fac6af7` ("Current state" section re-checked).
 
@@ -40,9 +40,11 @@ The user found YandexMusicLite and its fork YML (Ozo-bro), asked for a privacy a
    `docs/multi-source-player.md` aligned with them (2026-11-09). Queue switch in the car decided: popup, 2 taps
    (D26); ids are `<provider>:<kind>:<id>` for everything (D27). No open questions left in the doc except
    the deferred local-files design.
-4. **Design canvas** like Vantage's `Design/` (React artboards in an HTML canvas, PDF export) — plan in
-   `tasks/todo.md`. Reuse `design-canvas.jsx` / `tweaks-panel.jsx` from `~/Projects/Tegro/Vantage/Design/`.
-5. Approve / adjust `docs/multi-source-player.md`.
+4. **Design canvas** — in progress on branch `feature/design-canvas`: `Design/YAMP.html` (see
+   `Design/README.md` to view). Done: foundations, as-built reference, queue switcher (phone + head unit).
+   Waiting for the user's review of the style; then folder browser, Jellyfin sign-in, merged search,
+   capability-driven Home, mix builder; PDF export. Checklist in `tasks/todo.md`.
+5. ~~Approve `docs/multi-source-player.md`~~ (approved 2026-11-09, D28).
 6. Phase 0 — fork identity: `applicationId`, app name, signing key (secrets in GitHub Actions, never in the
    repo), updater → `tegro-org/YAMP`, CI for `android/`.
 
