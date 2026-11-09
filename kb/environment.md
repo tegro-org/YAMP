@@ -4,7 +4,9 @@
 
 - **Car head unit:** Android 9 (API 28), 1920×720. Details of the unit are in the user's Personal repo
   (`~/Projects/Arkady/Personal/Головное устройство/kb`). Upstream `minSdk` = 26, so it is supported.
-- Phone(s): Android, used for sign-in confirmation (Yandex device flow) among others.
+- The head unit runs a per-app DPI tool (MonjaroDPI / "Mdpi") that force-stops and restarts apps to apply
+  their DPI — see [head-unit-dpi-app.md](head-unit-dpi-app.md).
+- Phone(s): Android — a first-class target (D23), also used for sign-in confirmation (Yandex device flow).
 
 ## Music servers
 

@@ -2,8 +2,8 @@
 
 ## State
 
-- `main`: initial import `d221875` + docs commits; pushed up to `9e2d2a1`, later commits are local until the
-  user says "push".
+- `main`: initial import `d221875` + docs commits, pushed up to `8ae0180` (the user pushes; never push
+  unasked).
 - `android/` = upstream YandexMusicLite `fac6af7` (1.12.2), untouched (see `kb/upstream/README.md`).
   Still upstream identity (`applicationId`, package, updater → KorenskoyR). **No YAMP release before Phase 0.**
 - **Build verified** (2026-11-09): `sh gradlew assembleDebug testDebugUnitTest` passes (340 tests);
@@ -17,6 +17,9 @@
 
 - **Local files are planned as a third provider** (D25, Phase 4d stub in `docs/multi-source-player.md`).
   Design (scanning etc.) is deliberately deferred — don't design it until the user brings it up.
+
+- **Queue loss on the head unit** is partly caused by the per-app DPI tool, which force-stops apps without any
+  callback (`kb/head-unit-dpi-app.md`): persistence rules and test cases for Phase 1 are there.
 
 ## How we got here (context for a fresh session)
 
@@ -33,9 +36,10 @@ The user found YandexMusicLite and its fork YML (Ozo-bro), asked for a privacy a
    compare + lint.
 3. **Architecture drafts reviewed**; Q1–Q7 decided (`kb/decisions.md` D16–D22: `org.tegro.yamp`, gradual
    modules, NavHost inside `main`, several providers at once with capability-driven UI, full localization,
-   merged search, app-wide queues); `ARCHITECTURE.md` and `DESIGN_GUIDE.md` approved.
-   Remaining: align `docs/multi-source-player.md` with the architecture (`TrackRef`,
-   queue entry ids, write-through persistence, providers simultaneously, phone + car per D23).
+   merged search, app-wide queues); `ARCHITECTURE.md` and `DESIGN_GUIDE.md` approved;
+   `docs/multi-source-player.md` aligned with them (2026-11-09). Queue switch in the car decided: popup, 2 taps
+   (D26); ids are `<provider>:<kind>:<id>` for everything (D27). No open questions left in the doc except
+   the deferred local-files design.
 4. **Design canvas** like Vantage's `Design/` (React artboards in an HTML canvas, PDF export) — plan in
    `tasks/todo.md`. Reuse `design-canvas.jsx` / `tweaks-panel.jsx` from `~/Projects/Tegro/Vantage/Design/`.
 5. Approve / adjust `docs/multi-source-player.md`.
