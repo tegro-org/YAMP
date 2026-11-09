@@ -9,3 +9,7 @@
 - **2026-11-09 — Verify paths before cloning.** The user wrote `~/Projects/Guthub` (typo for `Github`);
   `cd` failed and the clones landed in the current repo. Rule: `ls -d` the target first and chain with
   `&&`, never `;`, after a `cd`.
+
+- **2026-11-09 — "Commit" is not "push".** Asked to "update handoff and commit", I chained `git push` into
+  the same command (blocked by the permission check). Rule: push only when the user literally says "push";
+  never chain push onto a commit.
