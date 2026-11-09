@@ -1,8 +1,7 @@
 # YAMP Architecture
 
-Status: **draft — awaiting approval** (2026-11-09). Part 1 describes the imported code as it is; Part 2 sets
-the rules for YAMP code. Rules marked **[proposed]** become binding once the user approves them; open points
-are at the end.
+Status: **approved** (2026-11-09). Part 1 describes the imported code as it is; Part 2 sets the binding rules
+for YAMP code. Changes to the rules need the user's approval and a row in `kb/decisions.md`.
 
 UI/visual rules: [DESIGN_GUIDE.md](DESIGN_GUIDE.md). Feature plan: [docs/multi-source-player.md](docs/multi-source-player.md).
 
@@ -50,13 +49,13 @@ write-then-rename files, token isolation, Keystore secrets, controller-owned que
 - **A1 Strangler, not rewrite.** Old code keeps working; new structure grows beside it and old parts move in
   only when a feature needs them. No big-bang refactors.
 - **A2 New code follows Part 2; touched old code** is moved toward it only within the feature's scope.
-- **A3 Keep upstream-hot files recognisable** [proposed]. Files that receive Yandex API fixes upstream
+- **A3 Keep upstream-hot files recognisable.** Files that receive Yandex API fixes upstream
   (`YandexMusicApi`, `TrackPreloadManager`, `LosslessSigner`, `EncrawDecryptor`, `EncrawDataSourceFactory`,
   `DownloadInfoParser`, `StreamVariants`, `Md5Helper`, `DeviceSignIn`) are **wrapped, not rewritten**, and
   keep their names, so upstream diffs can still be ported (see `kb/upstream-tracking.md`).
 - **A4 One feature = one design doc** in `docs/` approved before code (global workflow).
 
-### B. Layers, modules and packages [proposed]
+### B. Layers, modules and packages
 
 **Modules (decided Q2 — gradual split):** new code starts in its own Gradle modules — `:core:domain` (pure
 Kotlin/JVM), `:provider:jellyfin`, later `:core:queue` and others as they appear. Existing code stays in `:app`;
@@ -84,7 +83,7 @@ di/                     Hilt modules
   plus "nothing outside `data/provider/yandex/` imports Yandex DTOs" once a screen has been migrated (allow-list
   of not-yet-migrated files, which may only shrink).
 
-### C. Domain model & providers [proposed]
+### C. Domain model & providers
 
 - **C1 `TrackRef(provider: ProviderId, id: String)`** is the only track identity in new code.
   Persisted form: `"<provider>:<id>"` (e.g. `yandex:12345`, `jellyfin:3f2a…`). Used as Room key, file name
@@ -110,7 +109,7 @@ di/                     Hilt modules
   cache, timeouts) with **its own** auth interceptor. No interceptor adds credentials for a host it does not
   own (lesson from the token leak).
 
-### D. Errors & results [proposed]
+### D. Errors & results
 
 - **D1** Provider calls return `Outcome<T>` (`Ok` / `Err(ProviderError)`) with a small sealed
   `ProviderError` (Offline, Unauthorized, NotFound, Server(code), Unsupported, Unknown). Exceptions don't cross
@@ -118,7 +117,7 @@ di/                     Hilt modules
 - **D2** ViewModels map errors to UI state; user-facing text comes from string resources in the UI, not from
   VMs/data (`UiMessage` = resource id + args).
 
-### E. Playback & queues [proposed]
+### E. Playback & queues
 
 - **E1** Keep the proven split: controller decides, engine (2 ExoPlayers, one item each) plays. Don't move the
   queue into ExoPlayer's playlist.
@@ -133,7 +132,7 @@ di/                     Hilt modules
 - **E5** "Replace queue" and "move cursor" are separate operations (today `playTrack` does both).
 - **E6** The controller gets direct tests before it is restructured (fake engine + fake resolver).
 
-### F. Persistence [proposed]
+### F. Persistence
 
 - **F1** Room is the home for new structured state (queues, provider accounts' non-secret data, folder pins).
   `CacheDatabase` moves to Hilt-provided; from now on **every schema change ships a migration + migration test**
@@ -141,14 +140,14 @@ di/                     Hilt modules
 - **F2** Secrets only in `KeystoreStringPreferences`. Never in Room, DataStore, logs or crash reports.
 - **F3** Files: write-then-rename; names derived from `TrackRef` (C1).
 
-### G. DI & concurrency [proposed]
+### G. DI & concurrency
 
 - **G1** New interfaces bound with `@Binds` in modules; new classes stay `@Singleton @Inject constructor`.
 - **G2** New code gets an injected `@AppScope CoroutineScope` and a `DispatcherProvider` (testability). Old
   singletons keep their own scopes until touched.
 - **G3** Main-thread only for ExoPlayer and UI; IO for disk/network via `withContext`.
 
-### H. Presentation [proposed]
+### H. Presentation
 
 - **H1** New screens: one `@Immutable UiState` per screen exposed as `StateFlow`, `LoadState<T>` for lists,
   VM methods as actions. Player state via `NowPlaying` + Locals (as now); progress as `() -> Long`.

@@ -14,7 +14,7 @@ specific to YAMP.
 YAMP ("Yet Another Music Player", a nod to YML) is a **hard fork** of
 [KorenskoyR/YandexMusicLite](https://github.com/KorenskoyR/YandexMusicLite) (GPL-3.0), being turned into a
 multi-source Android player: Yandex Music + Jellyfin, multiple persistent queues, radio/mixes, folder
-browsing, car-first UX. Product design: `docs/multi-source-player.md`.
+browsing; phone and car head unit are both first-class (D23). Product design: `docs/multi-source-player.md`.
 
 ## Repo layout
 

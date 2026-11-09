@@ -21,7 +21,7 @@ Root index. Keep it a tree: this index → section docs. Add new docs under a se
 
 ## Architecture
 
-Rules (draft, awaiting approval): [ARCHITECTURE.md](../ARCHITECTURE.md), [DESIGN_GUIDE.md](../DESIGN_GUIDE.md).
+Rules (both approved 2026-11-09): [ARCHITECTURE.md](../ARCHITECTURE.md), [DESIGN_GUIDE.md](../DESIGN_GUIDE.md).
 As-is analysis of the imported code (upstream `fac6af7`):
 
 - [Layers, DI, data layer](architecture/as-is-data.md) — packages, Hilt, networking, repositories,
