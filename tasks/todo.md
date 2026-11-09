@@ -6,7 +6,9 @@
 - [x] Move design doc `docs/multi-source-player.md` (re-based on upstream)
 - [x] KB: index, environment, decisions, upstream tracking, privacy audit
 - [x] User review → initial commit → push (`d221875`)
-- [ ] Verify the imported project builds from `android/` (`./gradlew assembleDebug`) and tests pass
+- [x] Verify the imported project builds from `android/` (`./gradlew assembleDebug`) and tests pass
+      (2026-11-09: `assembleDebug testDebugUnitTest` OK, 340 tests)
+- [x] Run `verifyRoborazziDebug lintDebug` (what upstream CI runs): 107/107 screenshots unchanged, lint clean
 
 ## Next
 
@@ -25,3 +27,5 @@
   - [ ] Canvas = behaviour + layout source of truth; code deviations logged in `kb/design-deviations.md`
 - [ ] Approve `docs/multi-source-player.md`
 - [ ] Phase 0 — fork identity (applicationId, name, signing, updater repo, CI for `android/`)
+  - [ ] Create YAMP's own release keystore (none exists yet; Release tasks fail without it). Keep it outside
+        the repo, back it up, pass it to CI as secrets (`KEYSTORE_BASE64`, passwords, alias)

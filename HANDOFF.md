@@ -2,10 +2,12 @@
 
 ## State
 
-- `main`: initial import `d221875` (pushed) + architecture/design docs commit (local, not pushed yet).
+- `main`: initial import `d221875` + architecture/design docs commits, all pushed.
 - `android/` = upstream YandexMusicLite `fac6af7` (1.12.2), untouched (see `kb/upstream/README.md`).
   Still upstream identity (`applicationId`, package, updater → KorenskoyR). **No YAMP release before Phase 0.**
-- **Build not verified yet.**
+- **Build verified** (2026-11-09): `sh gradlew assembleDebug testDebugUnitTest` passes (340 tests);
+  `verifyRoborazziDebug lintDebug` passes (107/107 screenshots unchanged, lint clean). See
+  `kb/architecture/build-and-ci.md`.
 - **Architecture docs:** `ARCHITECTURE.md` (as-is summary + rules A–K; Q1–Q7 decided, no open questions),
   `DESIGN_GUIDE.md` (Hi-Fi tokens/components, car rules, localization, patterns for new screens), as-is analysis
   in `kb/architecture/` (data, playback, UI, build/CI). Rules still marked "[proposed]" await confirmation.
@@ -21,8 +23,8 @@ The user found YandexMusicLite and its fork YML (Ozo-bro), asked for a privacy a
 ## Next steps (in this order, user sets the pace)
 
 1. ~~Initial commit + push~~ (done, `d221875`).
-2. **Verify the build**: `cd android && ./gradlew assembleDebug testDebugUnitTest` (Android SDK at
-   `~/sdk/android`). Record anything non-obvious in the KB.
+2. ~~Verify the build~~ (done; `gradlew` is not executable — run `sh gradlew`), incl. screenshot
+   compare + lint.
 3. **Architecture drafts reviewed**; Q1–Q7 decided (`kb/decisions.md` D16–D22: `org.tegro.yamp`, gradual
    modules, NavHost inside `main`, several providers at once with capability-driven UI, full localization,
    merged search, app-wide queues). Remaining: user confirms the other "[proposed]" rules in

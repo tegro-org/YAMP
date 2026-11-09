@@ -1,7 +1,13 @@
 # Build, tests, CI (upstream `fac6af7`)
 
-Gradle project in `android/`. Parent: [ARCHITECTURE.md](../../ARCHITECTURE.md). Nothing here was run yet
-(build not verified).
+Gradle project in `android/`. Parent: [ARCHITECTURE.md](../../ARCHITECTURE.md).
+
+**Verified 2026-11-09** (JDK 21, no `local.properties`, no keystore, `ANDROID_HOME` set):
+`sh gradlew assembleDebug testDebugUnitTest` → BUILD SUCCESSFUL, 14 min cold (Gradle + dependencies
+downloaded), 35 suites / 340 tests, 0 failures; `app-debug.apk` ≈ 32 MB. Plain `testDebugUnitTest` executes
+the screenshot tests but does **not compare** them with the goldens; `sh gradlew verifyRoborazziDebug lintDebug`
+(the upstream CI command) does → 107/107 screenshots unchanged, lint "No issues found" (2 min warm). So the
+goldens render identically on this Linux PC and can serve as the baseline for YAMP changes.
 
 ## Build
 
@@ -58,6 +64,10 @@ DataStore 1.3.0, security-crypto 1.1.0, WorkManager 2.12.0. Tests: JUnit4, Robol
 ## Gotchas
 
 - JDK 21 needed (Robolectric SDK 35).
+- `compileSdk { version = release(37) }` needs the SDK package **`platforms;android-37.0`** (platforms carry a
+  minor version since 36.1; `platforms;android-37` does not exist):
+  `sdkmanager --sdk_root=$ANDROID_HOME "platforms;android-37.0"`. Old command-line tools (9.0) print
+  "SDK XML version 4" / `package.xml parsing problem` warnings — harmless, the install still works.
 - `android/.gitignore` also ignores `CHANGELOG.md`, `PLAN*.md`, `AGENT_MEMORY.md`, `.claude/`, `/release/`.
 - Renaming applicationId breaks LayoutSafetyTest, BaselineProfileGenerator and update compatibility.
 - Updater accepts an update only with the same signer and a higher versionCode.
