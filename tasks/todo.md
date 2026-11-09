@@ -17,8 +17,11 @@
 - [x] User review of the drafts; Q1–Q7 decided (`kb/decisions.md` D16–D22)
 - [x] `ARCHITECTURE.md` approved (2026-11-09, D24); phone is first-class next to the car (D23)
 - [x] `DESIGN_GUIDE.md` approved (2026-11-09, D24)
-- [ ] Align `docs/multi-source-player.md` with `ARCHITECTURE.md` (`TrackRef`, entry-id cursor, queue kinds,
-      several providers at once, `org.tegro.yamp`, phone + car)
+- [x] Align `docs/multi-source-player.md` with `ARCHITECTURE.md` (`TrackRef`, entry-id cursor, queue kinds,
+      several providers at once, `org.tegro.yamp`, phone + car) — done 2026-11-09
+- [x] Queue switch in the car: popup, 2 taps (D26)
+- [ ] Open question: id type for albums/artists/playlists/folders (ARCHITECTURE C1 covers tracks only) —
+      needed from Phase 2 (radio seeds)
 - [ ] **Design canvas** (like Vantage `Design/`): `Design/YAMP.html` + `design-canvas.jsx` / `tweaks-panel.jsx`
       copied from `~/Projects/Tegro/Vantage/Design/`, screens as React artboards in `Design/yamp/*.jsx`,
       Hi-Fi tokens mirrored from `presentation/hifi/HiFi.kt`. Sections:

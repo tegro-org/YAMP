@@ -5,10 +5,17 @@ YandexMusicLite `fac6af7` (1.12.2). Code paths below are relative to `android/ap
 Facts in "Current state" were re-checked against `fac6af7`; deeper details (e.g. how `WaveQueue` stores a
 station) still need reading before Phase 1/2 design is final.
 
+Aligned on 2026-11-09 with the approved [ARCHITECTURE.md](../ARCHITECTURE.md) and
+[DESIGN_GUIDE.md](../DESIGN_GUIDE.md) — their rules are binding and are referenced below by id (C1, E2, …);
+decisions D1–D25 are in `kb/decisions.md` (below, `Dn` always means a decision unless it says "ARCHITECTURE").
+Where this doc and those rules disagree, the rules win.
+
 ## Purpose
 
-Turn YAMP (hard fork of YandexMusicLite) from a Yandex-only client into a player for several music sources (Yandex Music + a personal
-Jellyfin server), with Musicolet-style multiple queues and YouTube-Music-style radio/mixes.
+Turn YAMP (hard fork of YandexMusicLite) from a Yandex-only client into a player for several music sources
+used **at the same time** (Yandex Music + a personal Jellyfin server; later also local files), with
+Musicolet-style multiple queues and YouTube-Music-style radio/mixes — equally good on the phone and on the car
+head unit (D23).
 
 Goals:
 - Several independent, persistent queues (car with wife / driving alone / audiobook), each resuming exactly
@@ -26,14 +33,24 @@ Plex (the abstraction must allow it later, nothing more).
   change (add/remove/reorder/track change) is written to Room immediately; position every 15 s and on
   pause. After process death or reboot the app restores the active queue paused at the saved position.
   Covered by an instrumented test that kills the process.
+  A concrete cause on the user's head unit is the per-app DPI tool, which **force-stops** an app (no lifecycle
+  callback at all) and restarts it, sometimes within a second or two of launch — so nothing may be saved only
+  in a callback, and start-up must never overwrite saved state. Rules and test cases:
+  `kb/head-unit-dpi-app.md`.
 - **Folders in few taps.** Symfonium needs too many taps to reach a folder. Target: from the car home
   screen to playing a pinned/recent folder in **1 tap**, to any folder in the tree in **≤ 3 taps**
   (pinned folder → subfolder → play).
+- **Phone and car are equal targets** (D23). Every new screen is designed for the phone (portrait) and for
+  the head unit; the current Hi-Fi glass look on the phone is the visual reference.
+- **Capabilities, not provider checks** (C3, C7). A feature is shown when at least one signed-in provider
+  supports it; no `if (provider == YANDEX)` in UI code.
+- **Strangler, not rewrite** (A1). Old code keeps working; each phase moves only what it needs.
 
 ## Users' setup
 
 Jellyfin and Airsonic-Advanced both serve **the same music folder on disk**. Both providers can be
-connected, but the same track then exists twice with different ids (see open questions).
+connected, but the same track then exists twice with different ids; duplicates are not merged (see
+"Decisions").
 
 ## Current state (upstream `fac6af7`, 1.12.2)
 
@@ -60,25 +77,38 @@ Each phase is shippable on its own and is reviewed/tested before the next starts
 
 ### Phase 0 — Fork identity (no feature work)
 
-- Own `applicationId`, app name "YAMP", own signing key; updater points at `tegro-org/YAMP` releases.
+- Package and `applicationId` → **`org.tegro.yamp`** (D16), renamed once: touches every file; upstream ports
+  then map `com/korenskoy/yandexmusic/` → `org/tegro/yamp/` (note in `kb/upstream-tracking.md`).
+- App name "YAMP"; updater points at `tegro-org/YAMP` releases.
+- **Own release keystore** — none exists yet. Created once, kept outside the repo and backed up; CI gets it
+  as secrets. Upstream's updater accepts only the same signer, so YAMP builds never update from upstream ones.
 - CI rebuilt for the `android/` subfolder (upstream workflows kept for reference in
   `kb/upstream/github-workflows-reference/`).
-- Package rename (`com.korenskoy.yandexmusic` → own namespace) — decide in the architecture rules
-  (cost: touches every file once; makes later upstream ports slightly harder to compare).
+- Guards that pin the old identity are updated, not deleted (I3): `LayoutSafetyTest` (`app_name`,
+  `applicationId`), `BaselineProfileGenerator` package name.
 - The token leak from the original audit is already fixed upstream — nothing to do.
 
 ### Phase 1 — Multiple queues (Yandex only)
 
-**Model** (Room, new tables; DB migration):
+**First, before restructuring:** `PlaybackController` gets direct tests with a fake engine and a fake stream
+resolver (E6) — today only its pure helpers are tested.
+
+**Model** (E2; Room, new tables, `CacheDatabase` v1 → v2 with a migration and a migration test, F1):
 
 | Table | Columns |
 |---|---|
-| `queues` | `id`, `name`, `kind` (`MANUAL`, `RADIO`, `MIX`, `WAVE`), `seed` (JSON: what a radio/mix was started from), `currentIndex`, `positionMs`, `shuffle`, `repeat`, `updatedAt`, `sortOrder` (app-wide; `account` only on `WAVE` queues) |
-| `queue_items` | `queueId`, `index`, `provider`, `trackId`, `originalIndex` (for un-shuffle), cached title/artist/cover/duration |
+| `queues` | `id`, `name`, `kind` (`STATIC`, `WAVE`, `RADIO`, `MIX` — behaviour), `origin` (where it came from: album, playlist, search… — display only), `seed` (JSON: what a radio/mix was started from), `cursorEntryId`, `positionMs`, `shuffle`, `repeat`, `updatedAt`, `sortOrder` (app-wide; `account` only on `WAVE` queues) |
+| `queue_entries` | `entryId`, `queueId`, `position`, `ref` (`TrackRef` as `"<provider>:<id>"`, C1), `originalPosition` (for un-shuffle), cached title/artist/cover/duration |
 
-- Items store **provider + trackId** from day one so Phase 3 needs no data migration.
-- The whole queue is stored (no 50/150 window); a queue is a list of ids, so 5 000 tracks is small.
-- Position is saved per queue: on switch, on pause, and every 15 s as now.
+- The cursor is an **entry id, never a track lookup** — the same track may be in a queue twice (today's
+  lookup by track id breaks on duplicates).
+- `kind` and `origin` replace today's `PlaylistSource`, which mixes behaviour and origin.
+- Entries store a provider-scoped `TrackRef` (`yandex:12345`) from day one so Phase 3 needs no data migration.
+- The whole queue is stored (no 50/150 window); a queue is a list of refs, so 5 000 tracks is small.
+- **Write-through** (E3): every mutation (add / remove / reorder / cursor move) is written to Room in the same
+  call path; position every 15 s and on pause, queue switch and `onTaskRemoved`.
+- Shuffle becomes a per-queue mode with the original order kept (today it is a one-shot reshuffle); repeat is
+  per queue.
 
 **Behaviour:**
 - One **active** queue drives the player; the others are frozen with their track + position.
@@ -86,9 +116,12 @@ Each phase is shippable on its own and is reviewed/tested before the next starts
   restore) — auto-play if the player was playing.
 - Playing an album/playlist/folder: **always replaces the content of the active queue** (as now). Other
   queues are touched only explicitly ("Add to queue…"). No confirmation dialog.
+- "Replace the queue" and "move the cursor" are separate controller operations (E5; today `playTrack` does
+  both).
 - **Queues are app-wide** (D22): switching or signing out an account never hides a queue. Entries whose
   provider is not signed in show as unavailable and are skipped during playback.
-- My Wave is a queue of kind `WAVE`: one per account, not editable, extended from rotor as now.
+- My Wave is a queue of kind `WAVE`: one per account, not editable, extended from rotor as now — through a
+  per-queue `DynamicSource` (`fetchBatch`, `feedback`; a generalised `WaveQueue`, E4) that only appends.
 - Queue actions: create, rename, delete, reorder, duplicate, clear; track actions: "Add to queue…",
   "Play next", "Add to end".
 - Existing `playback_state.json` is migrated into a first queue called "Main", then deleted.
@@ -96,8 +129,12 @@ Each phase is shippable on its own and is reviewed/tested before the next starts
 **UI:**
 - **No full queue-management screen** (unlike Musicolet). A **queue button** on the home screen, the
   player and car mode opens a **popup**: list of queues (name, current track, progress), tap = switch,
-  "+" = new queue, long-press = rename / delete / clear.
+  "+" = new queue, long-press = rename / delete / clear. Phone: sheet; landscape and car: side panel
+  (DESIGN_GUIDE §8). Switching is 2 taps (open, pick) everywhere, the car included (D26): it is done once
+  per trip, not repeatedly, so no queue tiles on car home.
 - The track list of the active queue stays where it is today (player's "up next").
+- The switcher lives in its own feature package (`presentation/queues/QueueSwitcherHost`, own ViewModel with
+  one `UiState`); `MainScreen` is not grown (H1, H3). Its strings are English + Russian from the start (K1).
 - Android Auto / media browser (`MediaLibraryTree`): a "Queues" folder.
 
 ### Phase 2 — Radio (Yandex), YouTube Music semantics
@@ -107,33 +144,53 @@ Each phase is shippable on its own and is reviewed/tested before the next starts
   `album:<id>`, `artist:<id>` to be verified against the live API. Reuse upstream's station code, do not
   build a second one.
 - **Persistent list:** fetched tracks are appended to the queue and never replaced, so back/forward through
-  history works. When near the end, the next batch is appended (like My Wave today).
+  history works. When near the end, the next batch is appended (like My Wave today) by the queue's
+  `DynamicSource` (E4) — the same mechanism as My Wave, not a second one.
 - **Re-run = new radio:** "Start radio" again on the same seed creates a new queue; the old one stays until
   deleted. Old radios can be auto-pruned (setting: keep last N radios, default 10).
 - Rotor feedback (skip/like) is sent for Yandex radio queues as it is for My Wave.
 
 ### Phase 3 — Provider abstraction
 
-- `domain/model`: neutral `Track`, `Album`, `Artist`, `Playlist`, `Genre`, each with `ProviderRef(provider, id)`.
-- `MusicProvider` interface: account/auth, search, library (playlists, albums, artists), item details,
-  `streamSource(track)` (URL + headers + optional decryptor), favorites, radio, lyrics (optional).
-- Capabilities flag set per provider (`WAVE`, `DISLIKE`, `LYRICS`, `PLAYLIST_EDIT`, …) → UI hides what
-  is not supported.
-- `YandexProvider` wraps today's `YandexMusicApi` + repositories; DTO → domain mappers.
-- UI and `PlaybackController` move from `TrackDetailsDto` to `Track`. This is the largest phase
-  (~34 files); done screen by screen behind the mappers, with screenshot tests kept green.
+- **Module `:core:domain`** (pure Kotlin, D17): neutral `Track`, `Album`, `Artist`, `Playlist`, `Folder`,
+  `Genre` with only the fields the UI and player need (C2). Tracks are identified by
+  `TrackRef(provider, id)` (C1); the other entities carry a provider-scoped id of the same form.
+- **`MusicProvider`** per account/server, grouped by capability (C3): `Library`, `Search`, `Favorites`,
+  `Radio`, `Folders`, `PlaylistEdit`, `Lyrics`… The UI asks for capabilities and hides what is missing.
+  The interface must not assume a server, an account or a network (local files, D25).
+- **`StreamResolver`** per provider (C4): `resolve(ref, prefs)` → `ResolvedStream` (`uri`, `headers`,
+  `quality`, optional decryption, `expiresAt`). The engine receives the final stream and never calls a
+  resolver; Yandex encraw/lossless details stay inside the Yandex provider.
+- **Accounts** become `ProviderAccount(provider, accountId, displayName, serverUrl?)` (C5); secrets stay in
+  the Keystore store. **Networking** per provider: own OkHttp client and own auth interceptor from a shared
+  base — no interceptor adds credentials for a host it does not own (C6).
+- **Errors:** provider calls return `Outcome<T>` with a small `ProviderError`; exceptions don't cross the
+  provider boundary; user-facing text comes from resources (ARCHITECTURE section D, rules D1–D2).
+- **Several providers at once** (C7, D19): Home, Library, Search and car home are composed from the sections
+  of all signed-in providers. My Wave, charts, dislikes come from Yandex; FM radio becomes a built-in "Radio"
+  source that can be switched off. **Search** is one merged list with provider badges (D21).
+- `YandexProvider` wraps today's `YandexMusicApi` + repositories; DTO → domain mappers. Files that receive
+  upstream Yandex fixes are **wrapped, not rewritten**, and keep their names (A3). The Yandex code moves to
+  `:provider:yandex` only after it is wrapped.
+- UI and `PlaybackController` move from `TrackDetailsDto` to `Track`. This is the largest phase (36 files use
+  the DTO, 20 of them in `presentation/`); done screen by screen behind the mappers, with screenshot tests
+  kept green. `ArchitectureTest` gets an allow-list of not-yet-migrated files that may only shrink (B4).
 
 ### Phase 4 — Jellyfin provider
 
+- **Module `:provider:jellyfin`** (D17) with its own OkHttp client and auth interceptor (C6); the Jellyfin
+  token is never sent to another host.
 - **Auth:** server URL + username/password → `POST /Users/AuthenticateByName` → access token stored
-  in `KeystoreStringPreferences` (same as Yandex tokens). Password is not stored.
+  in `KeystoreStringPreferences` (same as Yandex tokens). Password is not stored. Sign-in screen per
+  DESIGN_GUIDE §8 (https enforced with an inline error, password never prefilled).
 - **Browse:** `/Items` (Audio, MusicAlbum, Playlist), `/Artists`, `/MusicGenres`, `/Search/Hints`.
 - **Stream:** `/Audio/{id}/universal` (server picks direct play vs transcode); covers
   `/Items/{id}/Images/Primary`.
 - **Network: HTTPS only.** The server URL must be `https://`; `network_security_config.xml` stays
   unchanged (no cleartext). The certificate must be trusted by Android (e.g. Let's Encrypt via reverse
   proxy); self-signed certificates are not supported.
-- **Downloads/offline:** same `TrackDownloadManager`, plain files (no decryption).
+- **Downloads/offline:** same `TrackDownloadManager`, plain files (no decryption); file names derived from
+  `TrackRef` so ids of different providers cannot collide (F3).
 - Play reporting `/Sessions/Playing*` — optional, so Jellyfin's "recently played" stays correct.
 
 ### Phase 4b — Jellyfin folder browsing
@@ -141,6 +198,10 @@ Each phase is shippable on its own and is reviewed/tested before the next starts
 The collection is organised by folders that tags cannot express (studio albums vs live shows vs
 compilations like "Romantic Collection"), so the physical folder tree is a first-class way to browse.
 
+- **Navigation:** the proper Navigation Compose graph inside `main` is introduced here at the latest (H2,
+  D18); folder levels and artist/album pages of any provider become routes. Layout per DESIGN_GUIDE §8
+  (phone list with breadcrumbs; car tiles). Pinned and recent folders are stored in Room (F1).
+- **Screenshots** include the phone and the user's 1920×720 head unit (I2).
 - **API:** start from the user's music libraries (`/UserViews`), then `/Items?ParentId={id}` level by level;
   folders (`Folder`, `MusicAlbum`) first, then tracks; sort by name, tracks by disc/track number.
   Exact behaviour to be checked against the user's server (Jellyfin's own web UI has the same "Folders" view).
@@ -214,7 +275,10 @@ needs only the ordinary media permissions and no internet permission.
 
 ### Phase 5 — Favorites per provider
 
-- Library → Favorites with tabs Tracks / Albums / Artists / Playlists, for the **active provider**.
+- Library → Favorites with tabs Tracks / Albums / Artists / Playlists, **per signed-in provider** that has
+  the `Favorites` capability. Several providers can be active at once (C7), so there is no single "active
+  provider": each provider's favorites are a separate list, not merged (D11). How the provider is picked
+  (sections or a filter pill) is settled in the design canvas.
 - Yandex: add the missing `likes/albums` and `likes/artists` (read + `add-multiple` / `remove`).
 - Jellyfin: `Filters=IsFavorite`, `/Artists?IsFavorite=true`, `POST/DELETE /UserFavoriteItems/{id}`;
   heart state from `UserData.IsFavorite`.
@@ -234,16 +298,33 @@ needs only the ordinary media permissions and no internet permission.
   Result is a `MIX` queue: the pool is resolved, then shuffled with the rules. **Persistent** like radio;
   "Re-run" creates a new queue. Mix definitions can be saved and re-run later.
 - Live (endless) mixes are a later extension: the seed is already stored, so appending more is possible.
+- The mix builder is a phone/parked action; the car shows saved mixes only (DESIGN_GUIDE §8).
+
+## Cross-cutting work (from the architecture, not tied to one phase)
+
+- **Localization** (K, D20): new and changed screens ship English + Russian with semantic keys from Phase 1
+  on. The ~445 existing Russian strings are migrated in **one mechanical pass as its own task** (K4), not
+  mixed into a feature phase. In-app language choice gets its own design doc (K3).
+- **Module split** (D17): `:core:domain` appears with Phase 3, `:provider:jellyfin` with Phase 4,
+  `:provider:yandex` after the Yandex code is wrapped, `:core:queue` when it pays off.
+- **New-code plumbing** (G): injected app `CoroutineScope` and `DispatcherProvider` for new classes.
+- **Design canvas** (`Design/`): mock-ups of the new screens for phone and head unit before they are built;
+  deviations are logged in `kb/design-deviations.md` (DESIGN_GUIDE §9).
+- **Privacy re-check** (J3) for every change to auth, networking or the updater (Phases 0, 3, 4).
 
 ## Affected files (main ones)
+
+Paths are today's; after Phase 0 the package root is `org/tegro/yamp/`.
 
 - `android/app/build.gradle.kts`, `data/updater/GitHubUpdateManager.kt`, CI workflows (P0)
 - `data/player/PlaybackController.kt`, `PlaybackQueue.kt`, `WaveQueue.kt`, `MediaLibraryTree.kt`, `MusicService.kt`,
   `data/cache/CacheDatabase.kt`, `PlaybackStateStore.kt` (P1–2)
 - `presentation/player/*`, `presentation/car/CarScreen.kt`, `presentation/main/*` (P1–2, P3)
 - `data/network/YandexMusicApi.kt`, `data/dto/ApiModels.kt` (P2, P5)
-- New: `domain/model/*`, `domain/provider/MusicProvider.kt`, `data/provider/yandex/*`,
-  `data/provider/jellyfin/*`, `data/queue/*`, `presentation/queues/*`, `presentation/mix/*`
+- New in `:app`: `data/queue/*`, `data/provider/yandex/*` (until it moves to `:provider:yandex`),
+  `presentation/queues/*`, `presentation/mix/*`
+- New modules: `:core:domain` (models, `TrackRef`, `MusicProvider`, `StreamResolver`, `Outcome`),
+  `:provider:jellyfin`
 
 ## Risks and side effects
 
@@ -257,7 +338,12 @@ needs only the ordinary media permissions and no internet permission.
 
 ## Open questions
 
-None at the moment.
+Found while aligning with the approved rules (2026-11-09):
+
+1. **Ids of albums, artists, playlists, folders.** ARCHITECTURE C1 defines `TrackRef` for tracks only. The
+   other entities need a provider-scoped id too — one generic ref type for all, or one type per entity; to be
+   fixed in ARCHITECTURE before Phase 3.
+2. Local files provider — everything in Phase 4d is deliberately deferred.
 
 ## Resolved questions
 
@@ -266,6 +352,7 @@ None at the moment.
 3. "Play album" → replaces the active queue; switching queues via a popup from a queue button.
 4. Updates → `tegro-org/YAMP` GitHub releases (public repo; own `applicationId` + signing key).
 5. Library → one music library, flat hand-named top folders (see Phase 4b).
+6. Queue switch in the car → the popup, 2 taps; no queue tiles on car home (D26).
 
 ## Decisions
 
