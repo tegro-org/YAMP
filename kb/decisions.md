@@ -6,7 +6,7 @@ Decided with the user on 2026-11-08/09 (design discussion before the repo existe
 | # | Decision | Why |
 |---|---|---|
 | D1 | Hard fork of upstream YandexMusicLite, not of YML; no merges, manual porting | Upstream is the active source and has fixes YML lacks; rework is too deep for merges |
-| D2 | Own standalone repo `tegro-org/YAMP` (not a GitHub fork), code in `android/`, Vantage-style layout | Fork network limits; room for docs/kb/design next to the app |
+| D2 | Own standalone repo `tegro-org/YAMP` (not a GitHub fork), code in `android/`, with `docs/`, `kb/` and `Design/` next to it | Fork network limits; room for docs/kb/design next to the app |
 | D3 | Name **YAMP** (Yet Another Music Player); name clashes exist (hobby projects) but are irrelevant for a personal app with a unique `applicationId` | Nod to YML |
 | D4 | Jellyfin first; Subsonic/Airsonic deferred and likely dropped | Jellyfin is more modern; Airsonic only served as a 2nd-queue workaround |
 | D5 | No de-duplication between Jellyfin and Airsonic | Jellyfin is primary |

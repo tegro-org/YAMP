@@ -13,3 +13,8 @@
 - **2026-11-09 — "Commit" is not "push".** Asked to "update handoff and commit", I chained `git push` into
   the same command (blocked by the permission check). Rule: push only when the user literally says "push";
   never chain push onto a commit.
+
+- **2026-11-09 — Don't name the user's other projects in this repo.** I wrote "copied from <other project>" and
+  "like <other project>'s script" into the README, todo and decisions. The repo is public and those projects are
+  unrelated to it. Rule: docs, comments and commit messages describe YAMP only; where something came from
+  another project of the user's, don't mention it unless the user asks for the reference.
