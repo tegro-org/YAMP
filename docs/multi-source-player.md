@@ -1,6 +1,6 @@
 # Multi-source player: queues, radio, mixes, Jellyfin
 
-Status: **draft — awaiting approval**. Moved from the YML clone on 2026-11-09 and re-based on upstream
+Status: **approved** (2026-11-09, D28). Each phase still gets its own design doc before code where noted. Moved from the YML clone on 2026-11-09 and re-based on upstream
 YandexMusicLite `fac6af7` (1.12.2). Code paths below are relative to `android/app/src/main/java/com/korenskoy/yandexmusic/`.
 Facts in "Current state" were re-checked against `fac6af7`; deeper details (e.g. how `WaveQueue` stores a
 station) still need reading before Phase 1/2 design is final.
