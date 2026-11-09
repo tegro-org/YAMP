@@ -2,19 +2,13 @@
 
 ## State
 
-- Repo `tegro-org/YAMP` (public, GitHub) cloned at `~/Projects/Tegro/YAMP`. It was empty; **nothing is
-  committed or pushed yet** — everything below is untracked, waiting for the user's review and an explicit
-  "commit" / "push".
-- `android/` = upstream YandexMusicLite at `fac6af7` (1.12.2), exported with `git archive` (no upstream
-  history, tags or dependabot branches). Untouched except:
-  - `LICENSE` moved to the repo root;
-  - upstream `README.md` and `.github/` moved to `kb/upstream/` (reference only);
-  - upstream `docs/` (their GitHub Pages site) dropped.
-  - `app/src/test/screenshots/` (~61 MB of Roborazzi golden images) kept as imported.
-- **Not verified yet:** that the project builds from `android/` and the tests pass.
-- The app still has upstream identity: `applicationId = "YandexMusicLite.KorenskoyR"`, package
-  `com.korenskoy.yandexmusic`, updater → `KorenskoyR/YandexMusicLite`. **Do not release a YAMP build
-  before Phase 0** changes this.
+- `main`: initial import `d221875` (pushed) + architecture/design docs commit (local, not pushed yet).
+- `android/` = upstream YandexMusicLite `fac6af7` (1.12.2), untouched (see `kb/upstream/README.md`).
+  Still upstream identity (`applicationId`, package, updater → KorenskoyR). **No YAMP release before Phase 0.**
+- **Build not verified yet.**
+- **Architecture docs:** `ARCHITECTURE.md` (as-is summary + rules A–K; Q1–Q7 decided, no open questions),
+  `DESIGN_GUIDE.md` (Hi-Fi tokens/components, car rules, localization, patterns for new screens), as-is analysis
+  in `kb/architecture/` (data, playback, UI, build/CI). Rules still marked "[proposed]" await confirmation.
 
 ## How we got here (context for a fresh session)
 
@@ -26,18 +20,18 @@ The user found YandexMusicLite and its fork YML (Ozo-bro), asked for a privacy a
 
 ## Next steps (in this order, user sets the pace)
 
-1. **User reviews** the imported tree + docs → initial commit → push.
+1. ~~Initial commit + push~~ (done, `d221875`).
 2. **Verify the build**: `cd android && ./gradlew assembleDebug testDebugUnitTest` (Android SDK at
    `~/sdk/android`). Record anything non-obvious in the KB.
-3. **Architecture & design rules** — the user's explicit next task. Must be **derived from the existing
-   code first** (what upstream actually does: layers `data/ domain/ presentation/ di/`, Hilt modules,
-   Compose screens + ViewModels, Media3 service/controller, Room cache, DTO usage in UI, tests incl.
-   `ArchitectureTest.kt` and screenshot tests), then the target rules for YAMP (provider abstraction,
-   queue model, where Yandex-specific code may live, naming, testing). Output: `ARCHITECTURE.md` (+ a
-   design/UI guide), linked from `kb/README.md`. Open question to raise there: rename the package
-   `com.korenskoy.yandexmusic` or not.
-4. Approve / adjust `docs/multi-source-player.md`.
-5. Phase 0 — fork identity: `applicationId`, app name, signing key (secrets in GitHub Actions, never in the
+3. **Architecture drafts reviewed**; Q1–Q7 decided (`kb/decisions.md` D16–D22: `org.tegro.yamp`, gradual
+   modules, NavHost inside `main`, several providers at once with capability-driven UI, full localization,
+   merged search, app-wide queues). Remaining: user confirms the other "[proposed]" rules in
+   `ARCHITECTURE.md` / `DESIGN_GUIDE.md`; then align `docs/multi-source-player.md` with them (`TrackRef`,
+   queue entry ids, write-through persistence, providers simultaneously).
+4. **Design canvas** like Vantage's `Design/` (React artboards in an HTML canvas, PDF export) — plan in
+   `tasks/todo.md`. Reuse `design-canvas.jsx` / `tweaks-panel.jsx` from `~/Projects/Tegro/Vantage/Design/`.
+5. Approve / adjust `docs/multi-source-player.md`.
+6. Phase 0 — fork identity: `applicationId`, app name, signing key (secrets in GitHub Actions, never in the
    repo), updater → `tegro-org/YAMP`, CI for `android/`.
 
 ## Notes

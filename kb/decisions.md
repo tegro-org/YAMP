@@ -11,7 +11,7 @@ Decided with the user on 2026-11-08/09 (design discussion before the repo existe
 | D4 | Jellyfin first; Subsonic/Airsonic deferred and likely dropped | Jellyfin is more modern; Airsonic only served as a 2nd-queue workaround |
 | D5 | No de-duplication between Jellyfin and Airsonic | Jellyfin is primary |
 | D6 | Multiple persistent queues (Musicolet-style) — the key feature; queue must never be lost on process death | Main reason for the project |
-| D7 | Queues follow the Yandex account logic (per account) | Same as today's session behaviour |
+| D7 | ~~Queues follow the Yandex account logic (per account)~~ — **superseded by D22** | — |
 | D8 | Playing an album/folder replaces the active queue; queue switching via a popup from a queue button (home, player, car) — no full-screen queue manager | Simple; Musicolet's screen is overkill |
 | D9 | Radio/mixes follow YouTube Music: generated list is persistent (go back/forward); re-run = new queue | User preference |
 | D10 | Jellyfin radio = Instant Mix first | Never tried; evaluate before building alternatives |
@@ -20,3 +20,10 @@ Decided with the user on 2026-11-08/09 (design discussion before the repo existe
 | D13 | Jellyfin over HTTPS only | Security; no cleartext exceptions |
 | D14 | Updates from `tegro-org/YAMP` GitHub Releases; own `applicationId` + signing key | Independence from upstream update channel |
 | D15 | Don't decompile closed-source players (Musicolet, Symfonium) | Not needed, licensing |
+| D16 | Package + `applicationId` `org.tegro.yamp`, renamed once in Phase 0 | Own identity; tegro.org domain |
+| D17 | Gradual Gradle module split: new code in modules (`:core:domain`, `:provider:jellyfin`…), Yandex code moves out after wrapping | Compiler-enforced boundaries, faster builds, without a big move |
+| D18 | Proper Navigation Compose graph inside `main` (replaces in-VM catalog stack), at the latest with the folder browser | Current hand-built frame doesn't scale to new screens |
+| D19 | Several providers signed in at once; UI sections shown per capabilities of the configured providers; upstream extras (FM radio, charts, My Wave) kept | User idea 2026-11-09 |
+| D20 | Full localization: English default + Russian, more later; semantic keys; in-app language choice; existing strings migrated in one pass | Proper i18n, gradual like the rest |
+| D21 | Search across providers: one merged result list with provider badges | User choice |
+| D22 | Queues are app-wide (not per account); entries of a signed-out provider shown unavailable and skipped; My Wave, likes, Yandex playlists stay per account | Yandex has no named multi-queue concept; account-bound queues would hide queues on account switch and fail with Jellyfin-only |

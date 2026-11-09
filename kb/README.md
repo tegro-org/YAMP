@@ -21,5 +21,13 @@ Root index. Keep it a tree: this index → section docs. Add new docs under a se
 
 ## Architecture
 
-- _Not written yet._ Architecture & design rules are the next task (see `HANDOFF.md`); they must be
-  derived from the existing code first.
+Rules (draft, awaiting approval): [ARCHITECTURE.md](../ARCHITECTURE.md), [DESIGN_GUIDE.md](../DESIGN_GUIDE.md).
+As-is analysis of the imported code (upstream `fac6af7`):
+
+- [Layers, DI, data layer](architecture/as-is-data.md) — packages, Hilt, networking, repositories,
+  persistence, accounts, downloads, concurrency, Yandex leaks.
+- [Playback](architecture/as-is-playback.md) — controller/engine split, queue model, persistence/restore,
+  stream resolution, media session, recovery, seams for multi-queue and providers.
+- [Presentation & design system](architecture/as-is-ui.md) — navigation, VM/state patterns, Hi-Fi tokens and
+  primitives, adaptive/car layout, strings, accessibility, smells.
+- [Build, tests, CI](architecture/build-and-ci.md) — versions, signing, test suites and guards, CI, gotchas.

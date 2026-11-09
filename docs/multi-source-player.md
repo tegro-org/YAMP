@@ -40,7 +40,7 @@ connected, but the same track then exists twice with different ids (see open que
 - **One queue.** `data/player/PlaybackController.kt` (1296 lines) holds the current playlist and source
   (`PlaylistSource`: LIBRARY, VIBE, SEARCH, TRENDS, RADIO (FM), NONE, …). Pure queue logic in
   `PlaybackQueue.kt`; the wave/station queue is split out into `WaveQueue.kt`.
-- **Persistence** is one JSON file per account (`data/cache/PlaybackStateStore.kt`): source, a window of
+- **Persistence** is one global JSON file tagged with the account folder (`data/cache/PlaybackStateStore.kt`): source, a window of
   50 tracks before / 150 after the current one (`PlaybackQueue.SNAPSHOT_*`), current track id, position.
 - **Room** (`data/cache/CacheDatabase.kt`) already exists: `tracks`, `list_items`, `cache_values`.
 - **Yandex types everywhere.** DTOs from `data/dto/` are imported in 38 files, 20 of them in
@@ -73,7 +73,7 @@ Each phase is shippable on its own and is reviewed/tested before the next starts
 
 | Table | Columns |
 |---|---|
-| `queues` | `id`, `name`, `kind` (`MANUAL`, `RADIO`, `MIX`, `WAVE`), `seed` (JSON: what a radio/mix was started from), `currentIndex`, `positionMs`, `shuffle`, `repeat`, `updatedAt`, `sortOrder`, `account` |
+| `queues` | `id`, `name`, `kind` (`MANUAL`, `RADIO`, `MIX`, `WAVE`), `seed` (JSON: what a radio/mix was started from), `currentIndex`, `positionMs`, `shuffle`, `repeat`, `updatedAt`, `sortOrder` (app-wide; `account` only on `WAVE` queues) |
 | `queue_items` | `queueId`, `index`, `provider`, `trackId`, `originalIndex` (for un-shuffle), cached title/artist/cover/duration |
 
 - Items store **provider + trackId** from day one so Phase 3 needs no data migration.
@@ -86,8 +86,8 @@ Each phase is shippable on its own and is reviewed/tested before the next starts
   restore) — auto-play if the player was playing.
 - Playing an album/playlist/folder: **always replaces the content of the active queue** (as now). Other
   queues are touched only explicitly ("Add to queue…"). No confirmation dialog.
-- **Queues follow the Yandex account logic** (as today's session): each account has its own set of queues;
-  switching account switches the queue set. A queue may still contain Jellyfin tracks.
+- **Queues are app-wide** (D22): switching or signing out an account never hides a queue. Entries whose
+  provider is not signed in show as unavailable and are skipped during playback.
 - My Wave is a queue of kind `WAVE`: one per account, not editable, extended from rotor as now.
 - Queue actions: create, rename, delete, reorder, duplicate, clear; track actions: "Add to queue…",
   "Play next", "Add to end".
@@ -236,7 +236,7 @@ None at the moment.
 
 ## Resolved questions
 
-1. Queues per account → follow the Yandex account logic (per account, as today).
+1. Queues → **app-wide**, not per account (revised 2026-11-09, `kb/decisions.md` D22).
 2. Jellyfin transport → HTTPS only.
 3. "Play album" → replaces the active queue; switching queues via a popup from a queue button.
 4. Updates → `tegro-org/YAMP` GitHub releases (public repo; own `applicationId` + signing key).

@@ -1,0 +1,63 @@
+# Build, tests, CI (upstream `fac6af7`)
+
+Gradle project in `android/`. Parent: [ARCHITECTURE.md](../../ARCHITECTURE.md). Nothing here was run yet
+(build not verified).
+
+## Build
+
+- AGP 9.5.0, Kotlin 2.4.21 (AGP built-in Kotlin, no `kotlin-android` plugin), KSP 2.3.13, Gradle 9.8.2.
+- Modules `:app`, `:baselineprofile`. `org.gradle.configuration-cache=true`, `-Xmx2048m`.
+- `:app`: namespace `com.korenskoy.yandexmusic`, applicationId `YandexMusicLite.KorenskoyR`,
+  compileSdk 37, minSdk 26, targetSdk 36, Java 11, versionCode 47 / versionName 1.12.2 (manual bumps; tag
+  must be `v<versionName>`). ABIs: all four. No flavors.
+- BuildConfig: `YANDEX_SALT` (local.properties → env → committed default, not secret),
+  `YANDEX_DEVICE_SECRET` (empty → device-code sign-in disabled).
+- Signing: `KEYSTORE_FILE` (default `android/release.keystore`), `KEYSTORE_PASSWORD`, `KEY_ALIAS`,
+  `KEY_PASSWORD` from `local.properties` or env. Any task with "Release" (except UnitTest) **fails fast
+  without a valid key** (incl. `lintRelease`, baseline profile). Debug builds use the release key if present.
+- R8 on release (strips `Log.v/d/i`, keeps DTO/updater/model/player packages). Compose stability config marks
+  `data.dto.*` and `domain.model.*` stable. Room schemas exported to `app/schemas/`.
+- Baseline profile module (device needed, release key needed); generated profiles committed; package name
+  hard-coded `YandexMusicLite.KorenskoyR` in `BaselineProfileGenerator.kt`.
+- Lint: `warningsAsErrors`, `abortOnError`, `lint.xml` ignores version-age checks. No detekt/ktlint.
+
+## Dependencies (main)
+
+Compose BOM 2026.09.00, Navigation 2.10.2, Glance 1.2.0, Coil 3.6.3, Hilt 2.60.1, Retrofit 3.0.0 +
+kotlinx-serialization, OkHttp logging 5.5.1, zxing 3.5.3, Media3 1.11.1, coroutines 1.11.0, Room 2.8.5,
+DataStore 1.3.0, security-crypto 1.1.0, WorkManager 2.12.0. Tests: JUnit4, Robolectric 4.17, Roborazzi 1.77.0.
+
+## Tests
+
+- **Unit** (`app/src/test`, Robolectric for 13 files): data (device sign-in, crash log, card storage,
+  DTO shapes, lossless crypto, encraw, stream variants, playback queue/rules, road reserve, playlist diff,
+  updater incl. "token not sent to GitHub"), presentation logic, car layout/dock, display scale, widget.
+- **Screenshots**: `ScreenshotTest` (54) + `Screenshots112Test` (53), Robolectric SDK 35, Pixel7 + head-unit
+  qualifiers; goldens `app/src/test/screenshots/*.png` (107 files, ~61 MB); threshold 0.5 %.
+  `./gradlew recordRoborazziDebug` / `verifyRoborazziDebug`. **Any UI change needs re-recording.**
+- **ArchitectureTest**: (1) no `YandexMusicApi` in `presentation/`; (2) only `AccountSessionManager` calls
+  `playlistsRepository.resetForAccountChange()`, and `MainViewModel` calls `session.syncAll()`.
+- **LayoutSafetyTest** (32 source-text guards): MainScreen bar/dock structure, exact Retrofit signatures,
+  `TextUnit(` ban, `app_name == "Yandex Music Lite"`, **`applicationId == "YandexMusicLite.KorenskoyR"`**,
+  no literal passwords in build file, updater/player constants, no global cleartext. → must be updated in
+  Phase 0 (rename).
+- **Instrumented** (20 files, device): Android Auto browse, auth migration, car mode, player engine, playlist
+  cache, road fallback, insets, widget… Some **wipe auth storage** — test device only.
+
+## CI (upstream, kept in `kb/upstream/github-workflows-reference/`)
+
+- `ci.yml`: push to main / PR → gitleaks; JDK 21; `chmod +x gradlew` (committed 100644, no `gradlew.bat`);
+  `verifyRoborazziDebug lintDebug`; upload screenshot diffs on failure.
+- `release.yml`: tag `v*` → keystore from `KEYSTORE_BASE64`, unit tests, `assembleRelease` with secrets,
+  APK content check (no keys inside), GitHub release with the APK (updater takes first `*.apk` asset and
+  its `digest`).
+- dependabot: gradle weekly (groups androidx, kotlin), actions monthly.
+- **For `android/`**: `defaults.run.working-directory: android`, adjust artifact paths, keystore into
+  `android/`, setup-java cache paths, dependabot `directory: /android`.
+
+## Gotchas
+
+- JDK 21 needed (Robolectric SDK 35).
+- `android/.gitignore` also ignores `CHANGELOG.md`, `PLAN*.md`, `AGENT_MEMORY.md`, `.claude/`, `/release/`.
+- Renaming applicationId breaks LayoutSafetyTest, BaselineProfileGenerator and update compatibility.
+- Updater accepts an update only with the same signer and a higher versionCode.
