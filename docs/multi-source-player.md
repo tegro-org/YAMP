@@ -187,6 +187,31 @@ Generic Subsonic / OpenSubsonic provider; tested against the user's Airsonic-Adv
 - **Scrobble:** `scrobble` so the server's play counts / "recent" stay correct.
 - Server-side `savePlayQueue` is not used: queues live in the app (multiple, Room).
 
+### Phase 4d — Local files provider — planned, design deferred
+
+YAMP should also play music stored on the device (D25). It is a third provider (`local`) behind the same
+`MusicProvider` interface: no account, capabilities Library / Folders / Search / Favorites, no Radio (the mix
+builder can still use local tracks), stream = file URI, folder browser shared with Phase 4b.
+**Requirement for Phase 3:** the provider abstraction must not assume a server, an account or a network.
+
+Not designed yet — to be discussed when this phase starts, in its own design doc:
+
+- **Scanning:** Android's media index (MediaStore) vs our own scan of user-chosen folders with a rescan
+  button; change detection; background work on a weak head unit.
+- **Index storage:** separate database owned by the provider vs tables in the main one (would amend
+  ARCHITECTURE F1); where non-rebuildable user data lives (favorites, play counts).
+- **Track identity:** path-based id (simple, breaks on rename/move) vs fingerprint that survives moves —
+  matters because queues store track refs permanently.
+- **Removable storage** (SD card, USB stick in the head unit): absent volume → tracks unavailable, not deleted.
+- **Tags and covers:** tag reader, CP1251 tags in old Russian MP3s, embedded art vs `folder.jpg`/`cover.jpg`.
+- **Formats:** what Media3 plays out of the box vs FFmpeg for APE/DSF/WavPack; `.cue` single-file albums.
+- **Where the files are:** phone storage, SD card, USB stick — not asked yet.
+
+Reference (2026-11-09, from Musicolet 6.9's manifest and bundled changelog only — no decompiling, D15): it
+scans user-chosen folders itself (can include `.nomedia`/hidden folders, exclude folders, "Force to Rescan"),
+keeps its own cached tags refreshed in the background, bundles FFmpeg, uses embedded art then `folder.jpg`,
+needs only the ordinary media permissions and no internet permission.
+
 ### Phase 5 — Favorites per provider
 
 - Library → Favorites with tabs Tracks / Albums / Artists / Playlists, for the **active provider**.

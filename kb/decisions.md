@@ -27,3 +27,6 @@ Decided with the user on 2026-11-08/09 (design discussion before the repo existe
 | D20 | Full localization: English default + Russian, more later; semantic keys; in-app language choice; existing strings migrated in one pass | Proper i18n, gradual like the rest |
 | D21 | Search across providers: one merged result list with provider badges | User choice |
 | D22 | Queues are app-wide (not per account); entries of a signed-out provider shown unavailable and skipped; My Wave, likes, Yandex playlists stay per account | Yandex has no named multi-queue concept; account-bound queues would hide queues on account switch and fail with Jellyfin-only |
+| D23 | Phone is a first-class target, equal to the car head unit — YAMP is not a car-only app. The current Hi-Fi look on the phone (glass, iOS-like buttons) is liked and kept as the visual reference | User uses the app on the phone daily (tested 2026-11-09) |
+| D24 | `ARCHITECTURE.md` and `DESIGN_GUIDE.md` approved; their rules are binding | User review 2026-11-09 |
+| D25 | Local files (music stored on the device) will be supported as another provider. Only planned: scanning, index storage and track identity are **not decided** and are discussed when that phase starts (`docs/multi-source-player.md` Phase 4d) | User request 2026-11-09; keep the provider abstraction free of server/account assumptions |

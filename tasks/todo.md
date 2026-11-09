@@ -15,6 +15,10 @@
 - [x] As-is analysis of the code (`kb/architecture/`)
 - [x] Draft `ARCHITECTURE.md` + `DESIGN_GUIDE.md`
 - [x] User review of the drafts; Q1–Q7 decided (`kb/decisions.md` D16–D22)
+- [x] `ARCHITECTURE.md` approved (2026-11-09, D24); phone is first-class next to the car (D23)
+- [x] `DESIGN_GUIDE.md` approved (2026-11-09, D24)
+- [ ] Align `docs/multi-source-player.md` with `ARCHITECTURE.md` (`TrackRef`, entry-id cursor, queue kinds,
+      several providers at once, `org.tegro.yamp`, phone + car)
 - [ ] **Design canvas** (like Vantage `Design/`): `Design/YAMP.html` + `design-canvas.jsx` / `tweaks-panel.jsx`
       copied from `~/Projects/Tegro/Vantage/Design/`, screens as React artboards in `Design/yamp/*.jsx`,
       Hi-Fi tokens mirrored from `presentation/hifi/HiFi.kt`. Sections:
@@ -26,6 +30,8 @@
   - [ ] PDF export script (like Vantage `build-design-*-pdf.sh`)
   - [ ] Canvas = behaviour + layout source of truth; code deviations logged in `kb/design-deviations.md`
 - [ ] Approve `docs/multi-source-player.md`
+- [ ] Later: local files provider (D25, Phase 4d) — design discussion (scanning, index, track identity) when
+      we get to it; until then only keep the provider abstraction server/account-free
 - [ ] Phase 0 — fork identity (applicationId, name, signing, updater repo, CI for `android/`)
   - [ ] Create YAMP's own release keystore (none exists yet; Release tasks fail without it). Keep it outside
         the repo, back it up, pass it to CI as secrets (`KEYSTORE_BASE64`, passwords, alias)
