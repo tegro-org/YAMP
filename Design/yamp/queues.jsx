@@ -258,12 +258,14 @@ function CarPill({ icon, children, trailing, active }) {
   );
 }
 
-function CarHome({ dim }) {
+// Car mode. `w` = pane width (1920 full screen, 1280 wide split pane). `far` replaces the far column.
+function CarHome({ dim, w = 1920, far }) {
   const t = useT();
+  const wide = w >= 1900, panel = wide ? 760 : 700;
   return (
     <React.Fragment>
       {/* driver panel */}
-      <div style={{ position: 'absolute', left: 48, top: 30, width: 760 }}>
+      <div style={{ position: 'absolute', left: 48, top: 30, width: panel }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <GlassCircle icon="arrow_back" size={60} />
           <CarPill icon="stacks" active trailing={<Icon name="expand_more" size={28} color={HF.text2} />}>{t('With family', 'С семьёй')}</CarPill>
@@ -272,14 +274,14 @@ function CarHome({ dim }) {
         <div style={{ ...HFType.sectionCaps, fontSize: 15, color: HF.text2, marginTop: 30 }}>{t('Queue · 12 of 48', 'Очередь · 12 из 48')}</div>
         <div className="hf-ellipsis" style={{ fontSize: 56, lineHeight: '66px', fontWeight: 800 }}>Wish You Were Here</div>
         <div style={{ fontSize: 30, color: HF.text2 }}>Pink Floyd</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 26, marginTop: 26 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: wide ? 26 : 18, marginTop: 26 }}>
           <GlassCircle icon="heart_broken" size={76} iconSize={34} />
           <Knob icon="skip_previous" size={100} />
           <SpectrumRing size={236} knob={168} />
           <Knob icon="skip_next" size={100} />
           <GlassCircle icon="favorite" size={76} iconSize={34} color={HF.love} />
         </div>
-        <Slider value={0.3} style={{ marginTop: 18, width: 700 }} />
+        <Slider value={0.3} style={{ marginTop: 18, width: panel - 60 }} />
       </div>
       <div style={{ position: 'absolute', left: 48, bottom: 28, display: 'flex', gap: 14 }}>
         <CarTile icon="folder" label={t('Folders', 'Папки')} active />
@@ -289,27 +291,39 @@ function CarHome({ dim }) {
         <CarTile icon="download_done" label={t('Offline', 'Скачанные')} />
       </div>
       {/* far column */}
-      <div style={{ position: 'absolute', right: 56, top: 26, textAlign: 'right' }}>
+      <div style={{ position: 'absolute', right: wide ? 56 : 40, top: 26, textAlign: 'right' }}>
         <div style={{ fontSize: 46, fontWeight: 800, lineHeight: '50px' }}>10:30</div>
         <div style={{ ...HFType.sectionCaps, fontSize: 13, color: HF.text2 }}>{t('Wed · 21 October', 'Среда · 21 октября')}</div>
       </div>
-      <div style={{ position: 'absolute', left: 980, top: 96 }}>
-        <Cover size={320} hue="amber" radius={36} style={{ boxShadow: '0 0 90px rgba(224,160,80,0.45)' }} />
-      </div>
-      <div style={{ position: 'absolute', left: 1360, top: 110, width: 500 }}>
-        <div style={{ ...HFType.sectionCaps, fontSize: 15, color: HF.text2, marginBottom: 12 }}>{t('Next', 'Далее')}</div>
-        {[['Shine On You Crazy Diamond', 'Pink Floyd', 'amber'], ['Дороги', 'Мельница', 'green'], ['Comfortably Numb', 'Pink Floyd', 'violet']].map(([a, b, hue]) => (
-          <div key={a} style={{ display: 'flex', alignItems: 'center', gap: 16, height: 92 }}>
-            <Cover size={72} hue={hue} radius={16} />
-            <div style={{ minWidth: 0 }}>
-              <div className="hf-ellipsis" style={{ fontSize: 24, fontWeight: 700 }}>{a}</div>
-              <div style={{ fontSize: 18, color: HF.text2 }}>{b}</div>
-            </div>
+      {far || (
+        <React.Fragment>
+          <div style={{ position: 'absolute', left: wide ? 980 : 860, top: wide ? 96 : 120 }}>
+            <Cover size={wide ? 320 : 300} hue="amber" radius={36} style={{ boxShadow: '0 0 90px rgba(224,160,80,0.45)' }} />
           </div>
-        ))}
-      </div>
+          {wide && <CarNext style={{ position: 'absolute', left: 1360, top: 110, width: 500 }} />}
+          {!wide && <CarNext rows={2} compact style={{ position: 'absolute', left: 860, top: 452, width: 380 }} />}
+        </React.Fragment>
+      )}
       {dim && <Scrim opacity={0.6} />}
     </React.Fragment>
+  );
+}
+const CAR_NEXT = [['Shine On You Crazy Diamond', 'Pink Floyd', 'amber'], ['Дороги', 'Мельница', 'green'], ['Comfortably Numb', 'Pink Floyd', 'violet']];
+function CarNext({ rows = 3, compact, style }) {
+  const t = useT();
+  return (
+    <div style={style}>
+      <div style={{ ...HFType.sectionCaps, fontSize: 15, color: HF.text2, marginBottom: compact ? 6 : 12 }}>{t('Next', 'Далее')}</div>
+      {CAR_NEXT.slice(0, rows).map(([a, b, hue]) => (
+        <div key={a} style={{ display: 'flex', alignItems: 'center', gap: 16, height: compact ? 76 : 92 }}>
+          <Cover size={compact ? 60 : 72} hue={hue} radius={16} />
+          <div style={{ minWidth: 0 }}>
+            <div className="hf-ellipsis" style={{ fontSize: compact ? 21 : 24, fontWeight: 700 }}>{a}</div>
+            <div style={{ fontSize: compact ? 16 : 18, color: HF.text2 }}>{b}</div>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -328,4 +342,4 @@ function CarQueuePanel() {
   );
 }
 
-Object.assign(window, { PhoneHome, PhoneQueueSheet, PhoneQueueMenu, PhoneQueueNew, PhoneQueueDelete, PhonePlayerQueue, PhoneTrackMenu, PhoneAddToQueue, CarHome, CarQueuePanel, SpectrumRing, QueueRow, useQueues });
+Object.assign(window, { CarNext, CarPill, CarTile, QueueSheetHeader, PhoneHome, PhoneQueueSheet, PhoneQueueMenu, PhoneQueueNew, PhoneQueueDelete, PhonePlayerQueue, PhoneTrackMenu, PhoneAddToQueue, CarHome, CarQueuePanel, SpectrumRing, QueueRow, useQueues });

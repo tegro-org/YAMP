@@ -21,20 +21,24 @@
       several providers at once, `org.tegro.yamp`, phone + car) — done 2026-11-09
 - [x] Queue switch in the car: popup, 2 taps (D26)
 - [x] Ids: one form `<provider>:<kind>:<id>` for tracks, albums, artists, playlists, folders (D27, C1)
-- [ ] **Design canvas** (like Vantage `Design/`): `Design/YAMP.html` + `design-canvas.jsx` / `tweaks-panel.jsx`
-      copied from `~/Projects/Tegro/Vantage/Design/`, screens as React artboards in `Design/yamp/*.jsx`,
+- [ ] **Design canvas**: `Design/YAMP.html` + `design-canvas.jsx`, screens as React artboards in `Design/yamp/*.jsx`,
       Hi-Fi tokens mirrored from `presentation/hifi/HiFi.kt`. Sections:
   - [x] Canvas shell `Design/YAMP.html` (branch `feature/design-canvas`), EN/RU switch, `?only=` / `?print=1`
   - [x] Tokens & components (colours, type scale, buttons, rows, dialogs) — states (empty/error/skeleton) to add
   - [x] Existing screens as reference — real golden screenshots (phone, landscape, head unit, car)
   - [x] New: queue switcher (phone sheet, actions, new/delete, player entry, track menu, add to queue; head unit
-        car pill + side panel) — **awaiting the user's review of the style before the rest**
-  - [ ] New: folder browser (phone + car tiles, A–Z rail, breadcrumbs), Jellyfin sign-in, merged search with
-        provider badges, capability-driven Home/car home, mix builder, unavailable-provider states
-  - [ ] Decide: split-screen frame (960×720) for the head unit — does the user run YAMP in split screen?
-  - [ ] Decide: `design-canvas.jsx` is copied from Vantage and has no licence header — OK for the public repo?
+        car pill + side panel)
+  - [x] New: folder browser — phone (root, filter, inside a folder, album, menu) and head unit (pinned/recent on
+        car home, tiles + A–Z rail, inside a folder)
+  - [x] Split screen 1 : 2 — car mode, queues panel and folders in the wide (1280×720) and slim (640×720) panes
+  - [ ] New: Jellyfin sign-in, merged search with provider badges, capability-driven Home / Library / car home,
+        mix builder, list states (empty / error / skeleton), unavailable-provider states
+  - [ ] Measure the real split-pane sizes on the head unit and which side the player sits on
+  - [x] Style approved by the user (2026-11-09); `design-canvas.jsx` is the user's own file — fine for the
+        public repo
+  - [x] Split screen: used sometimes, 1 : 2 with the slim pane on the left → frames 640×720 and 1280×720
   - [ ] Frames: phone 412×915, head unit 1920×720 (user's unit) and the 1280×720 car grid
-  - [ ] PDF export script (like Vantage `build-design-*-pdf.sh`)
+  - [ ] PDF export script (one artboard per page, from the `?print=1` view)
   - [ ] Canvas = behaviour + layout source of truth; code deviations logged in `kb/design-deviations.md`
 - [x] `docs/multi-source-player.md` approved (2026-11-09, D28)
 - [ ] Later: local files provider (D25, Phase 4d) — design discussion (scanning, index, track identity) when

@@ -41,9 +41,9 @@ The user found YandexMusicLite and its fork YML (Ozo-bro), asked for a privacy a
    (D26); ids are `<provider>:<kind>:<id>` for everything (D27). No open questions left in the doc except
    the deferred local-files design.
 4. **Design canvas** — in progress on branch `feature/design-canvas`: `Design/YAMP.html` (see
-   `Design/README.md` to view). Done: foundations, as-built reference, queue switcher (phone + head unit).
-   Waiting for the user's review of the style; then folder browser, Jellyfin sign-in, merged search,
-   capability-driven Home, mix builder; PDF export. Checklist in `tasks/todo.md`.
+   `Design/README.md` to view). Style approved by the user. Done: foundations, as-built reference, queue
+   switcher, folder browser (phone + head unit), split-screen panes (1 : 2 → 1280×720 and 640×720).
+   Left: Jellyfin sign-in, merged search, capability-driven Home / Library, mix builder, list states; PDF export. Checklist in `tasks/todo.md`.
 5. ~~Approve `docs/multi-source-player.md`~~ (approved 2026-11-09, D28).
 6. Phase 0 — fork identity: `applicationId`, app name, signing key (secrets in GitHub Actions, never in the
    repo), updater → `tegro-org/YAMP`, CI for `android/`.

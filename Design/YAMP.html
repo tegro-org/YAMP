@@ -33,6 +33,8 @@
   <script src="yamp/foundations.jsx" type="text/babel"></script>
   <script src="yamp/reference.jsx" type="text/babel"></script>
   <script src="yamp/queues.jsx" type="text/babel"></script>
+  <script src="yamp/folders.jsx" type="text/babel"></script>
+  <script src="yamp/split.jsx" type="text/babel"></script>
 </head>
 <body>
   <div id="root"></div>
@@ -40,7 +42,7 @@
   <script type="text/babel" data-presets="env,react">
     // View with the bundled server (no-cache, and it serves the reference screenshots under /shots/):
     //   python3 Design/serve.py      → http://localhost:5520/YAMP.html   (?lang=ru for Russian)
-    const P = FRAMES.phone, H = FRAMES.head;
+    const P = FRAMES.phone, H = FRAMES.head, SN = FRAMES.splitN, SW = FRAMES.splitW;
 
     // Every artboard is declared once here; the canvas, the single-artboard view (?only=<id>) and the
     // print view (?print=1, used by the PDF export) are all rendered from this list.
@@ -76,6 +78,31 @@
           boards: [
             { id: 'qc-home', label: 'Car mode · active queue pill', ...sz(H), el: <Frame kind="head" tint="#8A5A22" glowY="40%"><CarHome /></Frame> },
             { id: 'qc-panel', label: 'Car mode · queues panel (tap = switch)', ...sz(H), el: <CarQueuePanel /> },
+          ] },
+        { id: 'folders-phone', title: '6 · Folder browser — phone (Phase 4b)',
+          subtitle: 'The physical folder tree of the Jellyfin library, opened directly at the library root. Row tap = open, play button = play the whole folder. Filter on every level; pinned folders on top; breadcrumbs jump to any level.',
+          boards: [
+            { id: 'pf-root', label: 'Folders · library root (natural sort, Latin then Cyrillic)', ...sz(P), el: <PhoneFolders /> },
+            { id: 'pf-filter', label: 'Folders · filter “мел”', ...sz(P), el: <PhoneFolders filter="мел" /> },
+            { id: 'pf-level', label: 'Inside a folder · actions + subfolders', ...sz(P), el: <PhoneFolderLevel /> },
+            { id: 'pf-album', label: 'Album folder · tracks', ...sz(P), el: <PhoneFolderAlbum /> },
+            { id: 'pf-menu', label: 'Folder · hold / ⋯ menu', ...sz(P), el: <PhoneFolderMenu /> },
+          ] },
+        { id: 'folders-car', title: '7 · Folder browser — head unit 1920×720 (Phase 4b)',
+          subtitle: 'Tap budget (D12): a pinned or recent folder plays in 1 tap from car home (its play button); any folder in ≤ 3 taps (Folders → folder → play). Big tiles, tile tap = open. The A–Z rail lists only the letters present, Latin and Cyrillic.',
+          boards: [
+            { id: 'cf-home', label: 'Car home · pinned and recent folders (1 tap to play)', ...sz(H), el: <CarHomeFolders /> },
+            { id: 'cf-root', label: 'Folders · library root as tiles + A–Z rail', ...sz(H), el: <CarFolders /> },
+            { id: 'cf-level', label: 'Inside a folder · big actions + album tiles', ...sz(H), el: <CarFolderLevel /> },
+          ] },
+        { id: 'split', title: '8 · Head unit in split screen (1 : 2)',
+          subtitle: 'With the navigator beside it the unit gives YAMP either the wide pane (about 1280×720 — the car grid the app is already designed on) or the slim pane (about 640×720, one column). Exact pane sizes still to be measured on the unit.',
+          boards: [
+            { id: 'sw-car', label: 'Wide pane 1280×720 · car mode', ...sz(SW), el: <SplitWideCar /> },
+            { id: 'sw-queues', label: 'Wide pane · queues panel', ...sz(SW), el: <SplitWideQueues /> },
+            { id: 'sn-car', label: 'Slim pane 640×720 · car mode', ...sz(SN), el: <SplitNarrowCar /> },
+            { id: 'sn-queues', label: 'Slim pane · queues panel', ...sz(SN), el: <SplitNarrowQueues /> },
+            { id: 'sn-folders', label: 'Slim pane · folders as a list', ...sz(SN), el: <SplitNarrowFolders /> },
           ] },
       ];
     }

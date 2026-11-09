@@ -26,15 +26,18 @@ Needs internet access for React, Babel and the fonts (Roboto, Material Symbols R
 |---|---|
 | `YAMP.html` | The page; every artboard is declared once in `buildSections()` |
 | `serve.py` | No-cache local server (+ `/shots/` alias for the golden screenshots) |
-| `design-canvas.jsx` | Canvas shell (sections, artboards, focus view) — copied from the Vantage project |
+| `design-canvas.jsx` | Canvas shell (sections, artboards, focus view) |
 | `yamp/hifi.jsx` | Tokens (`HF`, `HFType`, …) and primitives mirrored from `presentation/hifi` |
 | `yamp/foundations.jsx` | Tokens and components sheets |
 | `yamp/reference.jsx` | The app as built — golden screenshots from `android/app/src/test/screenshots/` |
 | `yamp/queues.jsx` | Phase 1: queue switcher, queue actions, "Add to queue…" (phone + head unit) |
+| `yamp/folders.jsx` | Phase 4b: folder browser — phone list, head-unit tiles, pinned/recent on car home |
+| `yamp/split.jsx` | Head unit in split screen: wide pane 1280×720 and slim pane 640×720 |
 
 ## Frames
 
-Phone 412×915 dp · head unit 1920×720 (the user's) · car grid 1280×720.
+Phone 412×915 dp · head unit 1920×720 (the user's) · split screen 1 : 2 → slim pane 640×720 and wide pane
+1280×720 (= the app's car design grid).
 
 ## Conventions
 

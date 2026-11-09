@@ -4,6 +4,9 @@
 
 - **Car head unit:** Android 9 (API 28), 1920×720. Details of the unit are in the user's Personal repo
   (`~/Projects/Arkady/Personal/Головное устройство/kb`). Upstream `minSdk` = 26, so it is supported.
+- **Split screen** is used sometimes (navigator + music): the unit divides the screen **1 : 2**, the left pane
+  is the slim one → about 640×720 and 1280×720 (exact sizes and which side the player sits on are not
+  measured yet). YAMP must work in both panes; the wide pane equals the app's 1280×720 car grid.
 - The head unit runs a per-app DPI tool (MonjaroDPI / "Mdpi") that force-stops and restarts apps to apply
   their DPI — see [head-unit-dpi-app.md](head-unit-dpi-app.md).
 - Phone(s): Android — a first-class target (D23), also used for sign-in confirmation (Yandex device flow).

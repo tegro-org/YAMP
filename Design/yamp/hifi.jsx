@@ -371,7 +371,9 @@ function Dock({ active = 'home', title, artist, hue, extra, miniWidth }) {
 }
 
 // ── Frames ───────────────────────────────────────────────────────────────────
-const FRAMES = { phone: { w: 412, h: 915 }, head: { w: 1920, h: 720 }, split: { w: 960, h: 720 }, car: { w: 1280, h: 720 } };
+// Head unit 1920×720. In split screen it divides 1 : 2 — a slim left pane and a wide right pane
+// (the wide pane equals the app's 1280×720 car design grid).
+const FRAMES = { phone: { w: 412, h: 915 }, head: { w: 1920, h: 720 }, splitN: { w: 640, h: 720 }, splitW: { w: 1280, h: 720 } };
 function Frame({ kind = 'phone', tint, glowY, children }) {
   const f = FRAMES[kind];
   return (
