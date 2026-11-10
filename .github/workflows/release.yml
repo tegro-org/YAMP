@@ -51,9 +51,10 @@ jobs:
         run: chmod +x gradlew
 
       - name: Scan for leaked secrets
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        working-directory: .
+        run: |
+          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.21.2 \
+            git /repo --no-banner --redact --exit-code 1
 
       - name: Run unit tests
         run: ./gradlew testDebugUnitTest --no-daemon
