@@ -62,8 +62,16 @@ A new primitive goes into `presentation/hifi/` with a screenshot test, not into 
 - **Tap budget** (D12): from car home → play a pinned/recent folder in **1 tap**; any folder in **≤ 3 taps**;
   switch queue in **2 taps** via the queue popup (D26 — done once per trip, not repeatedly). Every new car
   flow states its tap count in its design doc.
-- Big tiles, short labels (one line, ellipsized), covers over text. No text input while driving except the
-  optional filter box (search is a parked-car action).
+- **Car tiles** (D33) are one priority list — Folders, My Wave, Liked, Mixes, Radio — each present only while a
+  signed-in source supports it; as many as fit are shown (five on the full screen and in the wide split pane,
+  four in the slim pane) and the row scrolls for the rest. No Offline tile: when the signal is weak or lost,
+  the weak-signal pill in car mode plays the downloaded music.
+- **Car mode never requires typing** (D32): everything in it works by tapping. Typing lives in the normal
+  landscape interface (search, sign-in, mix building), which is always reachable — car mode has a search
+  button that opens the landscape search in one tap. Nothing detects whether the car is moving and nothing
+  is blocked.
+- Big tiles, short labels (one line, ellipsized), covers over text. No text input in car mode except the
+  optional filter box.
 - Add a **1920×720** screenshot qualifier for the user's head unit (alongside `w1280dp-h720dp` and
   `w1024dp-h600dp`).
 

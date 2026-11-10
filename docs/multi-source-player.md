@@ -111,6 +111,8 @@ resolver (E6) — today only its pure helpers are tested.
   per queue.
 
 **Behaviour:**
+- **Which queues exist** (D35): the user's own queues (never touched automatically), My Wave per Yandex
+  account, one radio queue, one queue per saved mix, one "Last mix".
 - One **active** queue drives the player; the others are frozen with their track + position.
 - Switching queues: save the active one → load target → show paused at saved position (same as today's
   restore) — auto-play if the player was playing.
@@ -146,8 +148,9 @@ resolver (E6) — today only its pure helpers are tested.
 - **Persistent list:** fetched tracks are appended to the queue and never replaced, so back/forward through
   history works. When near the end, the next batch is appended (like My Wave today) by the queue's
   `DynamicSource` (E4) — the same mechanism as My Wave, not a second one.
-- **Re-run = new radio:** "Start radio" again on the same seed creates a new queue; the old one stays until
-  deleted. Old radios can be auto-pruned (setting: keep last N radios, default 10).
+- **One radio queue at a time (D35):** "Start radio" replaces the radio queue (its name follows the seed,
+  e.g. "Radio: Time"); going back and forward inside it still works and it survives restarts. "Keep" copies
+  it into a named queue of the user's. No pruning setting.
 - Rotor feedback (skip/like) is sent for Yandex radio queues as it is for My Wave.
 
 ### Phase 3 — Provider abstraction
@@ -184,6 +187,10 @@ resolver (E6) — today only its pure helpers are tested.
 - **Auth:** server URL + username/password → `POST /Users/AuthenticateByName` → access token stored
   in `KeystoreStringPreferences` (same as Yandex tokens). Password is not stored. Sign-in screen per
   DESIGN_GUIDE §8 (https enforced with an inline error, password never prefilled).
+- **Quick Connect** as an alternative (D31): after the server address the app shows a code
+  (`/QuickConnect/Initiate`), the user confirms it in a Jellyfin client where they are already signed in, the
+  app polls and signs in (`/Users/AuthenticateWithQuickConnect`). Needs Quick Connect enabled on the server;
+  endpoints to be verified against the user's server.
 - **Browse:** `/Items` (Audio, MusicAlbum, Playlist), `/Artists`, `/MusicGenres`, `/Search/Hints`.
 - **Stream:** `/Audio/{id}/universal` (server picks direct play vs transcode); covers
   `/Items/{id}/Images/Primary`.
@@ -279,7 +286,8 @@ needs only the ordinary media permissions and no internet permission.
 - Library → Favorites with tabs Tracks / Albums / Artists / Playlists, **per signed-in provider** that has
   the `Favorites` capability. Several providers can be active at once (C7), so there is no single "active
   provider": each provider's favorites are a separate list, not merged (D11). How the provider is picked
-  (sections or a filter pill) is settled in the design canvas.
+  (sections or a filter pill) is settled in the design canvas. Where one button must act alone (Library
+  Play / Shuffle, the car "Liked" tile) it uses the first source in the Sources list (D30).
 - Yandex: add the missing `likes/albums` and `likes/artists` (read + `add-multiple` / `remove`).
 - Jellyfin: `Filters=IsFavorite`, `/Artists?IsFavorite=true`, `POST/DELETE /UserFavoriteItems/{id}`;
   heart state from `UserData.IsFavorite`.
@@ -297,7 +305,9 @@ needs only the ordinary media permissions and no internet permission.
   - favorites weight;
   - year/decade range; exclude audiobooks/podcasts.
   Result is a `MIX` queue: the pool is resolved, then shuffled with the rules. **Persistent** like radio;
-  "Re-run" creates a new queue. Mix definitions can be saved and re-run later.
+  "Re-run" of a saved mix **replaces that mix's previous queue** (D29), so queues do not pile up; a mix built
+  without saving goes into a single "Last mix" queue, replaced each time (D35). Mix definitions can be saved
+  and re-run later.
 - Live (endless) mixes are a later extension: the seed is already stored, so appending more is possible.
 - The mix builder is a phone/parked action; the car shows saved mixes only (DESIGN_GUIDE §8).
 

@@ -31,14 +31,16 @@
   - [x] New: folder browser — phone (root, filter, inside a folder, album, menu) and head unit (pinned/recent on
         car home, tiles + A–Z rail, inside a folder)
   - [x] Split screen 1 : 2 — car mode, queues panel and folders in the wide (1280×720) and slim (640×720) panes
-  - [ ] New: Jellyfin sign-in, merged search with provider badges, capability-driven Home / Library / car home,
-        mix builder, list states (empty / error / skeleton), unavailable-provider states
+  - [x] New: sources + Jellyfin sign-in, merged search, Home / Library / tabs / car tiles per signed-in
+        providers, mix builder + saved mixes, list states and unavailable sources (2026-11-09; drawn by agents,
+        50 boards); reviewed with the user 2026-11-10 → decisions D29–D33; round 2 of edits done (tile rows, Library rows,
+        mix re-run, Quick Connect, Settings → Storage "Available offline"); a few small open points in HANDOFF.md
   - [ ] Measure the real split-pane sizes on the head unit and which side the player sits on
   - [x] Style approved by the user (2026-11-09); `design-canvas.jsx` is the user's own file — fine for the
         public repo
   - [x] Split screen: used sometimes, 1 : 2 with the slim pane on the left → frames 640×720 and 1280×720
   - [ ] Frames: phone 412×915, head unit 1920×720 (user's unit) and the 1280×720 car grid
-  - [ ] PDF export script (one artboard per page, from the `?print=1` view)
+  - [x] PDF export: `Design/export-pdf.sh` → `Design/out/YAMP-design-<lang>.pdf` (from the `?print=1` view)
   - [ ] Canvas = behaviour + layout source of truth; code deviations logged in `kb/design-deviations.md`
 - [x] `docs/multi-source-player.md` approved (2026-11-09, D28)
 - [ ] Later: local files provider (D25, Phase 4d) — design discussion (scanning, index, track identity) when
