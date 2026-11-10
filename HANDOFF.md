@@ -50,6 +50,12 @@ The user found YandexMusicLite and its fork YML (Ozo-bro), asked for a privacy a
 6. Phase 0 — fork identity: `applicationId`, app name, signing key (secrets in GitHub Actions, never in the
    repo), updater → `tegro-org/YAMP`, CI for `android/`.
 
+## Player problems found on the phone (2026-11-10)
+
+Skip looks like a hang (old track plays up to ~10 s), FLAC chosen and never downgraded on a weak link. Facts
+and proposed rules: `kb/architecture/as-is-playback.md` → "Known problems". Not fixed in code. The rules are decided (D36) and listed there; they go into ARCHITECTURE (E / C4) and
+Phase 1 when those are next edited.
+
 ## Canvas choices to confirm (from the 2026-11-09 screens)
 
 - **Home with both providers:** today's My Wave stays the hero, Jellyfin sections (folders, recently added,

@@ -103,3 +103,50 @@ Also: cover URL templating, `r128` loudness, `radio_` prefixes, rotor calls from
   Plus behind provider capabilities.
 - **Radio/mix**: `WaveQueue` ≈ generic dynamic queue source; parameterise with `fetchBatch` + feedback.
 - **Risk**: controller has no direct tests (only pure helpers are tested).
+
+## Known problems (observed by the user on the phone, 2026-11-10; verified in code)
+
+Weak mobile link, Yandex Plus active, "Максимальное" quality. Line numbers are upstream `fac6af7`.
+
+1. **"Next" looks like a hang — the old track keeps playing for ~10 s.** `playNext` (`PlaybackController.kt:451`)
+   → `playTrack` with `crossfade = true` (:319) → `resolveAndPlay` (:784): if the URL is not pre-warmed, a full
+   best-mode resolve (2–3 HTTP calls, 15 s timeouts). Then `PlayerRepositoryImpl.startTransition` (:338) keeps
+   the **outgoing player at full volume** while it waits for the incoming one to render, up to
+   `INCOMING_READY_TIMEOUT_MS = 8 s` (:574). Only then `READY_TIMEOUT` → recovery RETRY (`PlaybackQueue.kt:111`)
+   → fresh resolve at the **same quality**. There is no loading state in `FullScreenPlayer` / `PlayerControls`
+   (`isBuffering` is consumed only by the home shimmer and the car ring) and `isPlaying` stays true while
+   starting (:111).
+2. **FLAC is chosen regardless of the link and never downgraded.** `resolveBest` (`TrackPreloadManager.kt:129`):
+   lossless via `LosslessSigner` → HQ mp3 → download-info. No input is the link state, the stall count or the
+   failure reason; RETRY re-resolves FLAC again; the recovery ladder is RETRY → copy → continue offline → skip /
+   stop, never "lower quality". With link WEAK and nothing on the device, `CONTINUE_OFFLINE` → `playOfflineMix`
+   (:1070) pauses with `waitingForConnection`; WEAK is cleared only by audible playback or a network flap
+   (`LinkTracker.kt:32-54`) — hence "played after ~15 minutes". The "weak link" state only chooses between a
+   road-reserve copy and streaming (`RoadPlan.originFor`, `LinkTracker.kt:73`); it never changes the request.
+
+### What YAMP must do differently (input to Phase 1 and the C4 resolver; proposed rules, not yet approved)
+
+- A **manual skip quick-fades the current track at once** (about half a second) while the next one is
+  requested: if the next is ready before the fade ends it comes in under it (a short crossfade); if not, the
+  fade ends in silence and the play glyph shows loading until the stream is ready. The user's long crossfade
+  setting applies to automatic transitions only. Next pressed again while loading retargets to the following
+  track.
+- The resolver takes **preferences with a link hint and a set of qualities to avoid** (what already failed) and
+  returns the chosen variant **plus the alternatives**, so the engine can downgrade without a new round trip.
+- Recovery ladder: retry same → **retry lower quality** → copy → skip. A FLAC that stalls or times out is
+  retried as MP3; on a weak link lossless is not requested and a cached MP3 beats a fresh FLAC.
+- Ready timeout per codec (FLAC needs more data before it renders); on timeout the outgoing player is stopped,
+  not left playing until the retry.
+- WEAK expires by itself; "waiting for connection" retries periodically instead of waiting for a network flap.
+- **Variants are resolved in parallel; playback starts with the one that fits the link; quality upgrades at the
+  next track boundary** (D36): the standby player prepares the next track in the higher quality when the
+  measured link allows. **The next track is prepared early, gated by buffer health, not by a fixed point:**
+  the standby player starts buffering it as soon as the current track has a healthy buffer ahead (≈30 s)
+  and the link is not weak — seconds after the start on a good link, later on a slow one, so the two downloads
+  never compete. The quality of the next track is chosen from the measured throughput of the current one.
+  A skip after that point is a crossfade; loading appears only for a skip before it or two tracks ahead.
+  The road reserve (full downloads to disk on a good link) stays as today. No mid-track stream switching (not sample-aligned → audible; doubles data on a weak
+  link; Yandex serves whole files, not adaptive segments) — at most a later experiment.
+- Smallest upstream-style fixes if wanted before Phase 1: `crossfade = false` for user skips; a `preferMp3`
+  input to `resolveBest` / `fetchOrAwait` set when WEAK or after a lossless READY/BUFFERING timeout; spinner on
+  the play glyph from `isBuffering`.
