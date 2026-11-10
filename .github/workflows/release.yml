@@ -89,7 +89,7 @@ jobs:
           cp app/build/outputs/apk/release/*.apk "release_artifacts/YAMP-${GITHUB_REF_NAME#v}.apk"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: android/release_artifacts/YAMP-*.apk
           generate_release_notes: true
