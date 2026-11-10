@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  secrets-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  test:
+    name: Unit tests, screenshots & lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the version is derived from git tags and the commit count
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21' # Robolectric screenshot tests for SDK 35 need Java 21
+          distribution: 'temurin'
+          cache: gradle
+          cache-dependency-path: |
+            android/*.gradle*
+            android/**/gradle-wrapper.properties
+            android/gradle/libs.versions.toml
+      - run: chmod +x gradlew
+      # verifyRoborazziDebug runs all unit tests and compares the screens with app/src/test/screenshots
+      - run: ./gradlew verifyRoborazziDebug lintDebug --no-daemon
+      - name: Screenshot differences
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshot-diffs
+          path: android/app/build/outputs/roborazzi/
+          if-no-files-found: ignore
