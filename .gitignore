@@ -5,3 +5,6 @@
 *.jks
 keystore.properties
 local.properties
+
+# Design canvas exports
+Design/out/

@@ -25,6 +25,7 @@ function NarrowCarBody({ dim }) {
       <div style={{ position: 'absolute', left: 28, right: 28, top: 24, display: 'flex', alignItems: 'center', gap: 12 }}>
         <GlassCircle icon="arrow_back" size={60} />
         <CarPill icon="stacks" active trailing={<Icon name="expand_more" size={28} color={HF.text2} />}>{t('With family', 'С семьёй')}</CarPill>
+        <GlassCircle icon="search" size={60} />
         <div style={{ flex: 1 }} />
         <div style={{ fontSize: 34, fontWeight: 800 }}>10:30</div>
       </div>
@@ -44,12 +45,8 @@ function NarrowCarBody({ dim }) {
         <GlassCircle icon="favorite" size={64} iconSize={30} color={HF.love} />
       </div>
       <Slider value={0.3} style={{ position: 'absolute', left: 28, right: 28, top: 506 }} />
-      <div style={{ position: 'absolute', left: 28, bottom: 24, display: 'flex', gap: 14 }}>
-        <CarTile icon="folder" label={t('Folders', 'Папки')} active />
-        <CarTile icon="favorite" label={t('Liked', 'Любимое')} />
-        <CarTile icon="waves" label={t('My Wave', 'Моя волна')} />
-        <CarTile icon="radio" label={t('Radio', 'Радио')} />
-      </div>
+      {/* Four tiles fit; the fifth peeks in to show that the row scrolls. */}
+      <div style={{ position: 'absolute', left: 28, right: 0, bottom: 24, overflow: 'hidden' }}><CarTileRow /></div>
       {dim && <Scrim opacity={0.6} />}
     </React.Fragment>
   );

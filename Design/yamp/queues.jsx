@@ -126,8 +126,23 @@ function PhoneQueueSheet() {
   );
 }
 
-function PhoneQueueMenu() {
-  const t = useT(); const q = useQueues()[1];
+function PhoneQueueMenu({ radio }) {
+  const t = useT(); const queues = useQueues(); const q = radio ? queues[4] : queues[1];
+  if (radio) return (
+    <Frame kind="phone">
+      <PhoneHome dim />
+      <Sheet height={640} style={{ opacity: 0.35 }} />
+      <Sheet height={330}>
+        <div style={{ padding: '18px 24px 0' }}>
+          <Txt t="dialogTitle">{q.name}</Txt>
+          <Txt t="caption" color={HF.text2} style={{ marginBottom: 10 }}>{t('Radio · replaced when you start another radio', 'Радио · заменяется, когда вы включаете другое радио')}</Txt>
+          <MenuRow icon="bookmark_add">{t('Keep as a queue…', 'Сохранить как очередь…')}</MenuRow>
+          <MenuRow icon="sensors">{t('Start again from the same seed', 'Начать заново с того же')}</MenuRow>
+          <MenuRow icon="delete" color={HF.danger}>{t('Delete radio', 'Удалить радио')}</MenuRow>
+        </div>
+      </Sheet>
+    </Frame>
+  );
   return (
     <Frame kind="phone">
       <PhoneHome dim />
@@ -258,8 +273,31 @@ function CarPill({ icon, children, trailing, active }) {
   );
 }
 
+// Car tiles in priority order (D33): the phone's tabs plus the most useful Library rows. As many as fit are
+// shown and the row scrolls sideways for the rest. A tile exists only while a signed-in source supports it.
+// There is no "Offline" tile: downloaded music is offered by the weak-signal pill when it is needed.
+function useCarTiles() {
+  const t = useT();
+  return [
+    { id: 'folders', icon: 'folder', label: t('Folders', 'Папки') },
+    { id: 'wave', icon: 'waves', label: t('My Wave', 'Моя волна') },
+    { id: 'liked', icon: 'favorite', label: t('Liked', 'Любимое') },
+    { id: 'mixes', icon: 'auto_awesome', label: t('Mixes', 'Миксы') },
+    { id: 'radio', icon: 'radio', label: t('Radio', 'Радио') },
+  ];
+}
+function CarTileRow({ count = 5, active = 'folders', style }) {
+  const tiles = useCarTiles();
+  return (
+    <div style={{ display: 'flex', gap: 14, ...style }}>
+      {tiles.slice(0, count).map((x) => <CarTile key={x.id} icon={x.icon} label={x.label} active={x.id === active} />)}
+    </div>
+  );
+}
+
 // Car mode. `w` = pane width (1920 full screen, 1280 wide split pane). `far` replaces the far column.
-function CarHome({ dim, w = 1920, far }) {
+// `weak` = the connection is weak or lost: the radio pill gives way to "play downloaded".
+function CarHome({ dim, w = 1920, far, weak, activeTile }) {
   const t = useT();
   const wide = w >= 1900, panel = wide ? 760 : 700;
   return (
@@ -269,7 +307,11 @@ function CarHome({ dim, w = 1920, far }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <GlassCircle icon="arrow_back" size={60} />
           <CarPill icon="stacks" active trailing={<Icon name="expand_more" size={28} color={HF.text2} />}>{t('With family', 'С семьёй')}</CarPill>
-          <CarPill icon="sensors">{t('Radio from track', 'Радио по треку')}</CarPill>
+          {weak
+            ? <CarPill icon="wifi_off" trailing={<Icon name="play_arrow" size={28} />}>{t('Weak signal · downloaded', 'Слабая связь · скачанное')}</CarPill>
+            : <CarPill icon="sensors">{t('Radio from track', 'Радио по треку')}</CarPill>}
+          {/* Search is one tap away; it opens the normal landscape search (car mode itself never needs typing). */}
+          <GlassCircle icon="search" size={60} />
         </div>
         <div style={{ ...HFType.sectionCaps, fontSize: 15, color: HF.text2, marginTop: 30 }}>{t('Queue · 12 of 48', 'Очередь · 12 из 48')}</div>
         <div className="hf-ellipsis" style={{ fontSize: 56, lineHeight: '66px', fontWeight: 800 }}>Wish You Were Here</div>
@@ -283,13 +325,7 @@ function CarHome({ dim, w = 1920, far }) {
         </div>
         <Slider value={0.3} style={{ marginTop: 18, width: panel - 60 }} />
       </div>
-      <div style={{ position: 'absolute', left: 48, bottom: 28, display: 'flex', gap: 14 }}>
-        <CarTile icon="folder" label={t('Folders', 'Папки')} active />
-        <CarTile icon="favorite" label={t('Liked', 'Любимое')} />
-        <CarTile icon="waves" label={t('My Wave', 'Моя волна')} />
-        <CarTile icon="radio" label={t('Radio', 'Радио')} />
-        <CarTile icon="download_done" label={t('Offline', 'Скачанные')} />
-      </div>
+      <CarTileRow active={activeTile} style={{ position: 'absolute', left: 48, bottom: 28 }} />
       {/* far column */}
       <div style={{ position: 'absolute', right: wide ? 56 : 40, top: 26, textAlign: 'right' }}>
         <div style={{ fontSize: 46, fontWeight: 800, lineHeight: '50px' }}>10:30</div>
@@ -342,4 +378,4 @@ function CarQueuePanel() {
   );
 }
 
-Object.assign(window, { CarNext, CarPill, CarTile, QueueSheetHeader, PhoneHome, PhoneQueueSheet, PhoneQueueMenu, PhoneQueueNew, PhoneQueueDelete, PhonePlayerQueue, PhoneTrackMenu, PhoneAddToQueue, CarHome, CarQueuePanel, SpectrumRing, QueueRow, useQueues });
+Object.assign(window, { useCarTiles, CarTileRow, CarNext, CarPill, CarTile, QueueSheetHeader, PhoneHome, PhoneQueueSheet, PhoneQueueMenu, PhoneQueueNew, PhoneQueueDelete, PhonePlayerQueue, PhoneTrackMenu, PhoneAddToQueue, CarHome, CarQueuePanel, SpectrumRing, QueueRow, useQueues });
