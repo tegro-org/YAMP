@@ -8,3 +8,6 @@ local.properties
 
 # Design canvas exports
 Design/out/
+
+# Local APK builds (scripts/build-apk.sh)
+dist/

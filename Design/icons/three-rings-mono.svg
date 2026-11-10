@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108">
+<defs>
+<linearGradient id="rAnod" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2F333E"></stop><stop offset="1" stop-color="#0A0B0F"></stop></linearGradient>
+<radialGradient id="rFace" cx="0.35" cy="0.3" r="0.85"><stop offset="0" stop-color="#2C303B"></stop><stop offset="0.55" stop-color="#15171D"></stop><stop offset="1" stop-color="#0A0B0F"></stop></radialGradient>
+<linearGradient id="rRim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#C9CED8"></stop><stop offset="0.35" stop-color="#2A2C33"></stop><stop offset="0.6" stop-color="#7C8291"></stop><stop offset="0.8" stop-color="#1E2026"></stop><stop offset="1" stop-color="#8E94A3"></stop></linearGradient>
+<radialGradient id="rGlow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#0A6CFF" stop-opacity="0.28"></stop><stop offset="1" stop-color="#0A6CFF" stop-opacity="0"></stop></radialGradient>
+</defs>
+<circle cx="54" cy="54" r="31" fill="none" stroke="#FFFFFF" stroke-opacity="0.5" stroke-width="3.6" stroke-linecap="round" stroke-dasharray="150 44.8" transform="rotate(-210 54 54)"></circle><circle cx="54" cy="54" r="24.5" fill="none" stroke="#FFFFFF" stroke-width="3.6" stroke-linecap="round" stroke-dasharray="100 53.9" transform="rotate(-30 54 54)"></circle><circle cx="54" cy="54" r="18" fill="none" stroke="#FFFFFF" stroke-opacity="0.7" stroke-width="3.6" stroke-linecap="round" stroke-dasharray="70 43.1" transform="rotate(100 54 54)"></circle><path d="M51 49 L51 59 L59.5 54 Z" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="2.5" stroke-linejoin="round"></path></svg>

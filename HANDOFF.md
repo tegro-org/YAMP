@@ -6,9 +6,8 @@
   unasked).
 - `android/` = upstream YandexMusicLite `fac6af7` (1.12.2), untouched (see `kb/upstream/README.md`).
   Still upstream identity (`applicationId`, package, updater → KorenskoyR). **No YAMP release before Phase 0.**
-- **Build verified** (2026-11-09): `sh gradlew assembleDebug testDebugUnitTest` passes (340 tests);
-  `verifyRoborazziDebug lintDebug` passes (107/107 screenshots unchanged, lint clean). See
-  `kb/architecture/build-and-ci.md`.
+- **Build:** `scripts/build-apk.sh [debug|release]` → `dist/`; `sh gradlew verifyRoborazziDebug lintDebug`
+  for the checks. See `kb/architecture/build-and-ci.md`.
 - **Architecture docs:** `ARCHITECTURE.md` — **approved 2026-11-09**, rules A–K binding (D24).
   `DESIGN_GUIDE.md` (Hi-Fi tokens/components, car rules, localization, patterns for new screens) —
   **approved 2026-11-09** (D24). As-is analysis in `kb/architecture/`.
@@ -47,8 +46,11 @@ The user found YandexMusicLite and its fork YML (Ozo-bro), asked for a privacy a
    providers, mix builder, list states; PDF export (`Design/export-pdf.sh`). **Open design choices waiting
    for the user:** see "Canvas choices to confirm" below. Checklist in `tasks/todo.md`.
 5. ~~Approve `docs/multi-source-player.md`~~ (approved 2026-11-09, D28).
-6. Phase 0 — fork identity: `applicationId`, app name, signing key (secrets in GitHub Actions, never in the
-   repo), updater → `tegro-org/YAMP`, CI for `android/`.
+6. **Phase 0 — fork identity: implemented** on `feature/phase-0-fork-identity` (doc
+   `docs/phase-0-fork-identity.md`): package/applicationId `org.tegro.yamp`, app name YAMP, Rings icon,
+   updater → `tegro-org/YAMP`, version from git (D37), CI in `.github/`, `scripts/build-apk.sh`, guards and
+   3 goldens updated; 340 tests / 107 screenshots / lint green. **Waiting for the user's phone test**, then
+   commit (groups), merge, push; the first release = tag `v0.1.0` + GitHub secrets (keystore, passwords).
 
 ## Player problems found on the phone (2026-11-10)
 

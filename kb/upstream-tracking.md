@@ -17,6 +17,13 @@ YAMP is a hard fork: no merges. Upstream changes are reviewed in batches and eac
 - **YML last looked at:** `f923e6c` (2026-11-09). It was 35 commits ahead / 22 behind upstream (merge-base
   `23ad3f2f`) and lacked the 1.9.4 token-leak fix.
 
+## Porting note (after Phase 0)
+
+Upstream paths `app/src/*/java/com/korenskoy/yandexmusic/` map to `android/app/src/*/java/org/tegro/yamp/`
+(same class names; `package`/`import` lines rewritten). Identity strings and constants (app name, applicationId,
+updater repo, User-Agent, wake-lock tags, widget actions, version numbers) are never ported. Upstream's version
+bumps are irrelevant: YAMP's version comes from git tags (D37).
+
 ## How to review
 
 ```sh

@@ -45,6 +45,8 @@
 - [x] `docs/multi-source-player.md` approved (2026-11-09, D28)
 - [ ] Later: local files provider (D25, Phase 4d) — design discussion (scanning, index, track identity) when
       we get to it; until then only keep the provider abstraction server/account-free
-- [ ] Phase 0 — fork identity (applicationId, name, signing, updater repo, CI for `android/`)
-  - [ ] Create YAMP's own release keystore (none exists yet; Release tasks fail without it). Keep it outside
-        the repo, back it up, pass it to CI as secrets (`KEYSTORE_BASE64`, passwords, alias)
+- [x] Phase 0 — fork identity implemented (2026-11-10, branch `feature/phase-0-fork-identity`); user test pending
+  - [x] Release keystore created by the user (outside the repo); CI secrets still to be added on GitHub
+  - [ ] User tests the debug APK on the phone → commit, merge, push
+  - [ ] GitHub: secrets `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`; then tag `v0.1.0`
+  - [ ] Regenerate the baseline profile for `org.tegro.yamp` (needs a device)

@@ -13,9 +13,10 @@ goldens render identically on this Linux PC and can serve as the baseline for YA
 
 - AGP 9.5.0, Kotlin 2.4.21 (AGP built-in Kotlin, no `kotlin-android` plugin), KSP 2.3.13, Gradle 9.8.2.
 - Modules `:app`, `:baselineprofile`. `org.gradle.configuration-cache=true`, `-Xmx2048m`.
-- `:app`: namespace `com.korenskoy.yandexmusic`, applicationId `YandexMusicLite.KorenskoyR`,
-  compileSdk 37, minSdk 26, targetSdk 36, Java 11, versionCode 47 / versionName 1.12.2 (manual bumps; tag
-  must be `v<versionName>`). ABIs: all four. No flavors.
+- `:app`: namespace and applicationId **`org.tegro.yamp`** (Phase 0; upstream was `com.korenskoy.yandexmusic` /
+  `YandexMusicLite.KorenskoyR`), compileSdk 37, minSdk 26, targetSdk 36, Java 11. **Version from git (D37):**
+  `versionName` = tag `vX.Y.Z` → `X.Y.Z`, otherwise `X.Y.Z-dev.N+sha` (`0.0.0-dev…` before the first tag,
+  `0.0.0-local` without git); `versionCode` = commit count. ABIs: all four. No flavors.
 - BuildConfig: `YANDEX_SALT` (local.properties → env → committed default, not secret),
   `YANDEX_DEVICE_SECRET` (empty → device-code sign-in disabled).
 - Signing: `KEYSTORE_FILE` (default `android/release.keystore`), `KEYSTORE_PASSWORD`, `KEY_ALIAS`,
@@ -23,8 +24,9 @@ goldens render identically on this Linux PC and can serve as the baseline for YA
   without a valid key** (incl. `lintRelease`, baseline profile). Debug builds use the release key if present.
 - R8 on release (strips `Log.v/d/i`, keeps DTO/updater/model/player packages). Compose stability config marks
   `data.dto.*` and `domain.model.*` stable. Room schemas exported to `app/schemas/`.
-- Baseline profile module (device needed, release key needed); generated profiles committed; package name
-  hard-coded `YandexMusicLite.KorenskoyR` in `BaselineProfileGenerator.kt`.
+- Baseline profile module (device needed, release key needed); generated profiles committed (still upstream's,
+  rewritten to the new package — regenerate when a device is at hand); package `org.tegro.yamp` in
+  `BaselineProfileGenerator.kt`.
 - Lint: `warningsAsErrors`, `abortOnError`, `lint.xml` ignores version-age checks. No detekt/ktlint.
 
 ## Dependencies (main)
@@ -50,16 +52,23 @@ DataStore 1.3.0, security-crypto 1.1.0, WorkManager 2.12.0. Tests: JUnit4, Robol
 - **Instrumented** (20 files, device): Android Auto browse, auth migration, car mode, player engine, playlist
   cache, road fallback, insets, widget… Some **wipe auth storage** — test device only.
 
-## CI (upstream, kept in `kb/upstream/github-workflows-reference/`)
+## CI (`.github/`, Phase 0; upstream originals in `kb/upstream/github-workflows-reference/`)
 
-- `ci.yml`: push to main / PR → gitleaks; JDK 21; `chmod +x gradlew` (committed 100644, no `gradlew.bat`);
-  `verifyRoborazziDebug lintDebug`; upload screenshot diffs on failure.
-- `release.yml`: tag `v*` → keystore from `KEYSTORE_BASE64`, unit tests, `assembleRelease` with secrets,
-  APK content check (no keys inside), GitHub release with the APK (updater takes first `*.apk` asset and
-  its `digest`).
-- dependabot: gradle weekly (groups androidx, kotlin), actions monthly.
-- **For `android/`**: `defaults.run.working-directory: android`, adjust artifact paths, keystore into
-  `android/`, setup-java cache paths, dependabot `directory: /android`.
+- `ci.yml`: push to main / PR → gitleaks; JDK 21; `working-directory: android`; `chmod +x gradlew`
+  (committed 100644, no `gradlew.bat`); `verifyRoborazziDebug lintDebug`; screenshot diffs uploaded on failure.
+- `release.yml`: tag `v[0-9]*` → keystore from `KEYSTORE_BASE64` (+ `KEYSTORE_PASSWORD`, `KEY_ALIAS`,
+  `KEY_PASSWORD`, optional `YANDEX_DEVICE_SECRET`), unit tests, `assembleRelease`, built `versionName` must
+  equal the tag, APK content check (no keys inside), GitHub release with one asset `YAMP-<version>.apk`
+  (the updater takes the first `*.apk` asset and its `digest`), auto-generated notes.
+- dependabot: gradle weekly in `/android` (groups androidx, kotlin), actions monthly.
+- Local: `scripts/build-apk.sh` (see below).
+
+## Local builds
+
+`scripts/build-apk.sh [debug|release] [--tests] [--install]` builds the APK and copies it to
+`dist/YAMP-<versionName>-<variant>.apk` (git-ignored); `--tests` runs unit tests, screenshot compare and lint
+first, `--install` adb-installs it. Release needs the signing key in `android/local.properties` or the
+environment.
 
 ## Gotchas
 

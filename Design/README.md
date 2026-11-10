@@ -48,6 +48,13 @@ Needs internet access for React, Babel and the fonts (Roboto, Material Symbols R
 | `yamp/home.jsx` | Home, Library and car home composed from the signed-in providers |
 | `yamp/mix.jsx` | Phase 6: mix builder and saved mixes |
 
+## Launcher icon
+
+`icons/` holds the icon sources (`rings.svg`, `three-rings.svg`, each with a `-mono.svg` mask for Android 13
+themed icons) on the 108 dp adaptive-icon canvas, and `make-launcher-icons.sh <name>`, which renders the
+Android resources (foreground, monochrome, legacy PNGs) into `android/app/src/main/res`. The concept pages
+they came from are the two zips next to this README.
+
 ## Frames
 
 Phone 412×915 dp · head unit 1920×720 (the user's) · split screen 1 : 2 → slim pane 640×720 and wide pane
