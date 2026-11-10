@@ -124,6 +124,21 @@ Weak mobile link, Yandex Plus active, "Максимальное" quality. Line n
    (`LinkTracker.kt:32-54`) — hence "played after ~15 minutes". The "weak link" state only chooses between a
    road-reserve copy and streaming (`RoadPlan.originFor`, `LinkTracker.kt:73`); it never changes the request.
 
+3. **Crossfade on "next": the old track seems to stop, the new one rises, then the old one reappears quieter
+   and fades.** The crossfade itself is sound: both players run on `Main.immediate`, the outgoing player is
+   never paused before its 3 s equal-power fade ends (`PlayerRepositoryImpl.startTransition` :338-385,
+   `runCrossfade` :391-421), audio focus has one owner (`MusicService.kt:121-132`) and the players are built
+   with `handleAudioFocus = false` (`di/PlayerModule.kt:54-59`). What is wrong: since upstream 1.12.0
+   (`6a91f49`) **both ExoPlayers share one audio session id** (`PlayerModule.kt:79-80`, from
+   `SystemEqualizer.audioSessionId`) so the phone's equalizer attaches to it. When a system effect with volume
+   control (equalizer, bass boost, Dolby) sits on a session, the mixer applies **one volume per session**, set
+   by whichever track was processed last: at fade start the incoming player's volume 0 silences the outgoing
+   track, then the two values alternate and the effect's smoothing produces the "reappears quieter" blur.
+   Observed on the **head unit**, whose vendor sound chain (OEM equalizer / DSP) is attached to every media
+   session and cannot be switched off — hence "almost every time" there. **Confirmed by the control test
+   (2026-11-10): on the phone the crossfade is correct** (only the 2–3 s FLAC delay of problem 1 remains). The
+   crossfade must be re-tested on the unit once the sessions are separated.
+
 ### What YAMP must do differently (input to Phase 1 and the C4 resolver; proposed rules, not yet approved)
 
 - A **manual skip quick-fades the current track at once** (about half a second) while the next one is
@@ -138,6 +153,10 @@ Weak mobile link, Yandex Plus active, "Максимальное" quality. Line n
 - Ready timeout per codec (FLAC needs more data before it renders); on timeout the outgoing player is stopped,
   not left playing until the retry.
 - WEAK expires by itself; "waiting for connection" retries periodically instead of waiting for a network flap.
+- **One audio session per player, never shared** (the system equalizer is attached to each session, or the
+  two tracks are mixed in-app into one sink so system effects see a single stream); exactly one audio-focus
+  owner; the crossfade stays a single main-thread state machine in which the outgoing player is never paused
+  before its fade ends.
 - **Variants are resolved in parallel; playback starts with the one that fits the link; quality upgrades at the
   next track boundary** (D36): the standby player prepares the next track in the higher quality when the
   measured link allows. **The next track is prepared early, gated by buffer health, not by a fixed point:**
