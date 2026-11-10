@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.korenskoy.yandexmusic.baselineprofile"
+    namespace = "org.tegro.yamp.baselineprofile"
     compileSdk {
         version = release(37)
     }

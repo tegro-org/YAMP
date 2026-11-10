@@ -41,11 +41,11 @@
 }
 
 # Keep all DTO, Domain Models and Updater
--keep class com.korenskoy.yandexmusic.data.dto.** { *; }
--keep class com.korenskoy.yandexmusic.data.cache.PlaybackSnapshot { *; }
--keep class com.korenskoy.yandexmusic.data.updater.** { *; }
--keep class com.korenskoy.yandexmusic.domain.model.** { *; }
--keep class com.korenskoy.yandexmusic.data.radio.** { *; }
+-keep class org.tegro.yamp.data.dto.** { *; }
+-keep class org.tegro.yamp.data.cache.PlaybackSnapshot { *; }
+-keep class org.tegro.yamp.data.updater.** { *; }
+-keep class org.tegro.yamp.domain.model.** { *; }
+-keep class org.tegro.yamp.data.radio.** { *; }
 
 # ------------------------------------------------------------------------------
 # 3. Hilt & Dagger
@@ -82,7 +82,7 @@
 -keep class androidx.media3.datasource.** { *; }
 -keep class androidx.media3.extractor.** { *; }
 -keep class androidx.media3.exoplayer.hls.** { *; }
--keep class com.korenskoy.yandexmusic.data.player.** { *; }
+-keep class org.tegro.yamp.data.player.** { *; }
 
 # ------------------------------------------------------------------------------
 # 6. Coil & Palette

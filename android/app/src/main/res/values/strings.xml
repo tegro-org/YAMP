@@ -1,5 +1,5 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <string name="app_name">Yandex Music Lite</string>
+    <string name="app_name">YAMP</string>
     <string name="account_management_upravlenie_akkauntami">Управление аккаунтами</string>
     <string name="account_management_pereklyuchenie_profiley_i_nastroyki">Переключение профилей и настройки входа</string>
     <string name="cd_zakryt">Закрыть</string>
@@ -20,7 +20,7 @@
     <string name="account_management_vyyti_so_vseh">Выйти со всех</string>
     <string name="account_management_udalit">Удалить</string>
     <string name="startup_account_picker_vyberite_profil">Выберите профиль</string>
-    <string name="startup_account_picker_vhod_v_yandex_music">Вход в Yandex Music Lite</string>
+    <string name="startup_account_picker_vhod_v_yandex_music">Вход в YAMP</string>
     <string name="startup_account_picker_dostupnye_akkaunty">ДОСТУПНЫЕ АККАУНТЫ</string>
     <string name="startup_account_picker_zapomnit_kak_profil_po">Запомнить как профиль по умолчанию</string>
     <string name="startup_account_picker_novyy">Новый</string>
@@ -39,7 +39,7 @@
     <string name="search_v_trende">В тренде</string>
     <string name="cd_oblozhka">Обложка</string>
     <string name="search_treki_artisty_albomy">Треки, артисты, альбомы</string>
-    <string name="cache_menu_yandex_music_lite">Yandex Music Lite</string>
+    <string name="cache_menu_yandex_music_lite">YAMP</string>
     <string name="download_progress_modal_zagruzka_kollektsii">Загрузка коллекции</string>
     <string name="download_progress_modal_svernut">Свернуть</string>
     <string name="download_progress_modal_otmenit">Отменить</string>
@@ -175,7 +175,7 @@
     <string name="crash_log_send">Отправить разработчику</string>
     <string name="crash_log_clear">Очистить</string>
     <string name="crash_log_close">Закрыть</string>
-    <string name="crash_log_subject">Yandex Music Lite %1$s — журнал сбоев</string>
+    <string name="crash_log_subject">YAMP %1$s — журнал сбоев</string>
     <string name="crash_log_privacy">Отчёт содержит только техническую информацию: версию приложения, модель телефона и место ошибки. Данные входа из него удалены. Отправка — только по вашему выбору.</string>
 
     <!-- Redesign 2.0 (Hi-Fi) -->
@@ -298,11 +298,11 @@
     <string name="update_err_apk_empty">Файл обновления пуст или не сохранился</string>
     <string name="update_err_apk_missing">Файл обновления пуст или не найден</string>
     <string name="update_err_apk_corrupt">Файл повреждён или это не пакет APK</string>
-    <string name="update_err_apk_foreign">Это не обновление Yandex Music Lite</string>
+    <string name="update_err_apk_foreign">Это не обновление YAMP</string>
     <string name="update_err_apk_older">Скачанная версия не новее установленной</string>
     <string name="update_err_apk_check">Не удалось проверить файл обновления</string>
     <string name="update_share_title">Сохранить или отправить файл обновления</string>
-    <string name="update_err_allow_install">Разрешите установку приложений для Yandex Music Lite в открывшихся настройках</string>
+    <string name="update_err_allow_install">Разрешите установку приложений для YAMP в открывшихся настройках</string>
     <string name="update_notes_default">• Улучшения стабильности и воспроизведения</string>
     <string name="update_status_checking">Проверяем обновления…</string>
     <string name="update_status_latest">Установлена последняя версия</string>
@@ -312,7 +312,7 @@
     <string name="update_file_size">Размер файла: ~%1$s МБ</string>
     <string name="update_open_installer">Открыть установщик</string>
     <string name="update_install">Установить</string>
-    <string name="notification_channel_description">Уведомления плеера Yandex Music Lite</string>
+    <string name="notification_channel_description">Уведомления плеера YAMP</string>
     <string name="account_is_default">По умолчанию</string>
     <string name="account_make_default">Сделать по умолчанию</string>
     <string name="tab_wave">Волна</string>

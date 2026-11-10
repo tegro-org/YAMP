@@ -1,0 +1,91 @@
+package org.tegro.yamp.di
+
+import android.content.Context
+import retrofit2.converter.kotlinx.serialization.asConverterFactory
+import org.tegro.yamp.BuildConfig
+import org.tegro.yamp.data.network.AuthInterceptor
+import dagger.Module
+import dagger.Provides
+import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
+import dagger.hilt.components.SingletonComponent
+import kotlinx.serialization.json.Json
+import okhttp3.Cache
+import okhttp3.ConnectionPool
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.logging.HttpLoggingInterceptor
+import retrofit2.Retrofit
+import java.io.File
+import java.util.concurrent.TimeUnit
+import javax.inject.Qualifier
+import javax.inject.Singleton
+
+/** The client for GitHub: everything that isn't Yandex must not see the Yandex token. */
+@Qualifier
+annotation class UpdateClient
+
+@Module
+@InstallIn(SingletonComponent::class)
+object NetworkModule {
+
+    @Provides
+    @Singleton
+    fun provideJson(): Json = Json {
+        ignoreUnknownKeys = true
+        coerceInputValues = true
+        isLenient = true
+    }
+
+    @Provides
+    @Singleton
+    fun provideOkHttpClient(
+        authInterceptor: AuthInterceptor,
+        @ApplicationContext context: Context
+    ): OkHttpClient {
+        val loggingInterceptor = HttpLoggingInterceptor().apply {
+            level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.HEADERS else HttpLoggingInterceptor.Level.NONE
+            // Never print the OAuth token, even in debug logcat
+            redactHeader("Authorization")
+            redactHeader("Cookie")
+        }
+
+        val cacheSize = 20L * 1024 * 1024 // 20 MB
+        val cache = Cache(File(context.cacheDir, "http_cache"), cacheSize)
+
+        return OkHttpClient.Builder()
+            .addInterceptor(authInterceptor)
+            .addInterceptor(loggingInterceptor)
+            .connectionPool(ConnectionPool(10, 5, TimeUnit.MINUTES))
+            .cache(cache)
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .build()
+    }
+
+    /** The shared client with its cache, pool and timeouts, minus the Yandex auth headers. */
+    @Provides
+    @Singleton
+    @UpdateClient
+    fun provideUpdateClient(client: OkHttpClient): OkHttpClient =
+        client.newBuilder()
+            .apply { interceptors().removeAll { it is AuthInterceptor } }
+            .build()
+
+    @Provides
+    @Singleton
+    fun provideRetrofit(okHttpClient: OkHttpClient, json: Json): Retrofit {
+        val contentType = "application/json".toMediaType()
+        return Retrofit.Builder()
+            .baseUrl("https://api.music.yandex.net/")
+            .client(okHttpClient)
+            .addConverterFactory(json.asConverterFactory(contentType))
+            .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideYandexMusicApi(retrofit: Retrofit): org.tegro.yamp.data.network.YandexMusicApi {
+        return retrofit.create(org.tegro.yamp.data.network.YandexMusicApi::class.java)
+    }
+}

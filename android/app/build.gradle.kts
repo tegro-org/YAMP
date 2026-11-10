@@ -36,8 +36,33 @@ composeCompiler {
     stabilityConfigurationFiles.add(rootProject.layout.projectDirectory.file("app/compose-stability.conf"))
 }
 
+// Version from git (decision D37), never bumped by hand:
+//   on a tag vX.Y.Z            -> versionName "X.Y.Z"                      (release)
+//   N commits after that tag   -> versionName "X.Y.Z-dev.N+<sha>"          (debug / untagged)
+//   no tag yet                 -> "0.0.0-dev.<commits>+<sha>"; no git at all -> "0.0.0-local"
+//   versionCode = number of commits on the branch (monotonic, so the updater's "higher code wins" holds).
+fun git(vararg args: String): String? = runCatching {
+    providers.exec {
+        commandLine("git", *args)
+        isIgnoreExitValue = true
+    }.standardOutput.asText.get().trim().ifBlank { null }
+}.getOrNull()
+
+val gitSha = git("rev-parse", "--short", "HEAD")
+val gitCount = git("rev-list", "--count", "HEAD")?.toIntOrNull()
+val gitDescribe = git("describe", "--tags", "--match", "v[0-9]*", "--long")
+val describeMatch = gitDescribe?.let { Regex("^v(\\d+\\.\\d+\\.\\d+)-(\\d+)-g[0-9a-f]+$").find(it) }
+val versionBase = describeMatch?.groupValues?.get(1) ?: "0.0.0"
+val versionDistance = describeMatch?.groupValues?.get(2)?.toInt() ?: (gitCount ?: 0)
+val appVersionName = when {
+    gitSha == null -> "0.0.0-local"
+    describeMatch != null && versionDistance == 0 -> versionBase
+    else -> "$versionBase-dev.$versionDistance+$gitSha"
+}
+val appVersionCode = gitCount ?: 1
+
 android {
-    namespace = "com.korenskoy.yandexmusic"
+    namespace = "org.tegro.yamp"
     compileSdk {
         version = release(37)
     }
@@ -50,11 +75,11 @@ android {
     }
 
     defaultConfig {
-        applicationId = "YandexMusicLite.KorenskoyR"
+        applicationId = "org.tegro.yamp"
         minSdk = 26
         targetSdk = 36
-        versionCode = 47
-        versionName = "1.12.2"
+        versionCode = appVersionCode
+        versionName = appVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
