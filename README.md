@@ -1,3 +1,5 @@
+<p align="center"><img src="Design/brand/readme-banner.png" width="560" alt="YAMP — Yet Another Music Player"></p>
+
 # YAMP — Yet Another Music Player
 
 Android music player for Yandex Music and a self-hosted Jellyfin server, for the phone and the car head
