@@ -11,6 +11,12 @@
   their DPI — see [head-unit-dpi-app.md](head-unit-dpi-app.md).
 - Phone(s): Android — a first-class target (D23), also used for sign-in confirmation (Yandex device flow).
 
+## Removable storage on the head unit
+
+- A USB stick mounts **seconds after a cold boot**; an app that scans or validates its queue/library at start sees
+  no volume and must not conclude anything from that (D47). Musicolet lost both its queue and its library this way
+  (2026-11-11).
+
 ## Music servers
 
 - **Jellyfin** — primary self-hosted backend for YAMP. Must be reached over **HTTPS** with a certificate

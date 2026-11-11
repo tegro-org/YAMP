@@ -128,7 +128,9 @@ target with its cursor/position. The controller reacts: `dropStandby`, show the 
 `positionMs` (today's restore path), `play()` immediately if it was playing.
 
 Account rules: the `WAVE` queue of an account is created on first sign-in (empty, then primed as today).
-`resetForAccount` (`AccountSessionManager.kt:107-125`) no longer clears playback — queues are app-wide (D22);
+Entries are never removed because their source is unavailable — a signed-out provider (D22) or, later, an unmounted
+USB/SD volume (D47): they are shown unavailable, skipped, and play again when the source returns.
+`resetUserData`/`resetForAccount` (`AccountSessionManager.kt:107-125`) no longer clears playback — queues are app-wide (D22);
 only if the active queue is another account's `WAVE` queue does the new account's `WAVE` queue become
 active. `clearWaveAndHistory` → `clear` on that account's `WAVE` queue.
 

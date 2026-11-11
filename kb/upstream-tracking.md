@@ -60,7 +60,7 @@ Then update "Last reviewed upstream commit".
 Triaged with three readers (playback / security+API / UI+build) against our tree at `9807c92`. Grouped by
 behaviour, not by commit. Line numbers are upstream HEAD. "Ours" = already in YAMP or differs.
 
-**Batch U1 — security, data, build (port now, small and safe)**
+**Batch U1 — security, data, build — ported 2026-11-11 (`fix/upstream-1.14-u1`)**; the Dependabot bumps and the release-notes cleanup are still open
 
 | Change | Commit | Decision | Note |
 |---|---|---|---|

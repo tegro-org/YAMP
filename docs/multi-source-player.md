@@ -266,6 +266,11 @@ Generic Subsonic / OpenSubsonic provider; tested against the user's Airsonic-Adv
 
 ### Phase 4d — Local files provider — planned, design deferred
 
+Hard requirement already decided (D47): the head unit mounts a USB stick seconds after a cold boot. The index of
+local files is persistent (not rebuilt from the mounted tree at start), queue entries on an unmounted volume show
+as unavailable and are skipped (D22 semantics), and playback resumes from them once the volume appears; a volume
+being absent never deletes anything.
+
 YAMP should also play music stored on the device (D25). It is a third provider (`local`) behind the same
 `MusicProvider` interface: no account, capabilities Library / Folders / Search / Favorites, no Radio (the mix
 builder can still use local tracks), stream = file URI, folder browser shared with Phase 4b.
