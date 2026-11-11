@@ -73,6 +73,10 @@ interface CacheDao {
     @Query("SELECT trackId FROM list_items WHERE owner = :owner AND list = :list ORDER BY position")
     suspend fun loadIds(owner: String, list: String): List<String>
 
+    /** The cached metadata of the given tracks, in no particular order (Phase 1 bridge for queue entries). */
+    @Query("SELECT * FROM tracks WHERE id IN (:ids)")
+    suspend fun tracksById(ids: List<String>): List<TrackEntity>
+
     @Upsert
     suspend fun putValue(value: ValueEntity)
 
@@ -81,6 +85,9 @@ interface CacheDao {
 
     @Query("DELETE FROM cache_values WHERE owner = :owner AND `key` = :key")
     suspend fun deleteValue(owner: String, key: String)
+
+    @Query("SELECT value FROM cache_values WHERE owner = :owner AND `key` = :key")
+    fun valueFlow(owner: String, key: String): kotlinx.coroutines.flow.Flow<String?>
 
     @Query("DELETE FROM list_items WHERE owner = :owner")
     suspend fun deleteOwnerItems(owner: String)
@@ -111,14 +118,21 @@ interface CacheDao {
         deleteAllTracks()
     }
 
-    /** Metadata no list refers to any more. */
-    @Query("DELETE FROM tracks WHERE id NOT IN (SELECT trackId FROM list_items)")
+    /** Metadata no list and no queue refers to any more. */
+    @Query("DELETE FROM tracks WHERE id NOT IN (SELECT trackId FROM list_items) AND id NOT IN (SELECT trackId FROM queue_entries)")
     suspend fun deleteOrphanTracks()
 }
 
-@Database(entities = [TrackEntity::class, ListItemEntity::class, ValueEntity::class], version = 1)
+@Database(
+    entities = [
+        TrackEntity::class, ListItemEntity::class, ValueEntity::class,
+        org.tegro.yamp.data.queue.QueueEntity::class, org.tegro.yamp.data.queue.QueueEntryEntity::class
+    ],
+    version = 2
+)
 abstract class CacheDatabase : RoomDatabase() {
     abstract fun dao(): CacheDao
+    abstract fun queueDao(): org.tegro.yamp.data.queue.QueueDao
 
     companion object {
         /** Owner of the lists every account shares (charts). Never a sanitized folder name. */
@@ -130,8 +144,31 @@ abstract class CacheDatabase : RoomDatabase() {
         /** One database per process, also for tests that build their own cache manager. */
         fun get(context: Context): CacheDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, CacheDatabase::class.java, "music_cache.db")
+                .addMigrations(MIGRATION_1_2)
                 .build()
                 .also { instance = it }
+        }
+
+        /** v1 → v2: the queues of Phase 1 (docs/phase-1-queues.md §2). Every schema change ships a migration (F1). */
+        val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `queues` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, " +
+                        "`kind` TEXT NOT NULL, `origin` TEXT, `seed` TEXT, `account` TEXT, `cursorEntryId` INTEGER, " +
+                        "`positionMs` INTEGER NOT NULL, `shuffle` INTEGER NOT NULL, `repeat` TEXT NOT NULL, " +
+                        "`sortOrder` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL)"
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `queue_entries` (`entryId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`queueId` INTEGER NOT NULL, `position` INTEGER NOT NULL, `originalPosition` INTEGER NOT NULL, " +
+                        "`ref` TEXT NOT NULL, `trackId` TEXT NOT NULL, `title` TEXT NOT NULL, `artist` TEXT NOT NULL, " +
+                        "`coverUrl` TEXT, `durationMs` INTEGER NOT NULL, " +
+                        "FOREIGN KEY(`queueId`) REFERENCES `queues`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE)"
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_queue_entries_queueId_position` ON `queue_entries` (`queueId`, `position`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_queue_entries_ref` ON `queue_entries` (`ref`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_queue_entries_trackId` ON `queue_entries` (`trackId`)")
+            }
         }
     }
 }

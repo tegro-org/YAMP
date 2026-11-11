@@ -30,4 +30,15 @@ class ArchitectureTest {
         assertEquals(listOf("AccountSessionManager.kt"), resets)
         assertTrue(File(sourceDir, "presentation/main/MainViewModel.kt").readText().contains("session.syncAll()"))
     }
+
+    /** ARCHITECTURE B1: the domain is pure Kotlin — no Android, no Media3, no data layer, no DTOs. */
+    @Test
+    fun theDomainQueueModelImportsNothingFromAndroidOrData() {
+        val forbidden = listOf("import android.", "import androidx.", "import org.tegro.yamp.data.", "import org.tegro.yamp.presentation.", "Dto")
+        val offenders = File(sourceDir, "domain/queue").walk()
+            .filter { it.isFile && it.extension == "kt" }
+            .flatMap { file -> file.readLines().filter { line -> forbidden.any { line.contains(it) } }.map { "${file.name}: $it" } }
+            .toList()
+        assertEquals(emptyList<String>(), offenders)
+    }
 }

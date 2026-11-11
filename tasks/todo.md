@@ -78,10 +78,12 @@
 - [ ] **Before Phase 1 code (D38):** `fix/player-skip-and-audio-session` (`docs/player-skip-and-audio-session.md`):
       skip = quick fade + loading glyph, "Separate audio sessions" setting (D45) — implemented 2026-11-10;
       user tests on phone + head unit → commit groups → merge → patch release
-- [ ] 1. Plumbing: `kotlinx-coroutines-test`, `room-testing`; `WIDE_HEAD_UNIT` 1920×720 qualifier + car goldens;
-      `TrackUrlResolver` seam over `TrackPreloadManager`
-- [ ] 2. `PlaybackControllerTest` on today's behaviour (E6) — fake engine + fake resolver, Robolectric
-- [ ] 3. `domain/queue` model; Room v2 (`queues`, `queue_entries`), Hilt `DatabaseModule`, migration + test, `QueueDao` tests
+- [x] 1. Plumbing: `kotlinx-coroutines-test`, `room-testing`; `WIDE_HEAD_UNIT` 1920×720 qualifier + car goldens;
+      `TrackUrlResolver` seam over `TrackPreloadManager` (2026-11-12)
+- [x] 2. `PlaybackControllerTest` on today's behaviour (E6) — 10 tests, fakes in `data/player/fakes/` (2026-11-12)
+- [x] 3. `domain/queue` model + `QueuePolicy` (pure, 8 tests); Room v2 (`queues`, `queue_entries`), Hilt
+      `DatabaseModule`, `RoomQueueStore` (6 tests), migration v1→v2 + test (Room validates on open; Robolectric
+      sees no test assets, so no MigrationTestHelper), B1 rule in `ArchitectureTest` (2026-11-12)
 - [ ] 4. `QueueManager` + legacy import + controller restructure (derived flows, entry cursor, replace/move split,
       shuffle/repeat, WAVE queue per account, live-station mode) — controller tests green; phone test: upgrade keeps session
 - [ ] 5. UI: `HiFiSheetPanel`, `QueueSwitcherHost` + VM, entry points (Home, player sheet, car pill), dialogs, track and
