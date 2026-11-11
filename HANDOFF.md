@@ -1,90 +1,72 @@
-# HANDOFF — 2026-11-09
+# HANDOFF — 2026-11-11
 
 ## State
 
-- `main`: initial import `d221875` + docs commits, pushed up to `8ae0180` (the user pushes; never push
-  unasked).
-- `android/` = upstream YandexMusicLite `fac6af7` (1.12.2), untouched (see `kb/upstream/README.md`).
-  Still upstream identity (`applicationId`, package, updater → KorenskoyR). **No YAMP release before Phase 0.**
-- **Build:** `scripts/build-apk.sh [debug|release]` → `dist/`; `sh gradlew verifyRoborazziDebug lintDebug`
-  for the checks. See `kb/architecture/build-and-ci.md`.
-- **Architecture docs:** `ARCHITECTURE.md` — **approved 2026-11-09**, rules A–K binding (D24).
-  `DESIGN_GUIDE.md` (Hi-Fi tokens/components, car rules, localization, patterns for new screens) —
-  **approved 2026-11-09** (D24). As-is analysis in `kb/architecture/`.
-- **Phone is first-class, not a car-only app** (D23): the user likes the current glass look on the phone;
-  keep it as the visual reference.
+- **Released:** `v0.1.0` (tag on `main` `1bbb8dd`) — the imported upstream player 1.12.2 under YAMP's identity
+  (`org.tegro.yamp`, name YAMP, Rings icon, updater → `tegro-org/YAMP`). Built and published by GitHub Actions
+  from the tag; the app updates itself from the releases. No feature work yet.
+- **Branch `fix/player-skip-and-audio-session`** (from `main`): skip quick-fade + loading glyph + "Separate audio
+  sessions" setting (`docs/player-skip-and-audio-session.md`, D45). **Tested by the user on the phone 2026-11-11:
+  works.** Next: merge → tag `v0.1.1`; the head-unit test of the setting is still to do.
+- `main` has a ruleset (no force push, no deletion).
+- **Versions come from git (D37):** tag `vX.Y.Z` → `X.Y.Z`; otherwise `X.Y.Z-dev.N+sha`; `versionCode` = commit
+  count. Releasing = `git tag -a vX.Y.Z` + push the tag. Never bump numbers by hand.
+- **Build:** `scripts/build-apk.sh [debug|release] [--tests] [--install]` → `dist/` (ignored). Checks:
+  `cd android && sh gradlew verifyRoborazziDebug lintDebug` (340 tests, 107 goldens, lint clean). JDK 21,
+  SDK package `platforms;android-37.0`, `gradlew` is not executable (`sh gradlew`). See
+  `kb/architecture/build-and-ci.md`.
+- **Signing:** the user's keystore lives outside the repo (`~/.keys/yamp/`), config in
+  `android/local.properties` (ignored); GitHub secrets `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`,
+  `KEY_PASSWORD` are set. `YANDEX_DEVICE_SECRET` is **postponed**: device-code sign-in disabled, WebView sign-in
+  only.
+- **CI:** `.github/workflows/ci.yml` (gitleaks from its Docker image — the action needs a licence for orgs;
+  tests + screenshots + lint), `release.yml` (tag `v*`), dependabot weekly for `/android`. The first eight
+  Dependabot PRs failed only because their branches predate the gitleaks fix; the user was advised to close
+  them and let next week's run recreate them.
+- **Docs approved and binding:** `ARCHITECTURE.md`, `DESIGN_GUIDE.md`, `docs/multi-source-player.md` (phases
+  0–6), `docs/phase-0-fork-identity.md` (done). Decisions D1–D37 in `kb/decisions.md`.
+- **Design canvas** `Design/YAMP.html` (serve with `python3 Design/serve.py`, PDF via `Design/export-pdf.sh`):
+  all planned screens for phone, head unit 1920×720 and the split panes (1280×720 / 640×720); reviewed with
+  the user, decisions D26–D35 applied. Icon sources + generator in `Design/icons/`; brand images in
+  `Design/brand/` (social preview to upload in GitHub settings). Two icon concept zips in `Design/` are
+  untracked on purpose.
 
-- **Local files are planned as a third provider** (D25, Phase 4d stub in `docs/multi-source-player.md`).
-  Design (scanning etc.) is deliberately deferred — don't design it until the user brings it up.
+## Player findings to carry into Phase 1 (all verified in code, see `kb/architecture/as-is-playback.md`)
 
-- **Queue loss on the head unit** is partly caused by the per-app DPI tool, which force-stops apps without any
-  callback (`kb/head-unit-dpi-app.md`): persistence rules and test cases for Phase 1 are there.
+1. **Skip looks like a hang** (old track plays up to ~10 s) and **FLAC is chosen and never downgraded on a weak
+   link** → D36: parallel resolution, start with what the link carries, lossless from the next track, the next
+   track prepared early (buffer-gated), quick ~0.5 s fade on manual skip + loading state, retry at lower quality.
+2. **Crossfade blur on the head unit** (old track "stops", new rises, old reappears quieter): both ExoPlayers
+   share one audio session (`di/PlayerModule.kt:79-80`) and the unit's sound chain collapses them to one volume.
+   Confirmed by the phone control test. Rule: one audio session per player.
+3. **Force-stop by the head unit's DPI tool** (`kb/head-unit-dpi-app.md`): write-through persistence, nothing
+   saved only in callbacks, start-up never overwrites state, test cases listed there.
 
-## How we got here (context for a fresh session)
+## Open reports from the user (2026-11-11, see `tasks/todo.md`)
 
-The user found YandexMusicLite and its fork YML (Ozo-bro), asked for a privacy audit
-(`kb/privacy-audit.md`) and whether more backends (Jellyfin) could be added. The design discussion produced
-`docs/multi-source-player.md` (phases; **approved 2026-11-09**, D28) and the decisions in
-`kb/decisions.md`. The doc was first written against YML, then moved here and re-based on upstream
-`fac6af7` ("Current state" section re-checked).
+- Crash on the Android Back button (once, then fine after restart) — trace needed.
+- The head unit's HUD / driver-screen app shows nothing for YAMP (worked for upstream and YML) — likely keyed by
+  package name or missing notification-listener access; app name/APK needed.
 
-## Next steps (in this order, user sets the pace)
+## Next steps (user sets the pace)
 
-1. ~~Initial commit + push~~ (done, `d221875`).
-2. ~~Verify the build~~ (done; `gradlew` is not executable — run `sh gradlew`), incl. screenshot
-   compare + lint.
-3. **Architecture drafts reviewed**; Q1–Q7 decided (`kb/decisions.md` D16–D22: `org.tegro.yamp`, gradual
-   modules, NavHost inside `main`, several providers at once with capability-driven UI, full localization,
-   merged search, app-wide queues); `ARCHITECTURE.md` and `DESIGN_GUIDE.md` approved;
-   `docs/multi-source-player.md` aligned with them (2026-11-09). Queue switch in the car decided: popup, 2 taps
-   (D26); ids are `<provider>:<kind>:<id>` for everything (D27). No open questions left in the doc except
-   the deferred local-files design.
-4. **Design canvas** — in progress on branch `feature/design-canvas`: `Design/YAMP.html` (see
-   `Design/README.md` to view). Style approved by the user. Done: foundations, as-built reference, queue
-   switcher, folder browser (phone + head unit), split-screen panes (1 : 2 → 1280×720 and 640×720).
-   Also drawn (2026-11-09): sources + Jellyfin sign-in, merged search, Home / Library / tabs per
-   providers, mix builder, list states; PDF export (`Design/export-pdf.sh`). **Open design choices waiting
-   for the user:** see "Canvas choices to confirm" below. Checklist in `tasks/todo.md`.
-5. ~~Approve `docs/multi-source-player.md`~~ (approved 2026-11-09, D28).
-6. **Phase 0 — fork identity: implemented** on `feature/phase-0-fork-identity` (doc
-   `docs/phase-0-fork-identity.md`): package/applicationId `org.tegro.yamp`, app name YAMP, Rings icon,
-   updater → `tegro-org/YAMP`, version from git (D37), CI in `.github/`, `scripts/build-apk.sh`, guards and
-   3 goldens updated; 340 tests / 107 screenshots / lint green. **Waiting for the user's phone test**, then
-   commit (groups), merge, push; the first release = tag `v0.1.0` + GitHub secrets (keystore, passwords).
-
-## Player problems found on the phone (2026-11-10)
-
-Skip looks like a hang (old track plays up to ~10 s), FLAC chosen and never downgraded on a weak link. Facts
-and proposed rules: `kb/architecture/as-is-playback.md` → "Known problems". Not fixed in code. The rules are decided (D36) and listed there; they go into ARCHITECTURE (E / C4) and
-Phase 1 when those are next edited.
-
-## Canvas choices to confirm (from the 2026-11-09 screens)
-
-- **Home with both providers:** today's My Wave stays the hero, Jellyfin sections (folders, recently added,
-  start a radio) follow below; first tab is "Wave" while My Wave exists, else "Home".
-- **Library:** rows by kind with provider badges only when mixed (not grouped by provider); one "Liked" row.
-- **Library Play / Shuffle and the car "Liked" tile** with both providers: the first source in the Sources
-  list (decided, D30). Queues may mix providers; favourites are not merged.
-- **Car tiles** (decided, D33): Folders, My Wave, Liked, Mixes, Radio; as many as fit, the row scrolls; no
-  Offline tile and no "Downloaded" row in Library — downloaded music is under Settings → Storage →
-  "Available offline", and the weak-signal pill / offline list state plays it.
-- **Search:** results interleaved by rank across providers, no provider filter, badges only in mixed lists.
-- **Sign-in:** Sources is a Settings sub-page; http address offers a one-tap "Change to https://"; Jellyfin
-  Quick Connect is an alternative sign-in (decided, D31; drawn: phone opens on the password form, the
-  head unit on Quick Connect).
-- **Mixes:** play continues the mix's existing queue; re-run replaces it (decided, D29; drawn). Default mix
-  length 200 tracks. Radio: one radio queue at a time, "Keep" saves it as a named queue; unsaved mixes share one "Last mix"
-  queue (decided, D35). Open: does a re-run ask for confirmation everywhere or only when that queue is
-  playing (drawn: only then)?
-- **"Parked" vs "driving"** (decided, D32): "driving" = car mode (no typing needed), "parked" = the normal
-  landscape UI; no detection, nothing blocked; car mode has a search button. The user will test on the unit.
-  (The "Only while parked" chip is removed from the canvas.)
-
-- **Offline:** "Play downloaded" in an offline list plays the downloaded part of that list (decided, D34). Storage is drawn as its own Settings section; today its rows sit under Playback.
+1. Merge the fix branch, tag `v0.1.1`; then **Phase 1 — multiple queues**: `docs/phase-1-queues.md` is
+   **approved** (D38–D44), checklist in `tasks/todo.md`; branch `feature/phase-1-queues` exists but is empty —
+   recreate it from `main` after the merge. Order: plumbing (deps, 1920×720 qualifier, resolver seam) →
+   controller tests (E6) → Room v2 + domain model → `QueueManager` + controller restructure → UI → screenshots,
+   device checklist, HANDOFF/KB. Still to decide in step 5: `MissingTranslation` lint during the EN/RU split.
+2. Install `v0.1.0` on the head unit; measure the real split-pane sizes and which side the player gets
+   (`kb/environment.md`); try the car-mode idea (D32).
+3. Regenerate the baseline profile for `org.tegro.yamp` (needs a device). Upstream reviews:
+   `kb/upstream-tracking.md` (baseline `fac6af7`, porting note for the package mapping).
+4. Later phases per `docs/multi-source-player.md`: radio (2), provider abstraction (3), Jellyfin (4, 4b),
+   local files (4d, design deferred), favourites (5), mixes (6).
 
 ## Notes
 
-- Upstream reviews: `kb/upstream-tracking.md` (baseline `fac6af7`).
-- User's setup (head unit, Jellyfin/Airsonic, library layout): `kb/environment.md`.
-- `arkadym/YAMP` (an earlier GitHub fork) is superseded; the user may delete/archive it.
-- The user dislikes being rushed: answer the question, don't append "shall I start…?" (`tasks/lessons.md`).
+- Workflow: feature branch + design doc approved before code; stage → report → confirm → commit, in groups;
+  push and merge only on the user's word (`tasks/lessons.md`).
+- Docs and commit messages describe YAMP only; the user's other projects are never named in this public repo.
+- The user dislikes being rushed: answer the question, don't push the next step.
+- User's setup: `kb/environment.md` (head unit Android 9, 1920×720, split 1 : 2; Jellyfin over HTTPS; library
+  layout). Upstream clones for reading: `~/Projects/Github/YandexMusicLite`, `~/Projects/Github/YML`.

@@ -45,8 +45,31 @@
 - [x] `docs/multi-source-player.md` approved (2026-11-09, D28)
 - [ ] Later: local files provider (D25, Phase 4d) — design discussion (scanning, index, track identity) when
       we get to it; until then only keep the provider abstraction server/account-free
-- [x] Phase 0 — fork identity implemented (2026-11-10, branch `feature/phase-0-fork-identity`); user test pending
-  - [x] Release keystore created by the user (outside the repo); CI secrets still to be added on GitHub
-  - [ ] User tests the debug APK on the phone → commit, merge, push
-  - [ ] GitHub: secrets `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`; then tag `v0.1.0`
+- [x] Phase 0 — fork identity: done, merged, **released as v0.1.0** (2026-11-10); CI + release workflows work
   - [ ] Regenerate the baseline profile for `org.tegro.yamp` (needs a device)
+  - [ ] Upload `Design/brand/social-preview.png` as the repo's social preview (user, GitHub settings)
+  - [ ] Close the first Dependabot PRs (failed only on the old gitleaks step); review next week's
+
+## Reported by the user, open (2026-11-11, phone, skip-fix build)
+
+- [ ] **Crash on the Android Back button** (once; after a restart Back works). Need the trace: Settings → About →
+      crash reports, or `adb logcat -d | grep -A 30 "FATAL EXCEPTION"`.
+- [ ] **Head-unit HUD / driver-screen app** shows nothing for YAMP (worked for YandexMusicLite and YML). Likely
+      keyed by package name (`org.tegro.yamp`) or missing notification-listener access; app name/APK to check.
+
+## Phase 1 — multiple queues
+
+- [x] `docs/phase-1-queues.md` approved 2026-11-10 (D38–D44); branch `feature/phase-1-queues`
+- [ ] **Before Phase 1 code (D38):** `fix/player-skip-and-audio-session` (`docs/player-skip-and-audio-session.md`):
+      skip = quick fade + loading glyph, "Separate audio sessions" setting (D45) — implemented 2026-11-10;
+      user tests on phone + head unit → commit groups → merge → patch release
+- [ ] 1. Plumbing: `kotlinx-coroutines-test`, `room-testing`; `WIDE_HEAD_UNIT` 1920×720 qualifier + car goldens;
+      `TrackUrlResolver` seam over `TrackPreloadManager`
+- [ ] 2. `PlaybackControllerTest` on today's behaviour (E6) — fake engine + fake resolver, Robolectric
+- [ ] 3. `domain/queue` model; Room v2 (`queues`, `queue_entries`), Hilt `DatabaseModule`, migration + test, `QueueDao` tests
+- [ ] 4. `QueueManager` + legacy import + controller restructure (derived flows, entry cursor, replace/move split,
+      shuffle/repeat, WAVE queue per account, live-station mode) — controller tests green; phone test: upgrade keeps session
+- [ ] 5. UI: `HiFiSheetPanel`, `QueueSwitcherHost` + VM, entry points (Home, player sheet, car pill), dialogs, track and
+      list menu actions, EN/RU strings, Android Auto "Queues" folder
+- [ ] 6. Screenshots + goldens, `verifyRoborazziDebug lintDebug`, device checklist (DPI force-stop cases), HANDOFF/KB,
+      1920×720 "as built" captures into `Design/`
