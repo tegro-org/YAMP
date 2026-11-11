@@ -57,6 +57,15 @@
 - [ ] **Head-unit HUD / driver-screen app** shows nothing for YAMP (worked for YandexMusicLite and YML). Likely
       keyed by package name (`org.tegro.yamp`) or missing notification-listener access; app name/APK to check.
 
+## Upstream 1.13–1.14.1 ports (`kb/upstream-tracking.md`, triaged 2026-11-11)
+
+- [ ] **U1** security/data/build: Н7 token hosts, Н3 backups + orphaned key, Н6 cache evict, Н1 download lock,
+      Н5 update cancel, Н9 cancellation, Н2 missing-copy fallback, Java 17 target, Compose reports, detekt job
+- [ ] **U2** playback/head unit: buffering policy, crossfade hold (adapted to the skip fade), equalizer announce
+      (two sessions), one track per swipe, `bufferedAheadMs`, AppDialog/AppScale, car font cap, software bitmaps +
+      dark bars, update window → phone + head-unit test
+- [ ] Later: see the "Later" table in the tracking log
+
 ## Phase 1 — multiple queues
 
 - [x] `docs/phase-1-queues.md` approved 2026-11-10 (D38–D44); branch `feature/phase-1-queues`
@@ -73,3 +82,7 @@
       list menu actions, EN/RU strings, Android Auto "Queues" folder
 - [ ] 6. Screenshots + goldens, `verifyRoborazziDebug lintDebug`, device checklist (DPI force-stop cases), HANDOFF/KB,
       1920×720 "as built" captures into `Design/`
+
+## Phase 1b — History (D46)
+
+- [ ] Short design doc + one canvas board → Room `history` table, Library row, track actions

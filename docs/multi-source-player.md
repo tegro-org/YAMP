@@ -139,6 +139,14 @@ resolver (E6) — today only its pure helpers are tested.
   one `UiState`); `MainScreen` is not grown (H1, H3). Its strings are English + Russian from the start (K1).
 - Android Auto / media browser (`MediaLibraryTree`): a "Queues" folder.
 
+### Phase 1b — History (D46)
+
+Every track start is recorded app-wide (`history(ref, startedAt, playedMs, origin)` in Room, write-through,
+capped at a few thousand rows) and shown as a **History** row in Library: most recent first, grouped by day,
+with the usual track actions (play, add to queue, like), so a track skipped past once can be found again.
+Across providers like the queues (D22). Built right after Phase 1 on its `TrackRef` / Room plumbing; the
+"track started" event is the queue manager's. Own short design doc; the canvas gets one board.
+
 ### Phase 2 — Radio (Yandex), YouTube Music semantics
 
 - "Start radio" on a track / album / artist creates a new queue of kind `RADIO` with `seed` set.
