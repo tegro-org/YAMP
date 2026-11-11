@@ -79,7 +79,7 @@ behaviour, not by commit. Line numbers are upstream HEAD. "Ours" = already in YA
 | Н11 imports instead of FQNs (71 files, mechanical) | a7bf428 | skip | conflicts with everything we touched; apply the convention as files are edited |
 | versionCode/Name bumps, release notes in `release.yml` | several | skip | versions from git (D37) |
 
-**Batch U2 — playback and head-unit fixes (port before Phase 1 restructures the controller)**
+**Batch U2 — playback and head-unit fixes — ported 2026-11-11 (`fix/upstream-1.14-u2`), awaiting the user's test**; left out: the pill-label autosize (1.13.0 UI batch), the uneven-link switch and the journal (below)
 
 | Change | Commit | Decision | Note |
 |---|---|---|---|

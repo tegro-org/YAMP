@@ -62,9 +62,14 @@
 - [x] **U1** security/data/build: Н7 token hosts, Н3 backups + orphaned key, Н6 cache evict, Н1 download lock,
       Н5 update cancel, Н9 cancellation, Н2 missing-copy fallback, Java 17 target, Compose reports, detekt job
       (2026-11-11, `fix/upstream-1.14-u1`; left: updater release-notes cleanup, Dependabot bumps)
-- [ ] **U2** playback/head unit: buffering policy, crossfade hold (adapted to the skip fade), equalizer announce
+- [x] **U2** playback/head unit: buffering policy, crossfade hold (adapted to the skip fade), equalizer announce
       (two sessions), one track per swipe, `bufferedAheadMs`, AppDialog/AppScale, car font cap, software bitmaps +
-      dark bars, update window → phone + head-unit test
+      dark bars, update window — implemented 2026-11-11 (`fix/upstream-1.14-u2`)
+  - [x] head-unit ride 1 (2026-11-11): skip crossfade good; auto-pause after double skip → fixed (engine keeps
+        "playing, loading" in the skip gap, audio focus never dropped); settings 200% → waiting for the scale line
+  - [x] ride 2: auto-pause without action, 1-s hold after a start → next-track preparation gated by buffer health
+        (D36); playback journal (About) + **diagnostic log file** (D48, `docs/diagnostic-log.md`)
+  - [ ] user test of `…-u2-diaglog` build on the head unit → share the log → commit groups → merge → `v0.1.2`
 - [ ] Later: see the "Later" table in the tracking log
 
 ## Phase 1 — multiple queues

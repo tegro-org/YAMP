@@ -137,7 +137,8 @@ Weak mobile link, Yandex Plus active, "Максимальное" quality. Line n
    Observed on the **head unit**, whose vendor sound chain (OEM equalizer / DSP) is attached to every media
    session and cannot be switched off — hence "almost every time" there. **Confirmed by the control test
    (2026-11-10): on the phone the crossfade is correct** (only the 2–3 s FLAC delay of problem 1 remains). The
-   crossfade must be re-tested on the unit once the sessions are separated.
+   crossfade must be re-tested on the unit once the sessions are separated. **Verified on the head unit
+   2026-11-11:** with the quick skip fade alone the blur was reduced; with "Separate audio sessions" on it was gone (D45).
 
 ### What YAMP must do differently (input to Phase 1 and the C4 resolver; proposed rules, not yet approved)
 
