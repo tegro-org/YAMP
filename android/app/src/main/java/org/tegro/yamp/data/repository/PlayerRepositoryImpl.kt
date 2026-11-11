@@ -45,8 +45,16 @@ class PlayerRepositoryImpl(
     private val preloadManager: TrackPreloadManager,
     private val wakeLockHelper: org.tegro.yamp.data.player.PlaybackWakeLockHelper,
     /** Where player B's audio session comes from, and whether it is its own one (Settings → Playback). */
-    private val audioSessions: AudioSessionPolicy? = null
+    private val audioSessions: AudioSessionPolicy? = null,
+    private val journal: org.tegro.yamp.data.player.PlaybackJournal? = null
 ) : PlayerRepository {
+
+    private fun note(kind: org.tegro.yamp.data.player.PlaybackJournal.Kind, title: CharSequence? = null, detail: String? = null, valueMs: Long = 0L) {
+        journal?.record(kind, title?.toString(), detail, valueMs)
+    }
+
+    /** When the active player ran dry mid-track (buffering with sound expected), to measure the stall. */
+    private var stalledSince: Long? = null
 
     /**
      * Player A always uses [shared]; player B uses [own] while [separate] says so, otherwise [shared].
@@ -56,7 +64,7 @@ class PlayerRepositoryImpl(
         val shared: Int,
         val own: Int,
         val separate: Flow<Boolean>,
-        val announce: (Int) -> Unit
+        val onSeparateChanged: (Boolean) -> Unit
     )
 
     private val _currentTrackId = MutableStateFlow<String?>(null)
@@ -107,6 +115,24 @@ class PlayerRepositoryImpl(
 
     /** Player fading out during a crossfade; null when no crossfade is running. */
     private var outgoingPlayer: ExoPlayer? = null
+
+    /**
+     * The incoming track of a crossfade is held silent until it has enough to sound without a stop; it still
+     * counts as playing, so nothing on the screen flickers to "paused" meanwhile.
+     */
+    private var awaitingIncoming = false
+
+    /**
+     * The user skipped and the next track is still being resolved: nothing may sound, but the engine keeps
+     * reporting "playing, loading". Reporting nothing playing in the gap made the service abandon audio focus
+     * and ask for it again at the next start — a request a head unit sometimes refuses, which pauses the music.
+     */
+    private var awaitingSkipTarget = false
+    private var skipWaitJob: Job? = null
+
+    @Volatile
+    private var bufferedAhead = Long.MAX_VALUE
+    override val bufferedAheadMs: Long get() = bufferedAhead
     private var crossfadeJob: Job? = null
     private var playJob: Job? = null
     private var preloadedTrackId: String? = null
@@ -150,7 +176,7 @@ class PlayerRepositoryImpl(
                 policy.separate.collect { separate ->
                     val wanted = if (separate && policy.own > 0) policy.own else policy.shared
                     if (wanted <= 0) return@collect
-                    if (separate) policy.announce(policy.own)
+                    policy.onSeparateChanged(separate && policy.own > 0)
                     pendingSessionIdB = wanted
                     applyPendingAudioSession(playerB)
                 }
@@ -161,6 +187,10 @@ class PlayerRepositoryImpl(
             while (isActive) {
                 val currentP = activePlayer
                 if (currentP.isPlaying) {
+                    // All of the track loaded counts as plenty: the end of a track is not a reason to hold back
+                    val loadedToTheEnd = currentP.duration > 0 && currentP.bufferedPosition >= currentP.duration - 500
+                    bufferedAhead = if (loadedToTheEnd) Long.MAX_VALUE else currentP.totalBufferedDuration
+                    journal?.addPlayed(PROGRESS_INTERVAL_MS)
                     updateProgress(currentP)
                     checkTransitionTriggers(currentP)
                     delay(PROGRESS_INTERVAL_MS)
@@ -201,8 +231,11 @@ class PlayerRepositoryImpl(
         if (duration <= 8_000L || position <= 0L || outgoingPlayer != null) return
         val remaining = duration - position
 
-        // 1. Warm standby preparation at 15 seconds remaining
-        if (remaining <= PREPARE_STANDBY_THRESHOLD_MS && !hasEmittedPrepareForCurrent) {
+        // 1. Warm standby preparation: a minute ahead once the playing track is loaded to its end, so the two
+        //    downloads never compete on a slow link (D36); at the latest at 15 seconds remaining
+        val loadedToTheEnd = bufferedAhead == Long.MAX_VALUE
+        val prepareNow = remaining <= PREPARE_STANDBY_THRESHOLD_MS && loadedToTheEnd || remaining <= PREPARE_STANDBY_LATEST_MS
+        if (prepareNow && !hasEmittedPrepareForCurrent) {
             hasEmittedPrepareForCurrent = true
             _prepareNextTrackEvent.tryEmit(Unit)
         }
@@ -235,6 +268,16 @@ class PlayerRepositoryImpl(
 
             override fun onPlaybackStateChanged(playbackState: Int) {
                 refreshPlaybackState()
+                if (playerIdx == activePlayerIndex && outgoingPlayer == null) {
+                    // A stall: the sounding track ran dry (not a start, not a seek)
+                    val ranDry = playbackState == Player.STATE_BUFFERING && player.playWhenReady && player.currentPosition > 1_000L
+                    if (ranDry && stalledSince == null) {
+                        stalledSince = SystemClock.elapsedRealtime()
+                    } else if (playbackState == Player.STATE_READY) {
+                        stalledSince?.let { note(org.tegro.yamp.data.player.PlaybackJournal.Kind.STALL, player.mediaMetadata.title, valueMs = SystemClock.elapsedRealtime() - it) }
+                        stalledSince = null
+                    }
+                }
                 if (playbackState == Player.STATE_ENDED && playerIdx == activePlayerIndex && outgoingPlayer == null) {
                     Log.d(TAG, "Player[$playerIdx] reached STATE_ENDED, crossfadeRequested=$hasEmittedTrackEndedForCurrent")
                     // When the early crossfade trigger already fired, the controller is advancing — don't skip twice.
@@ -248,6 +291,7 @@ class PlayerRepositoryImpl(
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 Log.e(TAG, "ExoPlayer error on player[$playerIdx]: ${error.errorCodeName}", error)
+                note(org.tegro.yamp.data.player.PlaybackJournal.Kind.ERROR, player.mediaMetadata.title, "player ${error.errorCodeName}" + (if (player === outgoingPlayer) " (outgoing)" else if (playerIdx != activePlayerIndex) " (standby)" else ""))
                 player.currentMediaItem?.mediaId?.let { preloadManager.evictUrl(it) }
                 when {
                     player === outgoingPlayer -> {
@@ -287,14 +331,14 @@ class PlayerRepositoryImpl(
 
     private fun refreshPlaybackState() {
         val p = activePlayer
-        val wantsToPlay = p.playWhenReady &&
+        val wantsToPlay = awaitingSkipTarget || (p.playWhenReady || awaitingIncoming) &&
             p.playerError == null &&
             p.mediaItemCount > 0 &&
             p.playbackState != Player.STATE_ENDED
         _isPlaying.value = wantsToPlay
         // Only a real STATE_BUFFERING counts as loading: a paused-but-wants-to-play limbo (focus loss) is not a
         // spinner, otherwise the indicator sticks when playback is interrupted mid-start.
-        _isBuffering.value = wantsToPlay && p.playbackState == Player.STATE_BUFFERING
+        _isBuffering.value = awaitingSkipTarget || wantsToPlay && p.playbackState == Player.STATE_BUFFERING
     }
 
     override fun getPlayer(): Player = activePlayer
@@ -366,6 +410,7 @@ class PlayerRepositoryImpl(
             val playUri = resolvePlayUri(trackId, url)
             if (playUri == null) {
                 Log.w(TAG, "playUri is blank for track $trackId")
+                note(org.tegro.yamp.data.player.PlaybackJournal.Kind.ERROR, title, "no stream URL")
                 _playbackErrorEvent.tryEmit(PlaybackFailure(trackId, startPositionMs, "EMPTY_URL"))
                 return@launch
             }
@@ -376,6 +421,7 @@ class PlayerRepositoryImpl(
     /** Switches the audible track on the main thread. */
     private suspend fun startTransition(item: MediaItem, crossfade: Boolean, startPositionMs: Long) {
         val trackId = item.mediaId
+        skipTargetArrived()
         // A crossfade that is still running (rapid skipping): fade its outgoing side out quickly instead of
         // cutting it, and keep the current track's volume to fade from.
         fadeOutRunningCrossfade()
@@ -386,6 +432,8 @@ class PlayerRepositoryImpl(
         lastSeekTimestamp = 0L
         _currentTrackId.value = trackId
         _progress.value = startPositionMs
+        stalledSince = null
+        note(org.tegro.yamp.data.player.PlaybackJournal.Kind.START, item.mediaMetadata.title, if (crossfade) "crossfade" else "cut", startPositionMs)
 
         val current = activePlayer
         val incoming = standbyPlayer
@@ -418,7 +466,9 @@ class PlayerRepositoryImpl(
             wakeLockHelper.acquireTransitionLock(30_000L)
             outgoingPlayer = current
             setVolume(incoming, 0f)
-            incoming.playWhenReady = true
+            // Silent and still until it can sound without a stop; the outgoing track plays its tail meanwhile
+            awaitingIncoming = true
+            incoming.playWhenReady = false
             crossfadeJob = scope.launch { runCrossfade(current, incoming) }
         } else {
             clearPlayer(current)
@@ -430,31 +480,45 @@ class PlayerRepositoryImpl(
     }
 
     /**
-     * Keeps [outgoing] audible until [incoming] actually renders audio, then blends them with an
-     * equal-power curve (cos² + sin² = 1) so perceived loudness stays constant.
+     * Keeps [outgoing] audible while [incoming] gets ready: ready to play, and with a few seconds in hand or all
+     * of it loaded. Then blends them with an equal-power curve (cos² + sin² = 1) so the loudness stays even.
+     * When the next track came too late and the previous one has already ended, it fades in quickly instead:
+     * no silence, no slow quiet start.
      */
     private suspend fun runCrossfade(outgoing: ExoPlayer, incoming: ExoPlayer) {
         val waitStart = SystemClock.elapsedRealtime()
-        while (!incoming.isPlaying) {
-            if (incoming.playerError != null) return // reported by the listener
+        while (incoming.playbackState != Player.STATE_READY) {
+            if (incoming.playerError != null) {
+                awaitingIncoming = false
+                return // reported by the listener
+            }
             if (SystemClock.elapsedRealtime() - waitStart > INCOMING_READY_TIMEOUT_MS) {
+                awaitingIncoming = false
+                incoming.playWhenReady = true
                 val id = incoming.currentMediaItem?.mediaId ?: return
                 Log.w(TAG, "Incoming track $id did not start in time")
+                note(org.tegro.yamp.data.player.PlaybackJournal.Kind.HOLD_TIMEOUT, incoming.mediaMetadata.title)
                 _playbackErrorEvent.tryEmit(PlaybackFailure(id, 0L, "READY_TIMEOUT"))
                 return
             }
-            delay(20)
+            delay(WAIT_STEP_MS)
+        }
+        // A little more in hand while the previous track still has its tail to play
+        fun shortOfSound() = incoming.isLoading && incoming.totalBufferedDuration < CROSSFADE_HEADROOM_MS
+        while (outgoing.isPlaying && shortOfSound() && SystemClock.elapsedRealtime() - waitStart < INCOMING_READY_TIMEOUT_MS) {
+            delay(WAIT_STEP_MS)
         }
 
-        val outStartVolume = logicalVolume[indexOf(outgoing)]
-        // ~50 ms per volume step whatever the duration (60 steps for the default 3 s)
-        val steps = (crossfadeDurationMs / (CROSSFADE_DURATION_MS / CROSSFADE_STEPS)).toInt().coerceAtLeast(1)
-        val stepDelay = crossfadeDurationMs / steps
-        for (step in 1..steps) {
-            val angle = step.toDouble() / steps * (PI / 2.0)
-            setVolume(outgoing, (outStartVolume * cos(angle)).toFloat().coerceIn(0f, 1f))
-            setVolume(incoming, sin(angle).toFloat().coerceIn(0f, 1f))
-            delay(stepDelay)
+        val late = !outgoing.isPlaying
+        awaitingIncoming = false
+        incoming.playWhenReady = true
+        refreshPlaybackState()
+        note(if (late) org.tegro.yamp.data.player.PlaybackJournal.Kind.CROSSFADE_LATE else org.tegro.yamp.data.player.PlaybackJournal.Kind.CROSSFADE, incoming.mediaMetadata.title, valueMs = SystemClock.elapsedRealtime() - waitStart)
+
+        if (late) {
+            fade(incoming, from = 0f, to = 1f, durationMs = LATE_FADE_IN_MS)
+        } else {
+            equalPowerFade(outgoing, incoming, crossfadeDurationMs)
         }
 
         outgoingPlayer = null
@@ -462,6 +526,35 @@ class PlayerRepositoryImpl(
         setVolume(outgoing, 1f)
         setVolume(incoming, 1f)
         wakeLockHelper.releaseTransitionLock()
+    }
+
+    /** [outgoing] down and [incoming] up over [durationMs], a step every [CROSSFADE_STEP_MS]: smooth to the ear. */
+    private suspend fun equalPowerFade(outgoing: ExoPlayer, incoming: ExoPlayer, durationMs: Long) {
+        val outStartVolume = logicalVolume[indexOf(outgoing)]
+        alongTheClock(durationMs) { part ->
+            val angle = part * (PI / 2.0)
+            setVolume(outgoing, (outStartVolume * cos(angle)).toFloat().coerceIn(0f, 1f))
+            setVolume(incoming, sin(angle).toFloat().coerceIn(0f, 1f))
+        }
+    }
+
+    private suspend fun fade(player: ExoPlayer, from: Float, to: Float, durationMs: Long) {
+        alongTheClock(durationMs) { part -> setVolume(player, (from + (to - from) * part).toFloat()) }
+    }
+
+    /**
+     * Calls [step] with how far along [durationMs] the clock is (0..1], about every [CROSSFADE_STEP_MS], and
+     * once more at the end. Paced by the clock, not by counting steps: a busy main thread makes the steps
+     * coarser, never the fade longer.
+     */
+    private suspend fun alongTheClock(durationMs: Long, step: (Double) -> Unit) {
+        val start = SystemClock.elapsedRealtime()
+        while (true) {
+            val part = ((SystemClock.elapsedRealtime() - start).toDouble() / durationMs).coerceAtMost(1.0)
+            step(part)
+            if (part >= 1.0) return
+            delay(CROSSFADE_STEP_MS)
+        }
     }
 
     /**
@@ -472,13 +565,10 @@ class PlayerRepositoryImpl(
         val out = outgoingPlayer ?: return
         crossfadeJob?.cancel()
         crossfadeJob = null
+        awaitingIncoming = false
         if (skipFading === out) cancelSkipFade() // a skip tail: this quick fade takes over its end
         try {
-            val startVolume = logicalVolume[indexOf(out)]
-            for (step in 1..QUICK_FADE_STEPS) {
-                setVolume(out, startVolume * (1f - step.toFloat() / QUICK_FADE_STEPS))
-                delay(QUICK_FADE_MS / QUICK_FADE_STEPS)
-            }
+            fade(out, from = logicalVolume[indexOf(out)], to = 0f, durationMs = QUICK_FADE_MS)
         } finally {
             if (outgoingPlayer === out) {
                 clearPlayer(out)
@@ -492,6 +582,11 @@ class PlayerRepositoryImpl(
     private fun finishCrossfadeNow(restoreActiveVolume: Boolean) {
         crossfadeJob?.cancel()
         crossfadeJob = null
+        // An incoming track held silent for its crossfade plays now (a pause right after stops it again)
+        if (awaitingIncoming) {
+            awaitingIncoming = false
+            activePlayer.playWhenReady = true
+        }
         outgoingPlayer?.let { out ->
             clearPlayer(out)
             setVolume(out, 1f)
@@ -504,14 +599,48 @@ class PlayerRepositoryImpl(
         val player = activePlayer
         if (skipFading === player) return // skipped again while the fade runs: nothing new to do
         fadeJob?.cancel()
+        expectSkipTarget()
+        note(org.tegro.yamp.data.player.PlaybackJournal.Kind.SKIP, player.mediaMetadata.title, when {
+            awaitingIncoming -> "during a hold"
+            !player.isPlaying -> "not sounding (${player.playbackState})"
+            else -> "fade"
+        })
         if (skipFading != null) {
             // The tail of the previous skip is still fading as the outgoing side: it is not needed any more.
             cancelSkipFade()
             finishCrossfadeNow(restoreActiveVolume = false)
         }
+        if (awaitingIncoming) {
+            // A crossfade is holding the next track silent while the old one plays its tail, and the user skips
+            // past the held track: its tail fades out as the skipped track, the held one is dropped.
+            crossfadeJob?.cancel()
+            crossfadeJob = null
+            awaitingIncoming = false
+            val tail = outgoingPlayer
+            clearPlayer(player)
+            setVolume(player, 1f)
+            _currentTrackId.value = null
+            _progress.value = 0L
+            if (tail != null && tail.isPlaying) {
+                skipFading = tail
+                skipFadeJob = scope.launch {
+                    fade(tail, from = logicalVolume[indexOf(tail)], to = 0f, durationMs = SKIP_FADE_MS)
+                    skipFading = null
+                    if (outgoingPlayer === tail) outgoingPlayer = null
+                    clearPlayer(tail)
+                    setVolume(tail, 1f)
+                    wakeLockHelper.releaseTransitionLock()
+                    refreshPlaybackState()
+                }
+            } else {
+                finishCrossfadeNow(restoreActiveVolume = false)
+            }
+            refreshPlaybackState()
+            return
+        }
         if (!player.isPlaying || player.playerError != null) {
-            // Nothing audible to fade (buffering, paused, ended): drop it now so the next track starts clean
-            // and the engine reports nothing playing while the controller resolves the target.
+            // Nothing audible to fade (buffering, paused, ended): drop it now so the next track starts clean;
+            // the engine keeps reporting "playing, loading" while the controller resolves the target.
             finishCrossfadeNow(restoreActiveVolume = false)
             clearPlayer(player)
             setVolume(player, 1f)
@@ -524,11 +653,7 @@ class PlayerRepositoryImpl(
         skipFadeJob = scope.launch {
             // A crossfade that is still running: its outgoing side leaves quickly, the audible one fades below.
             fadeOutRunningCrossfade()
-            val start = logicalVolume[indexOf(player)]
-            for (step in 1..SKIP_FADE_STEPS) {
-                setVolume(player, start * (1f - step.toFloat() / SKIP_FADE_STEPS))
-                delay(SKIP_FADE_MS / SKIP_FADE_STEPS)
-            }
+            fade(player, from = logicalVolume[indexOf(player)], to = 0f, durationMs = SKIP_FADE_MS)
             // Silent now. It keeps "playing" at zero volume so the media session and the notification keep
             // their item and state while the controller resolves the target (as the audible old track did
             // before). A target that never comes must not leave a silent track behind: give up after a while.
@@ -541,7 +666,7 @@ class PlayerRepositoryImpl(
             when {
                 outgoingPlayer === player -> outgoingPlayer = null // the next track came in under the tail
                 activePlayer === player -> {
-                    // Nothing came: silence and nothing playing until the controller starts something.
+                    // Nothing came yet: silence (still "playing, loading") until the controller starts something.
                     _currentTrackId.value = null
                     _progress.value = 0L
                 }
@@ -558,8 +683,30 @@ class PlayerRepositoryImpl(
         skipFading = null
     }
 
+    /** From now until the next track starts the engine reports "playing, loading" (see [awaitingSkipTarget]). */
+    private fun expectSkipTarget() {
+        awaitingSkipTarget = true
+        skipWaitJob?.cancel()
+        // A target that never comes (the controller gave up without starting or stopping anything) must not
+        // leave the engine "playing" for ever
+        skipWaitJob = scope.launch {
+            delay(SKIP_WAIT_MAX_MS)
+            if (awaitingSkipTarget) {
+                awaitingSkipTarget = false
+                refreshPlaybackState()
+            }
+        }
+    }
+
+    private fun skipTargetArrived() {
+        skipWaitJob?.cancel()
+        skipWaitJob = null
+        awaitingSkipTarget = false
+    }
+
     override fun pause() {
         fadeJob?.cancel()
+        skipTargetArrived()
         cancelSkipFade()
         finishCrossfadeNow(restoreActiveVolume = true)
         activePlayer.pause()
@@ -609,6 +756,7 @@ class PlayerRepositoryImpl(
 
     override fun stop() {
         playJob?.cancel()
+        skipTargetArrived()
         cancelSkipFade()
         finishCrossfadeNow(restoreActiveVolume = true)
         for (p in listOf(playerA, playerB)) {
@@ -628,6 +776,7 @@ class PlayerRepositoryImpl(
         scope.cancel()
         crossfadeJob?.cancel()
         skipFadeJob?.cancel()
+        skipWaitJob?.cancel()
         playJob?.cancel()
         wakeLockHelper.releaseTransitionLock()
         playerA.release()
@@ -635,6 +784,7 @@ class PlayerRepositoryImpl(
     }
 
     override fun seekTo(position: Long) {
+        skipTargetArrived()
         cancelSkipFade()
         finishCrossfadeNow(restoreActiveVolume = true)
         val p = activePlayer
@@ -683,18 +833,26 @@ class PlayerRepositoryImpl(
     companion object {
         private const val TAG = "PlayerRepositoryImpl"
         const val CROSSFADE_DURATION_MS = 3000L
-        const val CROSSFADE_STEPS = 60
-        const val PREPARE_STANDBY_THRESHOLD_MS = 15_000L
+        /** The next track is warmed up this long before the end, if the playing one is already loaded to its end. */
+        const val PREPARE_STANDBY_THRESHOLD_MS = 60_000L
+        /** …and at the latest this long before the end, whatever the buffer: the old rule. */
+        const val PREPARE_STANDBY_LATEST_MS = 15_000L
+        /** Sound the incoming track should have in hand before the crossfade starts (unless all of it loaded). */
+        const val CROSSFADE_HEADROOM_MS = 5_000L
+        /** When the previous track has already ended, the next one fades in this fast instead of crossfading. */
+        const val LATE_FADE_IN_MS = 300L
+        const val CROSSFADE_STEP_MS = 20L
+        private const val WAIT_STEP_MS = 20L
         const val INCOMING_READY_TIMEOUT_MS = 8_000L
         const val DUCK_VOLUME = 0.2f
         const val QUICK_FADE_MS = 150L
         /** A manual skip silences the current track this fast; the next one starts under it or after it. */
         const val SKIP_FADE_MS = 500L
-        private const val SKIP_FADE_STEPS = 10
         /** How long a skipped track may stay silently loaded waiting for its successor. */
         const val SKIP_SILENCE_MAX_MS = 10_000L
+        /** How long after a skip the engine reports "playing, loading" with nothing started. */
+        const val SKIP_WAIT_MAX_MS = 30_000L
         private const val FADE_STEP_MS = 50L
-        private const val QUICK_FADE_STEPS = 6
         private const val PROGRESS_INTERVAL_MS = 100L
         private const val IDLE_INTERVAL_MS = 500L
         private const val EVENT_BUFFER = 16

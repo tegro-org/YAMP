@@ -1,5 +1,6 @@
 package org.tegro.yamp
 
+import coil3.request.allowHardware
 import okio.Path.Companion.toOkioPath
 import coil3.request.crossfade
 import coil3.memory.MemoryCache
@@ -27,6 +28,9 @@ class YandexMusicApp : Application(), Configuration.Provider, SingletonImageLoad
     lateinit var widgetUpdater: NowPlayingWidgetUpdater
 
     @Inject
+    lateinit var diagnosticLog: org.tegro.yamp.data.diagnostics.DiagnosticLog
+
+    @Inject
     lateinit var bluetoothAutoplay: org.tegro.yamp.data.player.BluetoothAutoplay
 
     /**
@@ -44,12 +48,23 @@ class YandexMusicApp : Application(), Configuration.Provider, SingletonImageLoad
                     .build()
             }
             .crossfade(COVER_CROSSFADE_MS)
+            // Plain bitmaps, never "hardware" ones: head units that draw their window without the GPU (Android 9
+            // on Allwinner with a Mali-400) crash on a hardware bitmap ("Software rendering doesn't support
+            // hardware bitmaps"). On Android 8+ the pixels sit in native memory either way.
+            .allowHardware(false)
             .build()
 
     override fun onCreate() {
         // Before anything else, so a crash during start-up is recorded too
         org.tegro.yamp.data.crash.CrashLog.install(this)
         super.onCreate()
+        diagnosticLog.writeHeader("process start")
+        // A crash goes to the diagnostic log too, before the crash handler installed above hands over
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+            runCatching { diagnosticLog.eventNow("CRASH", "${thread.name}: $error") }
+            previous?.uncaughtException(thread, error)
+        }
         widgetUpdater.start()
         bluetoothAutoplay.start()
     }

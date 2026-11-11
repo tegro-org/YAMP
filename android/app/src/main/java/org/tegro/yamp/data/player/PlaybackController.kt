@@ -72,7 +72,9 @@ class PlaybackController @Inject constructor(
     private val stateStore: PlaybackStateStore,
     private val settingsRepository: org.tegro.yamp.domain.repository.SettingsRepository,
     private val networkMonitor: org.tegro.yamp.data.network.NetworkMonitor,
-    private val reserve: RoadReserve
+    private val reserve: RoadReserve,
+    private val journal: PlaybackJournal,
+    private val diagnosticLog: org.tegro.yamp.data.diagnostics.DiagnosticLog
 ) {
     private val scope = CoroutineScope(
         SupervisorJob() + Dispatchers.Main.immediate + CoroutineExceptionHandler { _, e ->
@@ -209,7 +211,8 @@ class PlaybackController @Inject constructor(
             playing && signedIn && state == LinkState.GOOD && track?.isRadio != true
         },
         resolve = preloadManager::resolveOrdinaryStream,
-        streamNeedsTheLine = { isBuffering.value },
+        // The reserve fills only while the playing track has sound in hand: the two downloads must not compete
+        streamNeedsTheLine = { isBuffering.value || playerRepository.bufferedAheadMs < RESERVE_HEADROOM_MS },
         upcoming = { upcomingTracks() },
         moreTracks = { wave.tracks.value },
         isDownloaded = preloadManager::hasPlayableCopy,
@@ -428,7 +431,8 @@ class PlaybackController @Inject constructor(
         resolveAndPlay(current, crossfade = false, startPositionMs = restoredPositionMs.value)
     }
 
-    fun pause() {
+    fun pause(reason: String = "user") {
+        journal.record(PlaybackJournal.Kind.PAUSE, _currentTrack.value?.title, reason)
         waitingForConnection = false
         if (_isStarting.value) {
             // Cancel a start that hasn't produced sound yet.
@@ -930,8 +934,10 @@ class PlaybackController @Inject constructor(
     }
 
     private fun updateLink(change: LinkTracker.() -> Unit) {
+        val before = link.state
         link.change()
         _linkState.value = link.state
+        if (link.state != before) diagnosticLog.event("LINK", "${before.name} → ${link.state.name}")
     }
 
     /** The system's word on the network, the check of the server while it is out of reach, and coming back. */
@@ -998,6 +1004,7 @@ class PlaybackController @Inject constructor(
             hasCopy = !copyFailed && reserve.has(failure.trackId),
             weakLink = _linkState.value == LinkState.WEAK
         )
+        journal.record(PlaybackJournal.Kind.ERROR, current.title, "${failure.reason} at ${failure.positionMs / 1000} s → $action")
         when (action) {
             Recovery.RESUME_FROM_COPY -> {
                 retriedTrackId = null
@@ -1292,6 +1299,8 @@ class PlaybackController @Inject constructor(
     companion object {
         const val WAVE_RETRY_START_MS = 2_000L
         const val WAVE_RETRY_MAX_MS = 60_000L
+        /** Sound the playing track must have ahead before the road reserve may use the line. */
+        const val RESERVE_HEADROOM_MS = 20_000L
         private const val TAG = "PlaybackController"
         private const val RECENT_LIMIT = 100
         private const val URL_RETRY_DELAY_MS = 700L

@@ -51,6 +51,15 @@ class MusicService : MediaLibraryService() {
     @Inject
     lateinit var reactions: TrackReactions
 
+    @Inject
+    lateinit var equalizer: SystemEqualizer
+
+    @Inject
+    lateinit var journal: PlaybackJournal
+
+    @Inject
+    lateinit var diagnosticLog: org.tegro.yamp.data.diagnostics.DiagnosticLog
+
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var mediaLibrarySession: MediaLibrarySession? = null
     private var audioManager: AudioManager? = null
@@ -67,11 +76,13 @@ class MusicService : MediaLibraryService() {
                 hasAudioFocus = false
                 wasPlayingBeforeTransientLoss = false
                 playerRepository.setDucked(false)
-                playbackController.pause()
+                journal.record(PlaybackJournal.Kind.FOCUS, detail = "lost")
+                playbackController.pause(reason = "audio focus lost")
             }
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
                 // Phone call, voice assistant: pause and resume afterwards
                 wasPlayingBeforeTransientLoss = playerRepository.isPlaying.value
+                journal.record(PlaybackJournal.Kind.FOCUS, detail = "lost for a while" + (if (wasPlayingBeforeTransientLoss) ", resumes after" else ""))
                 playerRepository.pause()
             }
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
@@ -81,6 +92,9 @@ class MusicService : MediaLibraryService() {
             AudioManager.AUDIOFOCUS_GAIN -> {
                 hasAudioFocus = true
                 playerRepository.setDucked(false)
+                journal.record(PlaybackJournal.Kind.FOCUS, detail = "regained" + (if (wasPlayingBeforeTransientLoss) ", resuming" else ""))
+                // The alert or the call is over: an equalizer that lost the session gets it back now
+                equalizer.announce()
                 if (wasPlayingBeforeTransientLoss) {
                     wasPlayingBeforeTransientLoss = false
                     playbackController.play()
@@ -93,6 +107,9 @@ class MusicService : MediaLibraryService() {
         super.onCreate()
         AppPresence.playerServiceRunning = true
         audioManager = getSystemService(AUDIO_SERVICE) as? AudioManager
+        diagnosticLog.event("SERVICE", "created")
+        // Equalizer apps hear about the sessions when the sound starts and after a real pause, never per track
+        equalizer.keepAnnounced(serviceScope, playerRepository.isPlaying)
 
         run {
             val channel = NotificationChannel(
@@ -123,6 +140,7 @@ class MusicService : MediaLibraryService() {
                 if (isPlaying) {
                     if (!hasAudioFocus && !requestSystemAudioFocus()) {
                         // Focus denied (e.g. an active phone call): don't play over it
+                        journal.record(PlaybackJournal.Kind.PAUSE, detail = "audio focus refused")
                         playerRepository.pause()
                     }
                 } else if (!wasPlayingBeforeTransientLoss) {
@@ -172,9 +190,13 @@ class MusicService : MediaLibraryService() {
             AudioManager.AUDIOFOCUS_REQUEST_DELAYED -> {
                 // Resumes on AUDIOFOCUS_GAIN
                 wasPlayingBeforeTransientLoss = true
+                journal.record(PlaybackJournal.Kind.FOCUS, detail = "request delayed")
                 false
             }
-            AudioManager.AUDIOFOCUS_REQUEST_FAILED -> false
+            AudioManager.AUDIOFOCUS_REQUEST_FAILED -> {
+                journal.record(PlaybackJournal.Kind.FOCUS, detail = "request failed")
+                false
+            }
             else -> true // AudioManager unavailable: don't block playback
         }
     }
@@ -391,7 +413,7 @@ class MusicService : MediaLibraryService() {
             }
             override fun pause() {
                 pendingStart = null
-                playbackController.pause()
+                playbackController.pause(reason = "media session (notification, headset, car)")
             }
             override fun setPlayWhenReady(playWhenReady: Boolean) {
                 if (playWhenReady) startPendingOrPlay() else pause()
@@ -440,6 +462,7 @@ class MusicService : MediaLibraryService() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
+        diagnosticLog.event("SERVICE", "task removed (app swiped away)")
         playbackController.persistNow()
         if (!playerRepository.isPlaying.value) {
             // Paused: remove the notification but keep the session, so the app reopens on the same track.
@@ -453,9 +476,11 @@ class MusicService : MediaLibraryService() {
     }
 
     override fun onDestroy() {
+        diagnosticLog.event("SERVICE", "destroyed")
         AppPresence.playerServiceRunning = false
         serviceScope.cancel()
         abandonSystemAudioFocus()
+        equalizer.close()
         mediaLibrarySession?.run {
             removeSession(this)
             release()

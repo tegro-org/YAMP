@@ -46,6 +46,8 @@ interface PlayerRepository {
      * after the fade the engine is silent and reports nothing playing until the next track starts.
      */
     fun fadeOutForSkip()
+    /** Music in hand ahead of the playing position; as good as unlimited when unknown. */
+    val bufferedAheadMs: Long get() = Long.MAX_VALUE
     /** Lowers the volume to silence over [durationMs], then pauses (sleep timer). */
     fun fadeOutAndPause(durationMs: Long)
     /** Resumes the loaded item. Returns false when nothing is loaded and the caller must start the track itself. */

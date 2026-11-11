@@ -86,6 +86,10 @@ interface SettingsRepository {
     val separateAudioSessions: Flow<Boolean>
     suspend fun setSeparateAudioSessions(enabled: Boolean)
 
+    /** The diagnostic log file (Settings → About). Default: on in debug builds, off in release. */
+    val diagnosticLog: Flow<Boolean>
+    suspend fun setDiagnosticLog(enabled: Boolean)
+
     companion object {
         const val DEFAULT_CROSSFADE_SECONDS = 3
         const val MAX_CROSSFADE_SECONDS = 12
