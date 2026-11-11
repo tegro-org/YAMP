@@ -21,11 +21,14 @@ import javax.inject.Singleton
  * (owner [CacheDatabase.SHARED], key [ACTIVE_QUEUE]) so a switch is one transaction with the cursor save.
  */
 @Singleton
-class RoomQueueStore @Inject constructor(
+class RoomQueueStore(
     private val dao: QueueDao,
     private val values: CacheDao,
-    private val now: () -> Long = System::currentTimeMillis
+    private val now: () -> Long
 ) : QueueStore {
+    /** The injected form: the clock is a test seam only. */
+    @Inject
+    constructor(dao: QueueDao, values: CacheDao) : this(dao, values, System::currentTimeMillis)
 
     override fun summaries(activeQueueId: Flow<Long?>): Flow<List<QueueSummary>> =
         combine(dao.queuesFlow(), dao.sizesFlow(), dao.cursorsFlow(), activeQueueId) { queues, sizes, cursors, active ->

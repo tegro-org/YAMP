@@ -307,6 +307,9 @@
     <string name="library_empty_title">Здесь пока пусто</string>
     <string name="library_empty_message">Отмечайте треки сердечком — они появятся в «Моей музыке».</string>
     <string name="queue_remove">Убрать</string>
+    <string name="queue_main_name">Основная</string>
+    <string name="queue_my_wave_name">Моя волна</string>
+    <string name="queue_offline_mix_name">Что есть на устройстве</string>
     <string name="update_err_empty_response">Пустой ответ от GitHub</string>
     <string name="update_err_no_apk">Релиз %1$s найден, но файла APK в нём нет</string>
     <string name="update_err_network">Не удалось проверить обновления: нет связи</string>

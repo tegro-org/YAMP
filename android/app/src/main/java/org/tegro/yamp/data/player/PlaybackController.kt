@@ -15,26 +15,36 @@ import android.content.Context
 import android.util.Log
 import android.widget.Toast
 import org.tegro.yamp.BuildConfig
-import org.tegro.yamp.data.cache.PlaybackSnapshot
-import org.tegro.yamp.data.cache.PlaybackStateStore
+import org.tegro.yamp.data.cache.CacheDao
+import org.tegro.yamp.data.cache.CacheDatabase
 import org.tegro.yamp.data.cache.PlaylistCacheManager
+import org.tegro.yamp.data.cache.ValueEntity
 import org.tegro.yamp.data.dto.ArtistDto
 import org.tegro.yamp.data.dto.TrackDetailsDto
 import org.tegro.yamp.data.network.TrackDownloadManager
 import org.tegro.yamp.data.network.TrackUrlResolver
 import org.tegro.yamp.data.network.YandexMusicApi
+import org.tegro.yamp.data.queue.ActiveQueue
+import org.tegro.yamp.data.queue.LegacySessionImport
+import org.tegro.yamp.data.queue.QueueManager
 import org.tegro.yamp.data.repository.RadioRepository
 import org.tegro.yamp.domain.model.RadioStation
+import org.tegro.yamp.domain.queue.QueueKind
+import org.tegro.yamp.domain.queue.QueuePolicy
+import org.tegro.yamp.domain.queue.QueuePolicy.Advance
+import org.tegro.yamp.domain.queue.QueueSummary
+import org.tegro.yamp.domain.queue.RepeatMode
+import org.tegro.yamp.domain.queue.TrackRef
 import org.tegro.yamp.domain.repository.AuthRepository
 import org.tegro.yamp.domain.repository.PlaybackFailure
 import org.tegro.yamp.domain.repository.PlayerRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -49,7 +59,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.plus
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
@@ -57,9 +67,10 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Owns the play queue and every playback decision (next/previous, My Wave refill, error recovery,
- * session persistence). It is a process-wide singleton, so notification, headset and track-end events
- * keep working after the Activity and its ViewModel are destroyed (e.g. the task is swiped away).
+ * Makes every playback decision (next/previous, My Wave refill, error recovery) over the queues that
+ * [QueueManager] owns: the controller reads the active queue and asks the manager for changes, it never holds
+ * a queue of its own (docs/phase-1-queues.md §4). It is a process-wide singleton, so notification, headset and
+ * track-end events keep working after the Activity and its ViewModel are destroyed (e.g. the task is swiped away).
  */
 @Singleton
 class PlaybackController @Inject constructor(
@@ -71,7 +82,9 @@ class PlaybackController @Inject constructor(
     private val preloadManager: TrackUrlResolver,
     private val cacheManager: PlaylistCacheManager,
     private val radioRepository: RadioRepository,
-    private val stateStore: PlaybackStateStore,
+    private val queueManager: QueueManager,
+    private val legacyImport: LegacySessionImport,
+    private val cacheDao: CacheDao,
     private val settingsRepository: org.tegro.yamp.domain.repository.SettingsRepository,
     private val networkMonitor: org.tegro.yamp.data.network.NetworkMonitor,
     private val reserve: RoadReserve,
@@ -84,14 +97,41 @@ class PlaybackController @Inject constructor(
         }
     )
 
-    private val _currentSource = MutableStateFlow(PlaylistSource.NONE)
-    val currentSource: StateFlow<PlaylistSource> = _currentSource.asStateFlow()
+    /**
+     * The queue operations run one after another, in call order, so each one reads the active queue as the
+     * one before left it (two quick presses on "next" move on twice). The manager's calls suspend; a user
+     * action is one operation.
+     */
+    private var lastQueueOp: Job? = null
 
+    /** An FM station on air (D41): a fake track beside the active queue, which stays as it is meanwhile. */
+    private val liveStation = MutableStateFlow<TrackDetailsDto?>(null)
+
+    /** The active queue as the manager holds it right now; the operations read this, never the derived flows. */
+    private val active: ActiveQueue? get() = queueManager.active.value
+
+    /** Every queue for the switcher, and the active one with its entries. */
+    val queues: StateFlow<List<QueueSummary>> = queueManager.queues
+    val activeQueue: StateFlow<ActiveQueue?> = queueManager.active
+
+    /**
+     * The active queue's tracks, its cursor track (or the station on air) and where the track comes from, as the
+     * callers have always read them. Mirrored from the manager's state the moment it changes (on the writing
+     * thread, undispatched), so nothing that runs after a queue operation reads a value the mirror has not reached.
+     */
     private val _currentPlaylist = MutableStateFlow<List<TrackDetailsDto>>(emptyList())
     val currentPlaylist: StateFlow<List<TrackDetailsDto>> = _currentPlaylist.asStateFlow()
 
     private val _currentTrack = MutableStateFlow<TrackDetailsDto?>(null)
     val currentTrack: StateFlow<TrackDetailsDto?> = _currentTrack.asStateFlow()
+
+    private val _currentSource = MutableStateFlow(PlaylistSource.NONE)
+    val currentSource: StateFlow<PlaylistSource> = _currentSource.asStateFlow()
+
+    init {
+        queueManager.active.onEach { refreshDerivedState() }.launchIn(scope + Dispatchers.Unconfined)
+        liveStation.onEach { refreshDerivedState() }.launchIn(scope + Dispatchers.Unconfined)
+    }
 
     /** Playback was requested but the stream URL is still being resolved. */
     private val _isStarting = MutableStateFlow(false)
@@ -145,10 +185,10 @@ class PlaybackController @Inject constructor(
     /** A wave by a track has just started: the screen offers to undo it. */
     val trackWaveStarted: kotlinx.coroutines.flow.SharedFlow<TrackDetailsDto> = _trackWaveStarted
 
+    /** Where the music was when a wave by a track started: the queue, its cursor entry and the position. */
     private data class BeforeTrackWave(
-        val source: PlaylistSource,
-        val playlist: List<TrackDetailsDto>,
-        val trackId: String?,
+        val queueId: Long?,
+        val entryId: Long?,
         val positionMs: Long,
         val seed: TrackDetailsDto?
     )
@@ -157,12 +197,15 @@ class PlaybackController @Inject constructor(
 
     init {
         // Volume normalization: the gains of the queued tracks, applied as each one plays
-        combine(_currentPlaylist, settingsRepository.normalizeVolume) { queue, on ->
+        combine(currentPlaylist, settingsRepository.normalizeVolume) { queue, on ->
             if (!on) emptyMap() else queue.mapNotNull { track -> track.r128?.integrated?.let { track.idString to Loudness.gainFor(it) } }.toMap()
         }.distinctUntilChanged().onEach { playerRepository.setTrackGains(it) }.launchIn(scope)
     }
 
-    /** "Моя волна": its own list, preview and fetching; new tracks join the queue while the wave plays. */
+    /**
+     * "Моя волна": the rotor fetching, its de-dup and the preview the wave page shows. What it fetches joins
+     * the account's WAVE queue, which is the wave the user plays; the wave's own list stays for the preview.
+     */
     private val wave = WaveQueue(
         api = api,
         cacheManager = cacheManager,
@@ -172,12 +215,8 @@ class PlaybackController @Inject constructor(
         isOffline = ::isOffline,
         userFolder = { activeUserFolder },
         keep = { !(skipExplicit.value && it.isExplicit) },
-        // Appended to the queue as it is now: tracks the user removed or moved stay that way
-        onFresh = { fresh ->
-            if (_currentSource.value == PlaylistSource.VIBE) {
-                _currentPlaylist.value = (_currentPlaylist.value + fresh).distinctBy { it.idString }
-            }
-        }
+        // Appended to the wave queue as it is now: tracks the user removed or moved stay that way
+        onFresh = { fresh -> queueOp { queueManager.appendFetched(waveQueueId(), fresh) } }
     )
     val isFetchingMoreQueue: StateFlow<Boolean> get() = wave.isFetching
 
@@ -198,7 +237,11 @@ class PlaybackController @Inject constructor(
     /** What the music left for a mix of what is on the device, to go back to once the connection is good. */
     private var returnPoint: ReturnPoint? = null
 
-    private class ReturnPoint(val source: PlaylistSource, val queue: List<TrackDetailsDto>, val leftTrackId: String?)
+    /** The queue and entry the music left; [wave] when it was My Wave that was asked for. */
+    private class ReturnPoint(val queueId: Long?, val leftEntryId: Long?, val wave: Boolean)
+
+    /** The app-made queue the offline mix plays in, so the queue the music left stays as it was (D35). */
+    private var offlineMixQueueId: Long? = null
 
     private val reserveKeeper = ReserveKeeper(
         scope = scope,
@@ -207,7 +250,7 @@ class PlaybackController @Inject constructor(
         mayFill = combine(
             playerRepository.isPlaying,
             _linkState,
-            _currentTrack,
+            currentTrack,
             authRepository.isAuthorized()
         ) { playing, state, track, signedIn ->
             playing && signedIn && state == LinkState.GOOD && track?.isRadio != true
@@ -229,11 +272,14 @@ class PlaybackController @Inject constructor(
     private var startRequestId = 0L
     private var retriedTrackId: String? = null
     private var consecutiveFailedTracks = 0
-    /** Completes once the saved session (if any) has been loaded from disk. */
+    /** Completes once the saved session (if any) has been loaded from the queue store. */
     private val sessionRestored = kotlinx.coroutines.CompletableDeferred<Unit>()
 
     private val activeUserFolder: String
         get() = authRepository.getActiveAccount()?.folderName ?: "default"
+
+    private val mainName: String get() = context.getString(R.string.queue_main_name)
+    private val waveName: String get() = context.getString(R.string.queue_my_wave_name)
 
     init {
         playerRepository.trackEndedEvent.onEach { onTrackEnded() }.launchIn(scope)
@@ -252,7 +298,7 @@ class PlaybackController @Inject constructor(
                     _isStarting.value = false
                     consecutiveFailedTracks = 0
                     retriedTrackId = null
-                    if (streamingTrackId != null && streamingTrackId == _currentTrack.value?.idString) updateLink { onStreamAudible() }
+                    if (streamingTrackId != null && streamingTrackId == currentTrackNow()?.idString) updateLink { onStreamAudible() }
                 }
             }
             .launchIn(scope)
@@ -273,15 +319,15 @@ class PlaybackController @Inject constructor(
                 bufferingWatchdog?.cancel()
                 stallWatchdog?.cancel()
                 if (buffering) {
-                    val trackId = _currentTrack.value?.idString
+                    val trackId = currentTrackNow()?.idString
                     stallWatchdog = scope.launch {
                         delay(LINK_STALL_MS)
-                        val track = _currentTrack.value
+                        val track = currentTrackNow()
                         if (isBuffering.value && track != null && track.idString == trackId && !track.isRadio) onStreamStalled(track)
                     }
                     bufferingWatchdog = scope.launch {
                         delay(BUFFERING_TIMEOUT_MS)
-                        if (isBuffering.value && _currentTrack.value?.idString == trackId && trackId != null) {
+                        if (isBuffering.value && currentTrackNow()?.idString == trackId && trackId != null) {
                             Log.w(TAG, "Buffering watchdog fired for $trackId")
                             onPlaybackFailure(PlaybackFailure(trackId, progress.value, "BUFFERING_TIMEOUT"))
                         }
@@ -302,7 +348,8 @@ class PlaybackController @Inject constructor(
             }
         }
 
-        scope.launch {
+        // The first queue operation: everything the user asks for waits for the restore
+        queueOp {
             try {
                 loadUserState(activeUserFolder, restoreSession = true)
             } finally {
@@ -317,6 +364,11 @@ class PlaybackController @Inject constructor(
         libraryTracks = tracks
     }
 
+    /**
+     * Plays [trackId] out of [playlist]. The same list as the active queue (the queue sheet's rows) moves the
+     * cursor to its first entry with that track; any other list replaces the queue (E5). Kept for the screens
+     * that still hand in lists; the queue sheet will pass entry ids to [playEntry].
+     */
     fun playTrack(
         trackId: String,
         playlist: List<TrackDetailsDto>,
@@ -324,47 +376,41 @@ class PlaybackController @Inject constructor(
         crossfade: Boolean = true,
         startPositionMs: Long = 0L
     ) {
-        val track = playlist.find { it.idString == trackId } ?: return
-        startRequestId++
-        waitingForConnection = false
+        if (playlist.none { it.idString == trackId }) return
         // A context chosen on purpose: there is nothing to go back to any more
-        source?.let {
-            _currentSource.value = it
-            returnPoint = null
+        if (source != null) returnPoint = null
+        playOp {
+            val queue = active
+            if (queue != null && queue.tracks.map { it.idString } == playlist.map { it.idString }) {
+                val entry = queue.entries.firstOrNull { it.ref.id == trackId } ?: return@playOp
+                startEntry(entry.entryId, crossfade, startPositionMs)
+            } else {
+                playFromNow(playlist, source?.name ?: queue?.queue?.origin, trackId, crossfade, startPositionMs)
+            }
         }
-        _currentPlaylist.value = playlist
-        _currentTrack.value = track
-        restoredPositionMs.value = startPositionMs
+    }
 
-        recordTrackPlayed(trackId)
-        reserve.markPlayed(trackId)
+    /** Replaces the active queue with [tracks] (E5) and plays [startId], or the first one. */
+    fun playFrom(tracks: List<TrackDetailsDto>, source: PlaylistSource, startId: String?) {
+        if (tracks.isEmpty()) return
+        returnPoint = null
+        playOp { playFromNow(tracks, source.name, startId, crossfade = true, startPositionMs = 0L) }
+    }
 
-        val currentIndex = playlist.indexOfFirst { it.idString == trackId }
-        val upcoming = playlist.drop(currentIndex + 1).take(3).map { it.idString }
-        if (upcoming.isNotEmpty()) preloadManager.preloadTracks(upcoming)
-        playlist.getOrNull(currentIndex + 1)?.let { prepareStandby(it) }
-
-        // Continuous queue auto-refill: fewer than 20 tracks left in My Wave
-        if (_currentSource.value == PlaylistSource.VIBE && playlist.size - currentIndex <= 20) {
-            wave.fetchMore()
-        }
-        if (_currentSource.value == PlaylistSource.VIBE && !track.isRadio) {
-            sendRotorFeedback("trackStarted", trackId)
-        }
-
-        resolveAndPlay(track, crossfade, startPositionMs)
-        scope.launch { persistSession() }
+    /** Moves the cursor to [entryId] of the active queue and plays it: the queue sheet's row, duplicates included. */
+    fun playEntry(entryId: Long) {
+        returnPoint = null
+        playOp { startEntry(entryId, crossfade = true, startPositionMs = 0L) }
     }
 
     /** Starts the wave from a track of its preview (the wave page's "next up" shelf). */
     fun playWaveFrom(trackId: String) {
-        val waveList = wave.tracks.value
-        if (waveList.none { it.idString == trackId }) {
+        if (wave.tracks.value.none { it.idString == trackId }) {
             playMyVibe()
             return
         }
-        _currentSource.value = PlaylistSource.VIBE
-        playTrack(trackId, waveList, PlaylistSource.VIBE)
+        returnPoint = null
+        playOp { playWaveFromNow(trackId) }
     }
 
     /** Returns once the saved session (track, queue, position) is back, so "continue" has something to continue. */
@@ -376,60 +422,101 @@ class PlaybackController @Inject constructor(
      */
     suspend fun shutdown() = scope.coroutineContext.job.cancelAndJoin()
 
-    fun playMyVibe() {
-        if (isOffline()) {
-            playOfflineMix(ReturnPoint(PlaylistSource.VIBE, emptyList(), null))
-            return
-        }
-        _currentSource.value = PlaylistSource.VIBE
-        val waveList = wave.tracks.value
-        val unplayed = wave.firstUnplayed()
-        if (unplayed != null) {
-            playTrack(unplayed.idString, waveList, PlaylistSource.VIBE)
-            if (waveList.size < 30) wave.fetchMore()
-            return
-        }
+    /** Waits for the queue operations asked for so far. Like [shutdown], only the tests need it. */
+    suspend fun awaitQueueIdle() {
+        lastQueueOp?.join()
+    }
 
-        // Nothing cached yet (first launch): show the loading state and start once tracks arrive.
-        val request = ++startRequestId
-        _isStarting.value = true
-        wave.fetchMore { _ ->
-            if (request != startRequestId) return@fetchMore
-            val list = wave.tracks.value
-            if (list.isNotEmpty()) {
-                playTrack(list.first().idString, list, PlaylistSource.VIBE)
-            } else {
-                _isStarting.value = false
-                showMessage(context.getString(R.string.msg_wave_load_failed))
-            }
-        }
+    fun playMyVibe() {
+        returnPoint = null
+        playOp { playMyVibeNow() }
     }
 
     fun playAllLikedTracks(shuffle: Boolean = false) {
         val playlist = if (shuffle) libraryTracks.shuffled() else libraryTracks
-        if (playlist.isNotEmpty()) playTrack(playlist.first().idString, playlist, PlaylistSource.LIBRARY)
+        if (playlist.isNotEmpty()) playFrom(playlist, PlaylistSource.LIBRARY, playlist.first().idString)
     }
 
     fun playHits(hits: List<TrackDetailsDto>, shuffle: Boolean = true) {
         val hitsList = if (shuffle) hits.shuffled() else hits
         if (hitsList.isEmpty()) return
         val trackToPlay = hitsList.firstOrNull { it.idString !in recentPlayedTrackIds } ?: hitsList.first()
-        playTrack(trackToPlay.idString, hitsList, PlaylistSource.TRENDS)
+        playFrom(hitsList, PlaylistSource.TRENDS, trackToPlay.idString)
     }
 
+    /** A station goes on air beside the active queue, which stays as it is; anything played from a queue ends it. */
     fun playRadioStation(station: RadioStation) {
-        val radioTrack = radioTrackFor(station)
-        playTrack(radioTrack.idString, listOf(radioTrack), PlaylistSource.RADIO)
+        returnPoint = null
+        playOp {
+            val radioTrack = radioTrackFor(station)
+            liveStation.value = radioTrack
+            restoredPositionMs.value = 0L
+            waitingForConnection = false
+            scope.launch { cacheDao.putValue(ValueEntity(CacheDatabase.SHARED, LIVE_STATION, station.id)) }
+            resolveAndPlay(radioTrack, crossfade = true, startPositionMs = 0L)
+        }
     }
+
+    // region Queues: switching, modes, adding
+
+    /** Makes [id] the active queue: shown paused at its saved track and position; keeps playing if the player was. */
+    fun switchQueue(id: Long) = playOp {
+        if (active?.queue?.id == id) return@playOp
+        val wasPlaying = isPlaying.value
+        val position = progress.value.takeIf { liveStation.value == null }
+        currentPlayJob?.cancel()
+        _isStarting.value = false
+        queueManager.switchTo(id, position)
+        playerRepository.stop()
+        leaveStation()
+        val target = active ?: return@playOp
+        restoredPositionMs.value = target.queue.positionMs
+        followWaveStation(target)
+        val entry = target.cursorEntry ?: target.entries.firstOrNull() ?: return@playOp
+        if (wasPlaying) startEntry(entry.entryId, crossfade = false, startPositionMs = if (entry == target.cursorEntry) target.queue.positionMs else 0L)
+    }
+
+    /** Shuffle keeps the current track where it is and can be switched off again. */
+    fun setShuffle(on: Boolean) = queueOp { keepingStandby { queueManager.setShuffle(on) } }
+
+    fun setRepeat(mode: RepeatMode) = queueOp { queueManager.setRepeat(mode) }
+
+    /** "Add to queue…": to the end of any queue, the active one included. */
+    fun addToQueue(queueId: Long, tracks: List<TrackDetailsDto>) = queueOp { queueManager.appendTo(queueId, tracks) }
+
+    /** "Add to end of queue": the active one, created when there is none. */
+    fun addToEnd(tracks: List<TrackDetailsDto>) = queueOp {
+        val queueId = active?.queue?.id ?: queueManager.create(mainName).id.also { queueManager.switchTo(it, null) }
+        queueManager.appendTo(queueId, tracks)
+    }
+
+    /** "Play next" for a list: right after the current track. */
+    fun playNextTracks(tracks: List<TrackDetailsDto>) = queueOp {
+        if (active == null) playFromNow(tracks, null, null, crossfade = true, startPositionMs = 0L)
+        else queueManager.insertAfterCursor(tracks)
+    }
+
+    fun removeEntry(entryId: Long) = queueOp { keepingStandby { queueManager.remove(entryId) } }
+
+    /** Drag in the queue: [entryId] takes the place of [targetEntryId]. The current entry never moves. */
+    fun moveEntry(entryId: Long, targetEntryId: Long) = queueOp {
+        val cursorId = active?.cursorEntry?.entryId
+        if (entryId == cursorId || targetEntryId == cursorId) return@queueOp
+        keepingStandby { queueManager.move(entryId, targetEntryId) }
+    }
+
+    // endregion
 
     fun togglePlayPause() {
         if (isPlaying.value) pause() else play()
     }
 
     fun play() {
-        val current = _currentTrack.value
+        val current = currentTrackNow()
         if (current == null) {
-            playMyVibe()
+            // A queue with entries but no cursor starts from its first one; nothing at all starts the wave
+            val first = active?.entries?.firstOrNull()
+            if (first != null) playEntry(first.entryId) else playMyVibe()
             return
         }
         // A start is already in flight (e.g. a second Play from a headset): don't restart it
@@ -440,16 +527,14 @@ class PlaybackController @Inject constructor(
     }
 
     fun pause(reason: String = "user") {
-        journal.record(PlaybackJournal.Kind.PAUSE, _currentTrack.value?.title, reason)
+        journal.record(PlaybackJournal.Kind.PAUSE, currentTrackNow()?.title, reason)
         waitingForConnection = false
-        if (_isStarting.value) {
-            // Cancel a start that hasn't produced sound yet.
-            startRequestId++
-            currentPlayJob?.cancel()
-            _isStarting.value = false
-        }
+        // A start that hasn't produced sound yet is cancelled, also one still waiting for its queue operation
+        startRequestId++
+        currentPlayJob?.cancel()
+        _isStarting.value = false
         playerRepository.pause()
-        scope.launch { persistSession() }
+        persistNow()
     }
 
     fun seekTo(positionMs: Long) {
@@ -460,143 +545,90 @@ class PlaybackController @Inject constructor(
         }
     }
 
-    fun playNext(isAuto: Boolean = false) {
-        val current = _currentTrack.value
-        if (current == null) {
-            val playlist = _currentPlaylist.value
-            if (playlist.isNotEmpty()) playTrack(playlist.first().idString, playlist) else playAllLikedTracks()
-            return
-        }
-        // A manual skip must not leave the old track playing while the next stream is resolved (D36): it
-        // fades out now and the play glyph shows loading until the next one sounds. Automatic transitions
-        // keep the user's crossfade.
-        if (!isAuto) playerRepository.fadeOutForSkip()
-        if (current.isRadio) {
-            stepRadioStation(current, +1)
-            return
-        }
-        if (returnFromOfflineMix()) return
+    fun playNext(isAuto: Boolean = false) = queueOp { playNextNow(isAuto) }
 
-        val currentId = current.idString
-        if (_currentSource.value == PlaylistSource.VIBE) {
-            val playedSeconds = progress.value / 1000.0
-            sendRotorFeedback(if (isAuto) "trackFinished" else "skip", currentId, playedSeconds)
-        }
-
-        val playlist = _currentPlaylist.value
-        val currentIndex = playlist.indexOfFirst { it.idString == currentId }
-        when (val action = PlaybackQueue.nextAction(playlist, currentIndex, _currentSource.value, ::skippedOnTheWay)) {
-            is NextAction.PlayIndex -> playTrack(playlist[action.index].idString, playlist)
-            NextAction.FetchMoreWave -> {
-                if (isOffline()) {
-                    skipToNextOnDevice(current)
-                    return
-                }
-                // End of the wave playlist: fetch more instead of stopping.
-                val request = ++startRequestId
-                wave.fetchMore { _ ->
-                    if (request != startRequestId) return@fetchMore
-                    val updated = _currentPlaylist.value
-                    val newIndex = updated.indexOfFirst { it.idString == currentId }
-                    val following = PlaybackQueue.nextMatching(updated, newIndex) { !skippedOnTheWay(it) }
-                        ?: (newIndex + 1).takeIf { newIndex != -1 && it < updated.size }
-                    when {
-                        following != null -> playTrack(updated[following].idString, updated)
-                        updated.isNotEmpty() -> playTrack(updated.first().idString, updated)
-                        else -> playAllLikedTracks()
-                    }
-                }
-            }
-            NextAction.FallbackLibrary -> playAllLikedTracks()
-        }
-    }
-
-    fun playPrev() {
-        val current = _currentTrack.value ?: return
-        if (current.isRadio) {
-            playerRepository.fadeOutForSkip()
-            stepRadioStation(current, -1)
-            return
-        }
-        val playlist = _currentPlaylist.value
-        val currentIndex = playlist.indexOfFirst { it.idString == current.idString }
-        val prevIndex = PlaybackQueue.previousIndex(currentIndex, progress.value)
-        if (prevIndex == null) {
-            seekTo(0)
-        } else {
-            playerRepository.fadeOutForSkip()
-            playTrack(playlist[prevIndex].idString, playlist)
-        }
-    }
+    fun playPrev() = queueOp { playPrevNow() }
 
     fun loadMoreQueue() {
-        if (_currentSource.value == PlaylistSource.VIBE) wave.fetchMore()
+        if (active?.queue?.kind == QueueKind.WAVE) wave.fetchMore()
     }
 
-    fun reorderQueue(from: Int, to: Int) {
-        val list = _currentPlaylist.value.toMutableList()
-        if (from !in list.indices || to !in list.indices) return
-        list.add(to, list.removeAt(from))
-        _currentPlaylist.value = list
+    fun reorderQueue(from: Int, to: Int) = queueOp {
+        val queue = active ?: return@queueOp
+        val entry = queue.entries.getOrNull(from) ?: return@queueOp
+        val target = queue.entries.getOrNull(to) ?: return@queueOp
+        keepingStandby { queueManager.move(entry.entryId, target.entryId) }
     }
 
-    /** Puts [track] right after the current one; with nothing (or radio) playing it just starts. */
-    fun enqueueNext(track: TrackDetailsDto) {
-        val current = _currentTrack.value
-        if (current == null || current.isRadio) {
-            playTrack(track.idString, listOf(track))
-            return
+    /** Puts [track] right after the current one; with nothing (or a station) playing it just starts. */
+    fun enqueueNext(track: TrackDetailsDto) = queueOp {
+        val queue = active
+        if (queue == null) {
+            playFromNow(listOf(track), null, track.idString, crossfade = true, startPositionMs = 0L)
+            return@queueOp
         }
-        if (current.idString == track.idString) return
-        val queue = _currentPlaylist.value.filterNot { it.idString == track.idString }.toMutableList()
-        queue.add(queue.indexOfFirst { it.idString == current.idString } + 1, track)
-        _currentPlaylist.value = queue
+        val current = currentTrackNow()
+        if (current == null || current.isRadio) {
+            queueManager.insertAfterCursor(listOf(track))
+            active?.entries?.getOrNull(queue.cursorIndex + 1)?.let { startEntry(it.entryId, crossfade = true, startPositionMs = 0L) }
+            return@queueOp
+        }
+        if (current.idString == track.idString) return@queueOp
+        queueManager.insertAfterCursor(listOf(track))
     }
 
-    fun removeFromQueue(trackId: String) {
-        updateQueueKeepingStandby { queue -> queue.filterNot { it.idString == trackId } }
+    /** Removes the first entry with [trackId] after the cursor, else any other than the cursor's. */
+    fun removeFromQueue(trackId: String) = queueOp {
+        val queue = active ?: return@queueOp
+        val entry = queue.entries.drop(queue.cursorIndex + 1).firstOrNull { it.ref.id == trackId }
+            ?: queue.entries.firstOrNull { it.ref.id == trackId && it.entryId != queue.cursorEntry?.entryId }
+            ?: return@queueOp
+        keepingStandby { queueManager.remove(entry.entryId) }
     }
 
     /** Drag in the queue: [trackId] takes the place of [targetId]. The current track never moves. */
-    fun moveInQueue(trackId: String, targetId: String) {
-        val currentId = _currentTrack.value?.idString
-        if (trackId == currentId || targetId == currentId) return
-        updateQueueKeepingStandby { queue ->
-            PlaybackQueue.moved(queue, queue.indexOfFirst { it.idString == trackId }, queue.indexOfFirst { it.idString == targetId })
+    fun moveInQueue(trackId: String, targetId: String) = queueOp {
+        val queue = active ?: return@queueOp
+        val currentId = queue.cursorTrack?.idString
+        if (trackId == currentId || targetId == currentId) return@queueOp
+        val entry = queue.entries.firstOrNull { it.ref.id == trackId } ?: return@queueOp
+        val target = queue.entries.firstOrNull { it.ref.id == targetId } ?: return@queueOp
+        keepingStandby { queueManager.move(entry.entryId, target.entryId) }
+    }
+
+    /** Runs a queue change; when what follows the cursor changed, that entry's track is prepared instead. */
+    private suspend fun keepingStandby(change: suspend () -> Unit) {
+        val before = active
+        change()
+        val after = active ?: return
+        if (liveStation.value != null || after.cursorTrack == null) return
+        val nextBefore = before?.entries?.getOrNull(before.cursorIndex + 1)
+        val nextAfter = after.entries.getOrNull(after.cursorIndex + 1) ?: return
+        if (nextAfter.entryId != nextBefore?.entryId) prepareStandby(after.tracks[after.cursorIndex + 1])
+    }
+
+    /** Dislike behaves like Yandex Music: the current track is skipped right away and leaves the queue. */
+    fun onTrackDisliked(trackId: String) {
+        wave.remove(trackId)
+        queueOp {
+            if (currentTrackNow()?.idString == trackId) playNextNow(isAuto = false)
+            keepingStandby {
+                active?.entries?.filter { it.ref.id == trackId }?.forEach { queueManager.remove(it.entryId) }
+            }
         }
     }
 
-    /** Changes the queue; when what follows the current track changed, that track is prepared instead. */
-    private fun updateQueueKeepingStandby(change: (List<TrackDetailsDto>) -> List<TrackDetailsDto>) {
-        val before = _currentPlaylist.value
-        val after = change(before)
-        if (after === before) return
-        _currentPlaylist.value = after
-        val currentId = _currentTrack.value?.idString ?: return
-        val nextBefore = before.getOrNull(before.indexOfFirst { it.idString == currentId } + 1)
-        val nextAfter = after.getOrNull(after.indexOfFirst { it.idString == currentId } + 1)
-        if (nextAfter != null && nextAfter.idString != nextBefore?.idString) prepareStandby(nextAfter)
-    }
-
-    /** Dislike behaves like Yandex Music: the current track is skipped right away. */
-    fun onTrackDisliked(trackId: String) {
-        wave.remove(trackId)
-        if (_currentTrack.value?.idString == trackId) playNext()
-        removeFromQueue(trackId)
-    }
-
+    /** Stops the engine; the queue stays, its position goes back to the start (nothing is deleted, D35). */
     fun stopAndClear() {
         startRequestId++
         currentPlayJob?.cancel()
         _isStarting.value = false
         playerRepository.stop()
-        _currentTrack.value = null
-        _currentPlaylist.value = emptyList()
-        _currentSource.value = PlaylistSource.NONE
         restoredPositionMs.value = 0L
         waitingForConnection = false
         returnPoint = null
-        scope.launch { stateStore.clear() }
+        leaveStation()
+        queueOp { queueManager.savePosition(0L) }
     }
 
     /** Account switch/logout: drop the session and load the other user's wave and history. */
@@ -609,12 +641,22 @@ class PlaybackController @Inject constructor(
         _waveSeed.value = null
         _waveTuning.value = WaveTuning()
         libraryTracks = emptyList()
-        if (userFolder != null) scope.launch { loadUserState(userFolder, restoreSession = false) }
+        if (userFolder == null) return
+        queueOp {
+            // Queues are app-wide (D22): only another account's My Wave gives way to this account's
+            val queue = active
+            if (queue?.queue?.kind == QueueKind.WAVE && queue.queue.account != userFolder) {
+                queueManager.switchTo(queueManager.waveQueue(userFolder, waveName).id, null)
+                restoredPositionMs.value = active?.queue?.positionMs ?: 0L
+            }
+            loadUserState(userFolder, restoreSession = false)
+        }
     }
 
     fun clearWaveAndHistory() {
         wave.clear()
         recentPlayedTrackIds.clear()
+        queueOp { queueManager.clear(waveQueueId()) }
     }
 
     /** Silent My Wave refresh on launch: append fresh unplayed tracks and warm their URLs. */
@@ -671,36 +713,49 @@ class PlaybackController @Inject constructor(
     /** The wave starts over after the current track: same station, fresh tracks. */
     private fun restartWaveAfterCurrent() {
         wave.switchTo(wave.station)
-        if (_currentSource.value == PlaylistSource.VIBE) {
-            _currentPlaylist.value = listOfNotNull(_currentTrack.value?.takeIf { !it.isRadio })
-            playerRepository.dropStandby()
+        queueOp {
+            val queue = active
+            if (queue?.queue?.kind == QueueKind.WAVE && liveStation.value == null) {
+                queueManager.restartDynamic(queue.queue.id, queue.queue.seed, keepUpToCursor = true, tracks = emptyList())
+                playerRepository.dropStandby()
+            }
+            wave.fetchMore()
         }
-        wave.fetchMore()
     }
 
     /**
-     * A wave by [track]: the track plays (on, if it already does) and similar ones follow. What played
-     * before is kept, so [undoTrackWave] can go back to it.
+     * A wave by [track]: the track plays (on, if it already does) and similar ones follow, inside the WAVE
+     * queue (D40). What played before is kept, so [undoTrackWave] can go back to it.
      */
     fun startTrackWave(track: TrackDetailsDto) {
         if (track.isRadio || isOffline()) {
             if (isOffline()) showMessage(context.getString(R.string.msg_offline_no_downloads))
             return
         }
-        val current = _currentTrack.value
-        beforeTrackWave = BeforeTrackWave(_currentSource.value, _currentPlaylist.value, current?.idString, progress.value, _waveSeed.value)
+        returnPoint = null
+        playOp { startTrackWaveNow(track) }
+    }
+
+    private suspend fun startTrackWaveNow(track: TrackDetailsDto) {
+        val left = active
+        val current = currentTrackNow()
+        beforeTrackWave = BeforeTrackWave(left?.queue?.id, left?.cursorEntry?.entryId, progress.value, _waveSeed.value)
         wave.switchTo(WaveQueue.trackStation(track.idString))
         _waveSeed.value = track
         _waveTuning.value = WaveTuning()
-        if (current?.idString == track.idString) {
-            _currentSource.value = PlaylistSource.VIBE
-            returnPoint = null
-            _currentPlaylist.value = listOf(current)
+        val waveId = waveQueueId()
+        if (left?.queue?.id != waveId) queueManager.switchTo(waveId, progress.value.takeIf { left != null && liveStation.value == null })
+        val playsOn = liveStation.value == null && current?.idString == track.idString
+        // The wave queue keeps what it played up to its cursor; the seed track follows unless it is that cursor
+        val seedIsCursor = playsOn && active?.cursorTrack?.idString == track.idString
+        queueManager.restartDynamic(waveId, seed = track.idString, keepUpToCursor = true, tracks = if (seedIsCursor) emptyList() else listOf(track))
+        val target = active?.entries?.lastOrNull() ?: return
+        if (playsOn) {
+            queueManager.moveCursor(target.entryId, progress.value)
             playerRepository.dropStandby()
             wave.fetchMore()
-            scope.launch { persistSession() }
         } else {
-            playTrack(track.idString, listOf(track), PlaylistSource.VIBE)
+            startEntry(target.entryId, crossfade = true, startPositionMs = 0L)
         }
         loadWaveTuning()
         _trackWaveStarted.tryEmit(track)
@@ -711,14 +766,15 @@ class PlaybackController @Inject constructor(
         if (_waveSeed.value == null) return
         _waveSeed.value = null
         beforeTrackWave = null
-        val current = _currentTrack.value?.takeIf { !it.isRadio }
-        scope.launch {
+        queueOp {
+            val current = currentTrackNow()?.takeIf { !it.isRadio }
             val saved = cacheManager.loadWaveQueue(activeUserFolder).filterNot { it.idString == current?.idString }
             wave.switchTo(WaveQueue.MY_WAVE, saved)
             _waveTuning.value = WaveTuning()
             loadWaveTuning()
-            if (_currentSource.value == PlaylistSource.VIBE) {
-                _currentPlaylist.value = (listOfNotNull(current) + saved).distinctBy { it.idString }
+            val waveId = waveQueueId()
+            queueManager.restartDynamic(waveId, seed = null, keepUpToCursor = true, tracks = saved)
+            if (active?.queue?.id == waveId && liveStation.value == null) {
                 playerRepository.dropStandby()
                 prepareNextTrackInQueue()
             }
@@ -732,28 +788,34 @@ class PlaybackController @Inject constructor(
         val before = beforeTrackWave ?: return
         beforeTrackWave = null
         if (before.seed != null) {
-            // It was a wave by another track: go back to that one
+            // It was a wave by another track: go back to that one, with nothing further to undo
             startTrackWave(before.seed)
-            beforeTrackWave = null
+            queueOp { beforeTrackWave = null }
             return
         }
         _waveSeed.value = null
-        val current = _currentTrack.value
-        scope.launch {
-            wave.switchTo(WaveQueue.MY_WAVE, cacheManager.loadWaveQueue(activeUserFolder))
-            _waveTuning.value = WaveTuning()
-            loadWaveTuning()
-            val previous = before.trackId
-            if (previous != null && previous != current?.idString && before.playlist.any { it.idString == previous }) {
-                // Started from a menu on another track: the track that played before comes back where it was
-                playTrack(previous, before.playlist, before.source, startPositionMs = before.positionMs)
-            } else {
-                _currentSource.value = before.source
-                _currentPlaylist.value = before.playlist.ifEmpty { listOfNotNull(current) }
-                playerRepository.dropStandby()
-                prepareNextTrackInQueue()
-                persistSession()
-            }
+        playOp { undoTrackWaveNow(before) }
+    }
+
+    private suspend fun undoTrackWaveNow(before: BeforeTrackWave) {
+        val current = currentTrackNow()
+        val waveId = waveQueueId()
+        wave.switchTo(WaveQueue.MY_WAVE, cacheManager.loadWaveQueue(activeUserFolder))
+        _waveTuning.value = WaveTuning()
+        loadWaveTuning()
+        queueManager.restartDynamic(waveId, seed = null, keepUpToCursor = true, tracks = wave.tracks.value)
+        val leftQueue = before.queueId
+        if (leftQueue != null && leftQueue != waveId && active?.queue?.id == waveId) queueManager.switchTo(leftQueue, progress.value)
+        val queue = active ?: return
+        val previous = before.entryId?.let { id -> queue.entries.firstOrNull { it.entryId == id } }
+        if (previous != null && previous.ref.id != current?.idString) {
+            // Started from a menu on another track: the track that played before comes back where it was
+            startEntry(previous.entryId, crossfade = true, startPositionMs = before.positionMs)
+        } else {
+            if (previous != null) queueManager.moveCursor(previous.entryId, progress.value)
+            playerRepository.dropStandby()
+            prepareNextTrackInQueue()
+            persistSession()
         }
     }
 
@@ -774,9 +836,7 @@ class PlaybackController @Inject constructor(
         playNext(isAuto = true)
     }
 
-    fun persistNow() {
-        scope.launch { persistSession() }
-    }
+    fun persistNow() = queueOp { persistSession() }
 
     /**
      * Playback resumption (headset/Bluetooth Play or the system media card after the process died):
@@ -784,7 +844,7 @@ class PlaybackController @Inject constructor(
      */
     suspend fun prepareResumption(startPlayback: Boolean): Pair<MediaItem, Long>? {
         sessionRestored.await()
-        val track = _currentTrack.value ?: return null
+        val track = currentTrackNow() ?: return null
         if (startPlayback) {
             play()
             withTimeoutOrNull(RESUMPTION_START_TIMEOUT_MS) { playerRepository.isPlaying.first { it } }
@@ -799,6 +859,253 @@ class PlaybackController @Inject constructor(
             .setMediaMetadata(metadata)
             .build()
         return item to progress.value
+    }
+
+    // endregion
+
+    // region Queue operations
+
+    private fun queueOp(block: suspend () -> Unit) {
+        val previous = lastQueueOp
+        val job = scope.launch(start = CoroutineStart.LAZY) {
+            previous?.join()
+            block()
+        }
+        lastQueueOp = job
+        job.start()
+    }
+
+    /** A request to start something: a later one, or a pause, supersedes it before it runs. */
+    private fun playOp(block: suspend () -> Unit) {
+        val request = ++startRequestId
+        queueOp { if (request == startRequestId) block() }
+    }
+
+    private fun currentTrackNow(): TrackDetailsDto? = liveStation.value ?: active?.cursorTrack
+
+    /** The track last, so whoever waits for it finds the source and the list already there. */
+    private fun refreshDerivedState() {
+        val queue = active
+        val station = liveStation.value
+        _currentSource.value = sourceOf(queue, station)
+        _currentPlaylist.value = queue?.tracks.orEmpty()
+        _currentTrack.value = station ?: queue?.cursorTrack
+    }
+
+    private fun sourceOf(queue: ActiveQueue?, station: TrackDetailsDto?): PlaylistSource {
+        if (station != null) return PlaylistSource.RADIO
+        if (queue == null || queue.cursorTrack == null) return PlaylistSource.NONE
+        if (queue.queue.kind == QueueKind.WAVE) return PlaylistSource.VIBE
+        return PlaylistSource.entries.firstOrNull { it.name.equals(queue.queue.origin, ignoreCase = true) } ?: PlaylistSource.LIBRARY
+    }
+
+    /** The account's My Wave queue, created empty on first use. */
+    private suspend fun waveQueueId(): Long = queueManager.waveQueue(activeUserFolder, waveName).id
+
+    /** Replaces the active queue with [tracks] and plays [startId] (or the first); My Wave is never replaced. */
+    private suspend fun playFromNow(tracks: List<TrackDetailsDto>, origin: String?, startId: String?, crossfade: Boolean, startPositionMs: Long) {
+        val left = active
+        if (left?.queue?.kind == QueueKind.WAVE) {
+            // The wave is not editable: the list goes to the user's latest own queue, or a new one
+            val target = queueManager.queues.value
+                .filter { it.queue.kind == QueueKind.STATIC }
+                .maxByOrNull { it.queue.updatedAt }?.queue?.id
+                ?: queueManager.create(mainName).id
+            queueManager.switchTo(target, progress.value.takeIf { liveStation.value == null })
+        }
+        val queue = queueManager.replaceActive(tracks, origin, startId?.let { TrackRef.yandex(it) }, nameIfNew = mainName)
+        val entry = queue.cursorEntry ?: return
+        startEntry(entry.entryId, crossfade, startPositionMs)
+    }
+
+    /** Moves the cursor to [entryId] and starts its track: the one place a queue entry is played from. */
+    private suspend fun startEntry(entryId: Long, crossfade: Boolean, startPositionMs: Long) {
+        val request = ++startRequestId
+        waitingForConnection = false
+        queueManager.moveCursor(entryId, startPositionMs)
+        if (request != startRequestId) return // paused or superseded while the cursor was being written
+        val queue = active ?: return
+        val index = queue.indexOfEntry(entryId)
+        val track = queue.tracks.getOrNull(index) ?: return
+        leaveStation()
+        restoredPositionMs.value = startPositionMs
+
+        val trackId = track.idString
+        recordTrackPlayed(trackId)
+        reserve.markPlayed(trackId)
+
+        val upcoming = queue.tracks.drop(index + 1).take(3).map { it.idString }
+        if (upcoming.isNotEmpty()) preloadManager.preloadTracks(upcoming)
+        queue.tracks.getOrNull(index + 1)?.let { prepareStandby(it) }
+
+        if (queue.queue.kind == QueueKind.WAVE) {
+            // Continuous queue auto-refill: fewer than 20 tracks left in My Wave
+            if (queue.size - index <= 20) wave.fetchMore()
+            sendRotorFeedback("trackStarted", trackId)
+        }
+
+        resolveAndPlay(track, crossfade, startPositionMs)
+    }
+
+    private suspend fun playNextNow(isAuto: Boolean) {
+        val station = liveStation.value
+        if (station != null) {
+            if (!isAuto) playerRepository.fadeOutForSkip()
+            stepRadioStation(station, +1)
+            return
+        }
+        val queue = active
+        val current = queue?.cursorTrack
+        if (queue == null || current == null) {
+            val first = queue?.entries?.firstOrNull()
+            if (first != null) startEntry(first.entryId, crossfade = true, startPositionMs = 0L) else playAllLikedTracks()
+            return
+        }
+        // A manual skip must not leave the old track playing while the next stream is resolved (D36): it
+        // fades out now and the play glyph shows loading until the next one sounds. Automatic transitions
+        // keep the user's crossfade.
+        if (!isAuto) playerRepository.fadeOutForSkip()
+        if (returnFromOfflineMixNow()) return
+
+        val currentId = current.idString
+        if (queue.queue.kind == QueueKind.WAVE) {
+            val playedSeconds = progress.value / 1000.0
+            sendRotorFeedback(if (isAuto) "trackFinished" else "skip", currentId, playedSeconds)
+        }
+
+        when (val advance = nextAdvance(queue, manual = !isAuto)) {
+            is Advance.To -> startEntry(queue.entries[advance.index].entryId, crossfade = true, startPositionMs = 0L)
+            Advance.FetchMore -> {
+                if (isOffline()) {
+                    skipToNextOnDeviceNow(current)
+                    return
+                }
+                // End of the wave: fetch more instead of stopping; the batch joins the queue before this runs
+                val request = ++startRequestId
+                wave.fetchMore { _ ->
+                    if (request != startRequestId) return@fetchMore
+                    queueOp {
+                        if (request != startRequestId) return@queueOp
+                        val updated = active ?: return@queueOp
+                        val following = nextAdvance(updated, manual = !isAuto) as? Advance.To
+                        when {
+                            following != null -> startEntry(updated.entries[following.index].entryId, crossfade = true, startPositionMs = 0L)
+                            updated.entries.isNotEmpty() -> startEntry(updated.entries.first().entryId, crossfade = true, startPositionMs = 0L)
+                            else -> playAllLikedTracks()
+                        }
+                    }
+                }
+            }
+            Advance.End -> {
+                // Repeat off: the queue ends here, the track stays on screen and Play starts it over
+                _isStarting.value = false
+                playerRepository.stop()
+                restoredPositionMs.value = 0L
+            }
+        }
+    }
+
+    private fun nextAdvance(queue: ActiveQueue, manual: Boolean): Advance =
+        QueuePolicy.next(queue.cursorIndex, queue.size, queue.queue.kind, queue.queue.repeat, manual) { skippedOnTheWay(queue.tracks[it]) }
+
+    private suspend fun playPrevNow() {
+        val station = liveStation.value
+        if (station != null) {
+            playerRepository.fadeOutForSkip()
+            stepRadioStation(station, -1)
+            return
+        }
+        val queue = active ?: return
+        if (queue.cursorTrack == null) return
+        // Apple Music behaviour: "previous" after three seconds of playback restarts the current track
+        val prevIndex = if (progress.value > PlaybackQueue.RESTART_ON_PREV_THRESHOLD_MS) null
+        else QueuePolicy.previous(queue.cursorIndex) { skippedOnTheWay(queue.tracks[it]) }
+        if (prevIndex == null) {
+            seekTo(0)
+        } else {
+            playerRepository.fadeOutForSkip()
+            startEntry(queue.entries[prevIndex].entryId, crossfade = true, startPositionMs = 0L)
+        }
+    }
+
+    /** My Wave = the account's WAVE queue: switched to, continued after its cursor, fetched when empty. */
+    private suspend fun playMyVibeNow() {
+        if (isOffline()) {
+            playOfflineMixNow(ReturnPoint(null, null, wave = true))
+            return
+        }
+        val waveId = waveQueueId()
+        if (active?.queue?.id != waveId) {
+            queueManager.switchTo(waveId, progress.value.takeIf { active != null && liveStation.value == null })
+            active?.let { followWaveStation(it) }
+        }
+        var queue = active ?: return
+        if (queue.entries.isEmpty() && wave.tracks.value.isNotEmpty()) {
+            // The wave's saved list (the preview) becomes the queue's content
+            queueManager.appendFetched(waveId, wave.tracks.value)
+            queue = active ?: return
+        }
+        val after = queue.entries.drop(queue.cursorIndex + 1)
+        val start = after.firstOrNull { it.ref.id !in recentPlayedTrackIds } ?: after.firstOrNull() ?: queue.cursorEntry
+        if (start != null) {
+            startEntry(start.entryId, crossfade = true, startPositionMs = 0L)
+            if (queue.size - queue.indexOfEntry(start.entryId) < 30) wave.fetchMore()
+            return
+        }
+
+        // Nothing cached yet (first launch): show the loading state and start once tracks arrive.
+        val request = ++startRequestId
+        _isStarting.value = true
+        wave.fetchMore { _ ->
+            if (request != startRequestId) return@fetchMore
+            queueOp {
+                if (request != startRequestId) return@queueOp
+                val first = active?.takeIf { it.queue.id == waveId }?.entries?.firstOrNull()
+                if (first != null) {
+                    startEntry(first.entryId, crossfade = true, startPositionMs = 0L)
+                } else {
+                    _isStarting.value = false
+                    showMessage(context.getString(R.string.msg_wave_load_failed))
+                }
+            }
+        }
+    }
+
+    private suspend fun playWaveFromNow(trackId: String) {
+        val waveId = waveQueueId()
+        if (active?.queue?.id != waveId) {
+            queueManager.switchTo(waveId, progress.value.takeIf { active != null && liveStation.value == null })
+            active?.let { followWaveStation(it) }
+        }
+        var queue = active ?: return
+        var entry = queue.entries.drop(queue.cursorIndex + 1).firstOrNull { it.ref.id == trackId }
+        if (entry == null) {
+            // The preview's tracks join the queue, so the one tapped is there to play
+            queueManager.appendFetched(waveId, wave.tracks.value)
+            queue = active ?: return
+            entry = queue.entries.drop(queue.cursorIndex + 1).firstOrNull { it.ref.id == trackId }
+                ?: queue.entries.firstOrNull { it.ref.id == trackId }
+        }
+        if (entry != null) startEntry(entry.entryId, crossfade = true, startPositionMs = 0L) else playMyVibeNow()
+    }
+
+    /** The wave's station follows a WAVE queue: with a seed it is a wave by that track, otherwise My Wave. */
+    private suspend fun followWaveStation(queue: ActiveQueue) {
+        if (queue.queue.kind != QueueKind.WAVE) return
+        val seed = queue.queue.seed
+        val station = if (seed != null) WaveQueue.trackStation(seed) else WaveQueue.MY_WAVE
+        if (wave.station != station) {
+            wave.switchTo(station, if (seed != null) queue.tracks.drop(queue.cursorIndex + 1) else cacheManager.loadWaveQueue(activeUserFolder))
+            _waveTuning.value = WaveTuning()
+            loadWaveTuning()
+        }
+        _waveSeed.value = seed?.let { id -> queue.tracks.firstOrNull { it.idString == id } }
+    }
+
+    private fun leaveStation() {
+        if (liveStation.value == null) return
+        liveStation.value = null
+        scope.launch { cacheDao.deleteValue(CacheDatabase.SHARED, LIVE_STATION) }
     }
 
     // endregion
@@ -833,7 +1140,7 @@ class PlaybackController @Inject constructor(
         when (RoadPlan.originFor(currentLink(), link.mayTryStream(), reserve.has(trackId))) {
             TrackOrigin.UNAVAILABLE -> {
                 _isStarting.value = false
-                skipToNextOnDevice(track)
+                queueOp { skipToNextOnDeviceNow(track) }
                 return
             }
             TrackOrigin.COPY -> {
@@ -861,7 +1168,7 @@ class PlaybackController @Inject constructor(
             } else {
                 Log.e(TAG, "Failed to resolve mp3 URL for track $trackId")
                 reportTrouble()
-                if (_currentTrack.value?.idString != trackId) return@launch
+                if (currentTrackNow()?.idString != trackId) return@launch
                 onPlaybackFailure(PlaybackFailure(trackId, startPositionMs, "URL_RESOLVE"))
             }
         }
@@ -873,7 +1180,7 @@ class PlaybackController @Inject constructor(
      * anything else plays on, and the next tracks follow the new mode.
      */
     fun onSoundModeChanged(compatible: Boolean) {
-        val track = _currentTrack.value?.takeIf { !it.isRadio }
+        val track = currentTrackNow()?.takeIf { !it.isRadio }
         val id = track?.idString
         val playingFlac = id != null && playingCopyId != id && if (streamingTrackId == id) {
             preloadManager.qualityOf(id)?.isLossless == true
@@ -912,7 +1219,7 @@ class PlaybackController @Inject constructor(
         if (file == null) {
             scope.launch { reserve.remove(trackId) }
             _isStarting.value = false
-            skipToNextOnDevice(track)
+            queueOp { skipToNextOnDeviceNow(track) }
             return
         }
         currentPlayJob?.cancel()
@@ -968,32 +1275,32 @@ class PlaybackController @Inject constructor(
     }
 
     /** The connection is good again: the music left for a mix of what is on the device goes back. */
-    private fun returnFromOfflineMix(): Boolean {
+    private suspend fun returnFromOfflineMixNow(): Boolean {
         val point = returnPoint ?: return false
         if (currentLink() != LinkState.GOOD) return false
         returnPoint = null
-        if (point.source == PlaylistSource.VIBE) {
-            playMyVibe()
+        if (point.wave) {
+            playMyVibeNow()
             return true
         }
-        val index = point.queue.indexOfFirst { it.idString == point.leftTrackId }
-        val next = point.queue.getOrNull(index + 1) ?: point.queue.firstOrNull() ?: return false
-        playTrack(next.idString, point.queue, point.source)
+        val queueId = point.queueId ?: return false
+        if (queueManager.queues.value.none { it.queue.id == queueId }) return false // deleted meanwhile
+        queueManager.switchTo(queueId, null)
+        val queue = active ?: return false
+        val index = point.leftEntryId?.let { queue.indexOfEntry(it) } ?: -1
+        val next = queue.entries.getOrNull(index + 1) ?: queue.entries.firstOrNull() ?: return false
+        startEntry(next.entryId, crossfade = true, startPositionMs = 0L)
         return true
     }
 
-    private fun upcomingTracks(): List<TrackDetailsDto> {
-        val queue = _currentPlaylist.value
-        val currentId = _currentTrack.value?.idString
-        return queue.drop(queue.indexOfFirst { it.idString == currentId } + 1)
-    }
+    private fun upcomingTracks(): List<TrackDetailsDto> = active?.let { it.tracks.drop(it.cursorIndex + 1) }.orEmpty()
 
     /**
      * First failure of a track: retry it once with a fresh URL from the same position (expired links
      * after a long pause). Repeated failure: skip. Several broken tracks in a row: stop and tell the user.
      */
     private fun onPlaybackFailure(failure: PlaybackFailure) {
-        val current = _currentTrack.value ?: return
+        val current = currentTrackNow() ?: return
         if (failure.trackId != current.idString) return // stale event from a track we already left
 
         preloadManager.evictUrl(failure.trackId)
@@ -1021,7 +1328,7 @@ class PlaybackController @Inject constructor(
             Recovery.CONTINUE_OFFLINE -> {
                 // The link dropped mid-track: not a broken track, continue with what is on the device
                 retriedTrackId = null
-                skipToNextOnDevice(current)
+                queueOp { skipToNextOnDeviceNow(current) }
             }
             Recovery.RETRY -> {
                 retriedTrackId = failure.trackId
@@ -1055,7 +1362,7 @@ class PlaybackController @Inject constructor(
     )
 
     fun qualityDetails(): QualityDetails? {
-        val track = _currentTrack.value?.takeIf { !it.isRadio } ?: return null
+        val track = currentTrackNow()?.takeIf { !it.isRadio } ?: return null
         val id = track.idString
         val hasPlus = authRepository.getActiveAccount()?.hasPlus
         return QualityDetails(
@@ -1090,9 +1397,10 @@ class PlaybackController @Inject constructor(
 
     /**
      * No connection and the queue has nothing more on the device: the rest of the reserve (what has not
-     * been heard first), then the downloads, shuffled. With nothing at all the music waits for the connection.
+     * been heard first), then the downloads, shuffled, in a queue of their own so the one the music left stays
+     * as it was. With nothing at all the music waits for the connection.
      */
-    private fun playOfflineMix(leaving: ReturnPoint) {
+    private suspend fun playOfflineMixNow(leaving: ReturnPoint) {
         val reserved = ReservePolicy.playOrder(reserve.entries.value.values) { it in recentPlayedTrackIds }
             .map { it.track }
             .filterNot { preloadManager.hasPlayableCopy(it.idString) }
@@ -1107,40 +1415,46 @@ class PlaybackController @Inject constructor(
         }
         // Coming from a mix already, the place to go back to stays what it was
         val point = returnPoint ?: leaving
-        playTrack(mix.first().idString, mix, PlaylistSource.LIBRARY)
+        val mixId = offlineMixQueueId?.takeIf { id -> queueManager.queues.value.any { it.queue.id == id } }
+            ?: queueManager.queues.value.firstOrNull { it.queue.origin == OFFLINE_MIX_ORIGIN }?.queue?.id
+            ?: queueManager.create(context.getString(R.string.queue_offline_mix_name)).id
+        offlineMixQueueId = mixId
+        if (active?.queue?.id != mixId) queueManager.switchTo(mixId, progress.value.takeIf { active != null && liveStation.value == null })
+        playFromNow(mix, OFFLINE_MIX_ORIGIN, mix.first().idString, crossfade = true, startPositionMs = 0L)
         returnPoint = point
     }
 
     /** The next track after [from] that is on the device, otherwise the mix of what is. */
-    private fun skipToNextOnDevice(from: TrackDetailsDto) {
+    private suspend fun skipToNextOnDeviceNow(from: TrackDetailsDto) {
         if (from.isRadio) {
             playerRepository.stop()
             waitingForConnection = true
             showMessage(context.getString(R.string.msg_station_unavailable))
             return
         }
-        val queue = _currentPlaylist.value
-        val start = queue.indexOfFirst { it.idString == from.idString }
-        val next = PlaybackQueue.nextMatching(queue, start) { isOnDevice(it.idString) }
-        if (next != null) playTrack(queue[next].idString, queue) else playOfflineMix(ReturnPoint(_currentSource.value, queue, from.idString))
+        val queue = active
+        if (queue != null) {
+            val next = PlaybackQueue.nextMatching(queue.tracks, queue.cursorIndex) { isOnDevice(it.idString) }
+            if (next != null) {
+                startEntry(queue.entries[next].entryId, crossfade = true, startPositionMs = 0L)
+                return
+            }
+        }
+        playOfflineMixNow(ReturnPoint(queue?.queue?.id, queue?.cursorEntry?.entryId, wave = false))
     }
 
     private fun prepareNextTrackInQueue() {
-        val current = _currentTrack.value ?: return
-        if (current.isRadio) return
-        val playlist = _currentPlaylist.value
-        val currentIndex = playlist.indexOfFirst { it.idString == current.idString }
+        if (liveStation.value != null) return
+        val queue = active ?: return
+        if (queue.cursorTrack == null) return
 
         // Proactively refill the wave while 10 tracks are still ahead: the "next up" shelf never runs dry
-        if (_currentSource.value == PlaylistSource.VIBE && playlist.size - currentIndex <= 10) {
+        if (queue.queue.kind == QueueKind.WAVE && queue.size - queue.cursorIndex <= 10) {
             wave.fetchMore()
         }
 
-        val nextTrack = when (val action = PlaybackQueue.nextAction(playlist, currentIndex, _currentSource.value, ::skippedOnTheWay)) {
-            is NextAction.PlayIndex -> playlist[action.index]
-            else -> null
-        }
-        nextTrack?.let { prepareStandby(it) }
+        val next = nextAdvance(queue, manual = false) as? Advance.To ?: return
+        prepareStandby(queue.tracks[next.index])
     }
 
     private fun prepareStandby(track: TrackDetailsDto) {
@@ -1170,17 +1484,18 @@ class PlaybackController @Inject constructor(
         scope.launch {
             sessionRestored.await()
             combine(
-                _currentSource,
-                _currentTrack,
-                _currentPlaylist,
+                queueManager.active,
+                liveStation,
                 wave.tracks,
                 // Online and signed in: signed out there is nothing to fetch, and signing in checks again
                 networkMonitor.isConnectedFlow.combine(authRepository.isAuthorized()) { online, signedIn -> online && signedIn }
-            ) { source, track, queue, wave, canFetch ->
+            ) { queue, station, wave, canFetch ->
+                // The queue side counts by entry, so a track that is in the wave twice is two places
+                val waveActive = station == null && queue?.queue?.kind == QueueKind.WAVE && queue.cursorTrack != null
                 canFetch && PlaybackQueue.waveShelfIsShort(
-                    waveActive = source == PlaylistSource.VIBE && track != null,
-                    currentId = track?.idString,
-                    queue = queue.map { it.idString },
+                    waveActive = waveActive,
+                    currentId = queue?.cursorEntry?.entryId?.toString(),
+                    queue = queue?.entries?.map { it.entryId.toString() }.orEmpty(),
                     wave = wave.map { it.idString }
                 )
             }.collectLatest { short ->
@@ -1236,22 +1551,16 @@ class PlaybackController @Inject constructor(
         isRadio = true
     )
 
+    /** The position of the cursor track, written through to the queue (E3); a station on air has no position. */
     private suspend fun persistSession() {
-        val current = _currentTrack.value ?: return
-        val queue = _currentPlaylist.value
-        val index = queue.indexOfFirst { it.idString == current.idString }
-        stateStore.save(
-            PlaybackSnapshot(
-                userFolder = activeUserFolder,
-                source = _currentSource.value.name,
-                queue = PlaybackQueue.snapshotWindow(queue, index).ifEmpty { listOf(current) },
-                currentTrackId = current.idString,
-                positionMs = progress.value,
-                waveSeed = _waveSeed.value.takeIf { _currentSource.value == PlaylistSource.VIBE }
-            )
-        )
+        if (liveStation.value != null) return
+        queueManager.savePosition(progress.value)
     }
 
+    /**
+     * Restore is read-only (DPI rule 2): the active queue comes back paused at its saved position, a station
+     * that was on air comes back paused too. The one write is the one-time import of the pre-queue session file.
+     */
     private suspend fun loadUserState(userFolder: String, restoreSession: Boolean) {
         val savedRecent = cacheManager.loadRecentTrackIds(userFolder)
         val cachedWave = cacheManager.loadWaveQueue(userFolder)
@@ -1261,30 +1570,20 @@ class PlaybackController @Inject constructor(
         // Without what was just heard, so the wave starts with something fresh
         wave.restore(cachedWave)
 
-        if (!restoreSession || _currentTrack.value != null || playerRepository.currentTrackId.value != null) return
-        val snapshot = stateStore.load() ?: return
-        if (snapshot.userFolder != userFolder || _currentTrack.value != null) return
-
-        val source = runCatching { PlaylistSource.valueOf(snapshot.source) }.getOrDefault(PlaylistSource.NONE)
-        // isRadio is @Transient, so it is rebuilt from the id prefix.
-        val queue = snapshot.queue.map { if (it.idString.startsWith("radio_")) it.copy(isRadio = true) else it }
-        val track = queue.firstOrNull { it.idString == snapshot.currentTrackId } ?: return
-        // A wave by a track goes on from where it was, with its own upcoming tracks
-        val seed = snapshot.waveSeed?.takeIf { source == PlaylistSource.VIBE }
-        if (seed != null) {
-            wave.switchTo(WaveQueue.trackStation(seed.idString), queue.dropWhile { it.idString != track.idString }.drop(1))
-            _waveSeed.value = seed
-            loadWaveTuning()
+        if (!restoreSession) return
+        legacyImport.run(mainName = mainName, waveName = waveName)
+        queueManager.load()
+        val queue = active
+        if (queue != null) {
+            // A wave by a track goes on from where it was, with its own upcoming tracks
+            followWaveStation(queue)
+            // Shown paused, like Apple Music: Play continues from the saved position.
+            restoredPositionMs.value = queue.queue.positionMs
         }
-        // Shown paused, like Apple Music: Play continues from the saved position.
-        _currentSource.value = source
-        _currentPlaylist.value = if (source == PlaylistSource.VIBE && seed == null && wave.tracks.value.isNotEmpty()) {
-            (queue + wave.tracks.value).distinctBy { it.idString }
-        } else {
-            queue
-        }
-        _currentTrack.value = track
-        restoredPositionMs.value = if (track.isRadio) 0L else snapshot.positionMs
+        val stationId = cacheDao.getValue(CacheDatabase.SHARED, LIVE_STATION) ?: return
+        val station = radioRepository.getBuiltinStations().firstOrNull { it.id == stationId } ?: return
+        liveStation.value = radioTrackFor(station)
+        restoredPositionMs.value = 0L
     }
 
     private fun coverUrlFor(track: TrackDetailsDto): String? = track.coverUri?.let { uri ->
@@ -1309,6 +1608,10 @@ class PlaybackController @Inject constructor(
         const val WAVE_RETRY_MAX_MS = 60_000L
         /** Sound the playing track must have ahead before the road reserve may use the line. */
         const val RESERVE_HEADROOM_MS = 20_000L
+        /** `cache_values` key (owner [CacheDatabase.SHARED]) of the FM station on air, for the restore. */
+        const val LIVE_STATION = "live_station"
+        /** The origin that marks the app-made queue of the offline mix. */
+        const val OFFLINE_MIX_ORIGIN = "OFFLINE_MIX"
         private const val TAG = "PlaybackController"
         private const val RECENT_LIMIT = 100
         private const val URL_RETRY_DELAY_MS = 700L

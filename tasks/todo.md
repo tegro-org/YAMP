@@ -84,8 +84,10 @@
 - [x] 3. `domain/queue` model + `QueuePolicy` (pure, 8 tests); Room v2 (`queues`, `queue_entries`), Hilt
       `DatabaseModule`, `RoomQueueStore` (6 tests), migration v1→v2 + test (Room validates on open; Robolectric
       sees no test assets, so no MigrationTestHelper), B1 rule in `ArchitectureTest` (2026-11-12)
-- [ ] 4. `QueueManager` + legacy import + controller restructure (derived flows, entry cursor, replace/move split,
-      shuffle/repeat, WAVE queue per account, live-station mode) — controller tests green; phone test: upgrade keeps session
+- [x] 4. `QueueManager` + legacy import + controller restructure (derived flows, entry cursor, replace/move split,
+      shuffle/repeat, WAVE queue per account, live-station mode) — 14 controller tests green (2026-11-12)
+  - [ ] phone test: upgrade from v0.1.2 keeps the session (the json becomes "Основная"); play/next/prev/My Wave/FM
+        radio/offline as before; the three decisions in the doc's "Implementation notes"
 - [ ] 5. UI: `HiFiSheetPanel`, `QueueSwitcherHost` + VM, entry points (Home, player sheet, car pill), dialogs, track and
       list menu actions, EN/RU strings, Android Auto "Queues" folder
 - [ ] 6. Screenshots + goldens, `verifyRoborazziDebug lintDebug`, device checklist (DPI force-stop cases), HANDOFF/KB,

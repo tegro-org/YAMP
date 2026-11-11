@@ -213,6 +213,24 @@ it in scope (open question 1). `MusicService` command mapping is unchanged (`Mus
   track, same position. A small `scripts/device-check.sh` drives the adb part.
 - New test dependencies: `kotlinx-coroutines-test`, `androidx.room:room-testing`. No mocking library.
 
+## Implementation notes (step 4, 2026-11-12)
+
+Decisions taken while restructuring the controller, to be confirmed on the phone:
+
+- **Offline mix is a queue of its own** ("Что есть на устройстве", origin marker `OFFLINE_MIX_ORIGIN`, reused):
+  replacing the active queue with it (today's way) would overwrite the user's queue (D35). The return point is
+  `(queueId, entryId)`.
+- **Playing a list while My Wave is active** never replaces the wave queue (not editable): the list goes into the
+  user's most recently used own queue, or a new "Основная".
+- **`stopAndClear`** (mini-player swipe-away, "close and clear") stops the engine and saves position 0 but keeps
+  the cursor track on screen — the queue is never lost.
+- `WaveQueue` keeps saving its own list in `list_items` for now (the wave page preview, `firstUnplayed`, the
+  rotor `queue=` parameter and the reserve read it); the WAVE queue's entries are the persisted queue. One of the
+  two goes in Phase 2 when the dynamic source is generalised.
+- Queue operations run in a FIFO chain on the controller scope (`queueOp`), the restore being the first; a start
+  request (`playOp`) is superseded by a later start or a pause before it runs.
+- `QueuePolicy.next` ends a queue that holds only skipped (explicit) tracks; the old `nextAction` played one anyway.
+
 ## Order of work and verification
 
 1. Plumbing: test dependencies, `WIDE_HEAD_UNIT` qualifier + car goldens at 1920×720, `TrackUrlResolver` seam.

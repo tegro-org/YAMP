@@ -17,8 +17,8 @@ import org.tegro.yamp.domain.repository.PlayerRepository
 class FakePlayerRepository(private val context: Context) : PlayerRepository {
     data class Call(val name: String, val trackId: String? = null, val url: String? = null, val positionMs: Long? = null)
 
-    /** One entry per engine call, in order. */
-    val calls = mutableListOf<Call>()
+    /** One entry per engine call, in order. Copy-on-write: the controller's queue operations finish on IO threads. */
+    val calls = java.util.concurrent.CopyOnWriteArrayList<Call>()
 
     override val currentTrackId = MutableStateFlow<String?>(null)
     override val isPlaying = MutableStateFlow(false)
