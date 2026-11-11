@@ -7,6 +7,9 @@
 #   drawable-*dpi/ic_launcher_foreground.png   the full 108 dp adaptive-icon canvas (the SVG as is)
 #   drawable-*dpi/ic_launcher_monochrome.png   the alpha mask for Android 13+ themed icons (<name>-mono.svg)
 #   mipmap-*dpi/ic_launcher.png, ic_launcher_round.png   legacy 48 dp icons (squircle / circle of the visible 72 dp)
+#   drawable-nodpi/splash_logo.png             the in-app splash logo: the visible 72 dp as a circle, 576 px,
+#                                              transparent around it
+# The system splash icon (Android 12+, themes.xml) is ic_launcher_foreground itself: the same 108 dp canvas.
 # The adaptive icon XML in mipmap-anydpi-v26 and the solid background drawable stay as they are.
 # Needs rsvg-convert and ImageMagick (magick).
 set -e
@@ -32,4 +35,9 @@ for d in mdpi:1 hdpi:1.5 xhdpi:2 xxhdpi:3 xxxhdpi:4; do
   magick "$TMP/vis.png" \( +clone -fill black -colorize 100 -fill white -draw "circle $r,$r $r,0" -alpha off \) \
     -compose CopyOpacity -composite -resize "${lg}x${lg}" "$RES/mipmap-$q/ic_launcher_round.png"
 done
+mkdir -p "$RES/drawable-nodpi"
+rsvg-convert -w 864 -h 864 "$SRC" -o "$TMP/big.png"
+magick "$TMP/big.png" -gravity center -crop 576x576+0+0 +repage \
+  \( +clone -fill black -colorize 100 -fill white -draw "circle 288,288 288,0" -alpha off \) \
+  -compose CopyOpacity -composite -strip "$RES/drawable-nodpi/splash_logo.png"
 echo "launcher icons generated from $NAME.svg"

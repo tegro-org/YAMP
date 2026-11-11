@@ -105,9 +105,9 @@ fun SplashScreen(
             drawCircle(brush = brush2, radius = radius2, center = center)
         }
 
-        // The glowing Audio-Sphere (matches the system splash screen icon)
+        // The Rings logo (the visible part of the splash icon as a circle, transparent around it)
         Image(
-            painter = painterResource(id = R.drawable.splash_icon),
+            painter = painterResource(id = R.drawable.splash_logo),
             contentDescription = stringResource(R.string.cd_logotip_prilozheniya),
             modifier = Modifier
                 .size((160 * scaleFactor).dp)
@@ -124,7 +124,7 @@ fun SplashScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = stringResource(R.string.splash_yandex_music_lite),
+                text = stringResource(R.string.splash_app_name),
                 style = TextStyle(
                     color = Color.White,
                     fontSize = (18 * scaleFactor).sp,
@@ -134,7 +134,7 @@ fun SplashScreen(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = stringResource(R.string.splash_lossless_audio),
+                text = stringResource(R.string.splash_tagline),
                 style = TextStyle(
                     color = HiFi.TextSecondary,
                     fontSize = (12 * scaleFactor).sp,

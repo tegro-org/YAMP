@@ -171,8 +171,8 @@ class LayoutSafetyTest {
             stringsXml.contains("<string name=\"app_name\">YAMP</string>"))
 
         val splashScreen = File(sourceDir, "presentation/splash/SplashScreen.kt").readText()
-        assertTrue("SplashScreen must display YANDEX MUSIC LITE",
-            splashScreen.contains("R.string.splash_yandex_music_lite") && stringsXml.contains(">YANDEX MUSIC LITE<"))
+        assertTrue("SplashScreen must display YAMP",
+            splashScreen.contains("R.string.splash_app_name") && stringsXml.contains(">YAMP<"))
 
         val searchScreen = File(sourceDir, "presentation/main/SearchScreen.kt").readText()
         assertTrue("SearchScreen must show its large title (Hi-Fi redesign dropped the catalog subtitle)",

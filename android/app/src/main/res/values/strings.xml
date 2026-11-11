@@ -59,8 +59,8 @@
     <string name="cd_logotip_radiostantsii">Логотип радиостанции</string>
     <string name="cd_v_izbrannoe">В избранное</string>
     <string name="cd_logotip_prilozheniya">Логотип приложения</string>
-    <string name="splash_yandex_music_lite">YANDEX MUSIC LITE</string>
-    <string name="splash_lossless_audio">LOSSLESS AUDIO</string>
+    <string name="splash_app_name">YAMP</string>
+    <string name="splash_tagline">YET ANOTHER MUSIC PLAYER</string>
     <string name="update_dostupno_obnovlenie">Доступно обновление</string>
     <string name="update_chto_novogo_v_etoy">Что нового в этой версии:</string>
     <string name="update_zagruzka_paketa">Загрузка пакета…</string>
