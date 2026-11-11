@@ -22,7 +22,7 @@ class TrackPreloadManager @Inject constructor(
     private val okHttpClient: OkHttpClient,
     private val authRepository: org.tegro.yamp.domain.repository.AuthRepository,
     private val soundMode: org.tegro.yamp.data.player.SoundMode
-) {
+) : TrackUrlResolver {
     private data class CachedTrackUrl(val url: String, val fetchedAtMs: Long)
 
     /**
@@ -49,16 +49,16 @@ class TrackPreloadManager @Inject constructor(
     }
     private val qualities = ConcurrentHashMap<String, StreamQuality>()
 
-    fun qualityOf(trackId: String): StreamQuality? = qualities[trackId]
+    override fun qualityOf(trackId: String): StreamQuality? = qualities[trackId]
 
     /** Every variant the server offered for a track ("AAC 192 · MP3 192 · …"), for the player's quality details. */
     private val offered = ConcurrentHashMap<String, String>()
-    fun offeredOf(trackId: String): String? = offered[trackId]
+    override fun offeredOf(trackId: String): String? = offered[trackId]
 
     /** Diagnostic failure reason for Lossless if fallback occurred. */
     private val lastLosslessError = ConcurrentHashMap<String, String>()
 
-    fun getResolvedUrl(trackId: String): String? {
+    override fun getResolvedUrl(trackId: String): String? {
         val cached = resolvedUrls[trackId] ?: return null
         if (System.currentTimeMillis() - cached.fetchedAtMs > URL_TTL_MS) {
             resolvedUrls.remove(trackId)
@@ -86,7 +86,7 @@ class TrackPreloadManager @Inject constructor(
      * The ordinary stream the service offers this app, for the road reserve: full tracks only (without a
      * subscription there are just previews, so null), and only what download-info lists.
      */
-    suspend fun resolveOrdinaryStream(trackId: String): ResolvedStream? = withContext(Dispatchers.IO) {
+    override suspend fun resolveOrdinaryStream(trackId: String): ResolvedStream? = withContext(Dispatchers.IO) {
         try {
             val offered = api.getTrackDownloadInfo(trackId).result.orEmpty()
             StreamVariants.ranked(offered).filter { !it.preview }.firstNotNullOfOrNull { variant ->
@@ -116,11 +116,11 @@ class TrackPreloadManager @Inject constructor(
     }
 
     /** The downloaded file to play. In compatible sound a FLAC file does not count: on this device it would be silent. */
-    fun playableCopy(trackId: String): java.io.File? =
+    override fun playableCopy(trackId: String): java.io.File? =
         downloadManager.getLocalTrackFile(trackId)?.takeUnless { isSilentCopy(trackId) }
 
     /** Main-thread friendly [playableCopy]: answers from memory. */
-    fun hasPlayableCopy(trackId: String): Boolean = downloadManager.isKnownDownloaded(trackId) && !isSilentCopy(trackId)
+    override fun hasPlayableCopy(trackId: String): Boolean = downloadManager.isKnownDownloaded(trackId) && !isSilentCopy(trackId)
 
     private fun isSilentCopy(trackId: String): Boolean =
         soundMode.compatible.value && downloadManager.downloadedQuality(trackId)?.isLossless == true
@@ -338,12 +338,12 @@ class TrackPreloadManager @Inject constructor(
         qualities[trackId] = quality
     }
 
-    fun evictUrl(trackId: String) {
+    override fun evictUrl(trackId: String) {
         resolvedUrls.remove(trackId)
         inFlightRequests.remove(trackId)?.cancel()
     }
 
-    fun preloadTracks(trackIds: List<String>) {
+    override fun preloadTracks(trackIds: List<String>) {
         scope.launch {
             trackIds.map { trackId ->
                 async {
@@ -357,7 +357,7 @@ class TrackPreloadManager @Inject constructor(
         return fetchOrAwait(trackId)
     }
 
-    suspend fun getOrFetchUrl(trackId: String): String? = fetchOrAwait(trackId)
+    override suspend fun getOrFetchUrl(trackId: String): String? = fetchOrAwait(trackId)
 
     private suspend fun fetchOrAwait(trackId: String): String? {
         if (trackId.startsWith("radio_")) return null
@@ -390,7 +390,7 @@ class TrackPreloadManager @Inject constructor(
         }
     }
 
-    fun clearCache() {
+    override fun clearCache() {
         resolvedUrls.clear()
         inFlightRequests.values.forEach { it.cancel() }
         inFlightRequests.clear()

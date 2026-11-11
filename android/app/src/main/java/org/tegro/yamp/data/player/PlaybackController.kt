@@ -21,7 +21,7 @@ import org.tegro.yamp.data.cache.PlaylistCacheManager
 import org.tegro.yamp.data.dto.ArtistDto
 import org.tegro.yamp.data.dto.TrackDetailsDto
 import org.tegro.yamp.data.network.TrackDownloadManager
-import org.tegro.yamp.data.network.TrackPreloadManager
+import org.tegro.yamp.data.network.TrackUrlResolver
 import org.tegro.yamp.data.network.YandexMusicApi
 import org.tegro.yamp.data.repository.RadioRepository
 import org.tegro.yamp.domain.model.RadioStation
@@ -35,6 +35,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -50,6 +51,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -66,7 +68,7 @@ class PlaybackController @Inject constructor(
     private val authRepository: AuthRepository,
     private val playerRepository: PlayerRepository,
     private val downloadManager: TrackDownloadManager,
-    private val preloadManager: TrackPreloadManager,
+    private val preloadManager: TrackUrlResolver,
     private val cacheManager: PlaylistCacheManager,
     private val radioRepository: RadioRepository,
     private val stateStore: PlaybackStateStore,
@@ -367,6 +369,12 @@ class PlaybackController @Inject constructor(
 
     /** Returns once the saved session (track, queue, position) is back, so "continue" has something to continue. */
     suspend fun awaitRestoredSession() = sessionRestored.await()
+
+    /**
+     * Ends every coroutine of the controller and waits for them. The app never calls it (the singleton lives as
+     * long as the process); the tests do, so a controller of one test leaves nothing running into the next.
+     */
+    suspend fun shutdown() = scope.coroutineContext.job.cancelAndJoin()
 
     fun playMyVibe() {
         if (isOffline()) {

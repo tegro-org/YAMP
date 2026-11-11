@@ -8,7 +8,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import org.tegro.yamp.data.network.TrackDownloadManager
-import org.tegro.yamp.data.network.TrackPreloadManager
+import org.tegro.yamp.data.network.TrackUrlResolver
 import org.tegro.yamp.domain.repository.PlaybackFailure
 import org.tegro.yamp.domain.repository.PlayerRepository
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -42,7 +42,7 @@ class PlayerRepositoryImpl(
     private val playerA: ExoPlayer,
     private val playerB: ExoPlayer,
     private val downloadManager: TrackDownloadManager,
-    private val preloadManager: TrackPreloadManager,
+    private val preloadManager: TrackUrlResolver,
     private val wakeLockHelper: org.tegro.yamp.data.player.PlaybackWakeLockHelper,
     /** Where player B's audio session comes from, and whether it is its own one (Settings → Playback). */
     private val audioSessions: AudioSessionPolicy? = null,

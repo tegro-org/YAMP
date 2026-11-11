@@ -769,6 +769,25 @@ class ScreenshotTest {
         snap("car_landscape_right_wheel")
     }
 
+    /** The user's head unit: 1920×720, a flat 2.67:1 screen (ARCHITECTURE I2). */
+    @Test
+    @Config(qualifiers = WIDE_HEAD_UNIT)
+    fun carWideHeadUnit() {
+        show { Car(isLandscape = true) }
+        snap("car_wide_head_unit")
+    }
+
+    @Test
+    @Config(qualifiers = WIDE_HEAD_UNIT)
+    fun carWideHeadUnitRightHandDrive() {
+        show { Car(isLandscape = true, steeringWheelOnLeft = false) }
+        snap("car_wide_head_unit_right_wheel")
+    }
+
+    @Test
+    @Config(qualifiers = WIDE_HEAD_UNIT)
+    fun settingsWideHeadUnit() = settings("wide_head_settings", org.tegro.yamp.presentation.main.components.SettingsPage.INTERFACE)
+
     @Test
     @Config(qualifiers = "+land")
     fun carLandscapeUiScaled() {
@@ -802,6 +821,8 @@ class ScreenshotTest {
         /** 21.10.2026 10:30 MSK: the car clock in the screenshots. */
         const val FIXED_TIME = 1_792_567_800_000L
         const val HEAD_UNIT = "w1280dp-h720dp-land-mdpi"
+        /** The user's unit (kb/environment.md): 1920×720 at mdpi. */
+        const val WIDE_HEAD_UNIT = "w1920dp-h720dp-land-mdpi"
         const val OLD_HEAD_UNIT = "w1024dp-h600dp-land-mdpi"
         const val PHONE_ON_SIDE = "w800dp-h360dp-land-xhdpi"
     }

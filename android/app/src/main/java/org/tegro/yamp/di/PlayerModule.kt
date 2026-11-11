@@ -75,7 +75,7 @@ object PlayerModule {
     fun providePlayerRepository(
         @ApplicationContext context: Context,
         downloadManager: org.tegro.yamp.data.network.TrackDownloadManager,
-        preloadManager: org.tegro.yamp.data.network.TrackPreloadManager,
+        preloadManager: org.tegro.yamp.data.network.TrackUrlResolver,
         wakeLockHelper: org.tegro.yamp.data.player.PlaybackWakeLockHelper,
         equalizer: org.tegro.yamp.data.player.SystemEqualizer,
         card: org.tegro.yamp.data.download.CardStorage,

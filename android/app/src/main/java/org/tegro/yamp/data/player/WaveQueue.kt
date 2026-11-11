@@ -3,7 +3,7 @@ package org.tegro.yamp.data.player
 import android.util.Log
 import org.tegro.yamp.data.cache.PlaylistCacheManager
 import org.tegro.yamp.data.dto.TrackDetailsDto
-import org.tegro.yamp.data.network.TrackPreloadManager
+import org.tegro.yamp.data.network.TrackUrlResolver
 import org.tegro.yamp.data.network.YandexMusicApi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -52,7 +52,7 @@ internal class RecentlyPlayed(private val limit: Int) {
 internal class WaveQueue(
     private val api: YandexMusicApi,
     private val cacheManager: PlaylistCacheManager,
-    private val preloadManager: TrackPreloadManager,
+    private val preloadManager: TrackUrlResolver,
     private val scope: CoroutineScope,
     private val recent: RecentlyPlayed,
     private val isOffline: () -> Boolean,
