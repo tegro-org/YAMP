@@ -13,4 +13,10 @@ import org.tegro.yamp.data.network.TrackUrlResolver
 abstract class ResolverModule {
     @Binds
     abstract fun bindTrackUrlResolver(impl: TrackPreloadManager): TrackUrlResolver
+
+    @Binds
+    abstract fun bindQueueStore(impl: org.tegro.yamp.data.queue.RoomQueueStore): org.tegro.yamp.domain.queue.QueueStore
+
+    @Binds
+    abstract fun bindQueueTrackBridge(impl: org.tegro.yamp.data.queue.QueueTrackBridge): org.tegro.yamp.data.queue.QueueTrackBridgeApi
 }
