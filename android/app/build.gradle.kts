@@ -34,6 +34,11 @@ val deviceSecret = (localProperties.getProperty("YANDEX_DEVICE_SECRET") ?: Syste
 
 composeCompiler {
     stabilityConfigurationFiles.add(rootProject.layout.projectDirectory.file("app/compose-stability.conf"))
+    // `-PcomposeReports`: recomposition and stability reports in build/compose_reports
+    if (project.hasProperty("composeReports")) {
+        reportsDestination.set(layout.buildDirectory.dir("compose_reports"))
+        metricsDestination.set(layout.buildDirectory.dir("compose_reports"))
+    }
 }
 
 // Version from git (decision D37), never bumped by hand:
@@ -143,8 +148,8 @@ android {
         noCompress.addAll(listOf("tflite", "mp3"))
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures {
         compose = true

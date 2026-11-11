@@ -15,7 +15,12 @@ import org.tegro.yamp.data.dto.GitHubReleaseDto
 import org.tegro.yamp.di.UpdateClient
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.coroutineContext
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -102,6 +107,8 @@ class GitHubUpdateManager @Inject constructor(
             } else {
                 UpdateCheckResult.UpToDate(BuildConfig.VERSION_NAME)
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "Error checking for updates", e)
             UpdateCheckResult.Error(e.localizedMessage ?: context.getString(R.string.update_err_network))
@@ -159,6 +166,7 @@ class GitHubUpdateManager @Inject constructor(
         val tempFile = File(updatesDir, "YAMP_download.tmp")
         val targetFile = File(updatesDir, "YAMP.apk")
 
+        var watcher: Job? = null
         try {
             // Clean up old files before downloading
             cleanupUpdateFiles()
@@ -169,7 +177,17 @@ class GitHubUpdateManager @Inject constructor(
                 .header("User-Agent", "YAMP-Android")
                 .build()
 
-            val downloadResult = okHttpClient.newCall(request).execute().use { response ->
+            val call = okHttpClient.newCall(request)
+            // The request is blocking: cancelling the job (the window was closed) must cut the connection too.
+            // The watcher wakes the moment the job is cancelled; reading then fails and the download ends.
+            watcher = launch {
+                try {
+                    awaitCancellation()
+                } finally {
+                    call.cancel()
+                }
+            }
+            val downloadResult = call.execute().use { response ->
                 if (!response.isSuccessful) {
                     return@withContext Result.failure(Exception(context.getString(R.string.update_err_http, response.code)))
                 }
@@ -225,9 +243,13 @@ class GitHubUpdateManager @Inject constructor(
 
             Result.success(targetFile)
         } catch (e: Exception) {
-            Log.e(TAG, "Error downloading APK", e)
             if (tempFile.exists()) tempFile.delete()
+            // Cancelled (the window was closed): not an error, and nobody is waiting for the result
+            coroutineContext.ensureActive()
+            Log.e(TAG, "Error downloading APK", e)
             Result.failure(e)
+        } finally {
+            watcher?.cancel()
         }
     }
 

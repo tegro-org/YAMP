@@ -304,7 +304,10 @@ class PlayerRepositoryImpl(
         if (localFile != null) return android.net.Uri.fromFile(localFile).toString()
         // A copy from the road reserve was chosen on purpose: a resolved stream must not replace it
         if (url.startsWith("file:")) return url
-        return (preloadManager.getResolvedUrl(trackId) ?: url).takeIf { it.isNotBlank() }
+        (preloadManager.getResolvedUrl(trackId) ?: url).takeIf { it.isNotBlank() }?.let { return it }
+        // No link was asked for because the track counted as downloaded, and its copy is gone (the card was
+        // taken out): it plays from the network instead of failing (upstream Н2)
+        return if (trackId.startsWith("radio_")) null else preloadManager.getOrFetchUrl(trackId)
     }
 
     private fun buildMediaItem(trackId: String, uri: String, title: String?, artist: String?, coverUrl: String?): MediaItem {
