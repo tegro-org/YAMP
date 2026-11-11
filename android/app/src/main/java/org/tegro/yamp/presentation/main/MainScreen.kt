@@ -277,6 +277,7 @@ fun MainScreen(
                                 MiniPlayer(
                                     track = track,
                                     isPlaying = isPlaying,
+                                    isLoading = isBuffering,
                                     progress = progress,
                                     onPlayPauseClick = { viewModel.togglePlayPause() },
                                     onNextClick = { viewModel.playNext() },
@@ -448,6 +449,7 @@ private fun PlayerHost(
     FullScreenPlayer(
         track = track,
         isPlaying = now.isPlaying,
+        isLoading = now.isBuffering,
         isLiked = if (track.isRadio) stationId in favoriteStationIds else track.idString in now.likedTrackIds,
         progress = progress,
         queue = queue,

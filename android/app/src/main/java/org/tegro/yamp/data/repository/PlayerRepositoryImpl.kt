@@ -43,8 +43,21 @@ class PlayerRepositoryImpl(
     private val playerB: ExoPlayer,
     private val downloadManager: TrackDownloadManager,
     private val preloadManager: TrackPreloadManager,
-    private val wakeLockHelper: org.tegro.yamp.data.player.PlaybackWakeLockHelper
+    private val wakeLockHelper: org.tegro.yamp.data.player.PlaybackWakeLockHelper,
+    /** Where player B's audio session comes from, and whether it is its own one (Settings → Playback). */
+    private val audioSessions: AudioSessionPolicy? = null
 ) : PlayerRepository {
+
+    /**
+     * Player A always uses [shared]; player B uses [own] while [separate] says so, otherwise [shared].
+     * The change is applied when player B is idle, or at its next stop — never under a playing track.
+     */
+    class AudioSessionPolicy(
+        val shared: Int,
+        val own: Int,
+        val separate: Flow<Boolean>,
+        val announce: (Int) -> Unit
+    )
 
     private val _currentTrackId = MutableStateFlow<String?>(null)
     override val currentTrackId: StateFlow<String?> = _currentTrackId.asStateFlow()
@@ -125,9 +138,24 @@ class PlayerRepositoryImpl(
     private var hasEmittedPrepareForCurrent = false
     private var hasEmittedTrackEndedForCurrent = false
 
+    /** Session id player B should have; applied by [applyPendingAudioSession] when B is not busy. */
+    private var pendingSessionIdB: Int? = null
+
     init {
         setupPlayerListener(playerA, 0)
         setupPlayerListener(playerB, 1)
+
+        audioSessions?.let { policy ->
+            scope.launch {
+                policy.separate.collect { separate ->
+                    val wanted = if (separate && policy.own > 0) policy.own else policy.shared
+                    if (wanted <= 0) return@collect
+                    if (separate) policy.announce(policy.own)
+                    pendingSessionIdB = wanted
+                    applyPendingAudioSession(playerB)
+                }
+            }
+        }
 
         scope.launch {
             while (isActive) {
@@ -141,6 +169,16 @@ class PlayerRepositoryImpl(
                 }
             }
         }
+    }
+
+    /** Gives [player] its pending audio session if it is player B and holds nothing right now. */
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    private fun applyPendingAudioSession(player: ExoPlayer) {
+        val wanted = pendingSessionIdB ?: return
+        if (player !== playerB || player.mediaItemCount > 0 && player.playbackState != Player.STATE_IDLE) return
+        pendingSessionIdB = null
+        if (player.audioSessionId != wanted) runCatching { player.setAudioSessionId(wanted) }
+            .onFailure { Log.w(TAG, "Audio session not applied", it) }
     }
 
     private fun updateProgress(player: ExoPlayer) {
@@ -214,8 +252,7 @@ class PlayerRepositoryImpl(
                 when {
                     player === outgoingPlayer -> {
                         // The fading-out track broke; just drop it.
-                        player.stop()
-                        player.clearMediaItems()
+                        clearPlayer(player)
                         outgoingPlayer = null
                         setVolume(activePlayer, 1f)
                     }
@@ -229,8 +266,7 @@ class PlayerRepositoryImpl(
                     else -> {
                         // A preloaded standby went stale — never hand it to a transition.
                         if (preloadedTrackId == player.currentMediaItem?.mediaId) preloadedTrackId = null
-                        player.stop()
-                        player.clearMediaItems()
+                        clearPlayer(player)
                     }
                 }
                 refreshPlaybackState()
@@ -294,6 +330,7 @@ class PlayerRepositoryImpl(
 
             val standby = standbyPlayer
             standby.stop()
+            applyPendingAudioSession(standby)
             setVolume(standby, 0f)
             standby.playWhenReady = false
             standby.setMediaItem(buildMediaItem(trackId, playUri, title, artist, coverUrl), 0L)
@@ -308,8 +345,7 @@ class PlayerRepositoryImpl(
             if (outgoingPlayer != null) return@launch
             preloadedTrackId = null
             hasEmittedPrepareForCurrent = false
-            standbyPlayer.stop()
-            standbyPlayer.clearMediaItems()
+            clearPlayer(standbyPlayer)
         }
     }
 
@@ -360,6 +396,7 @@ class PlayerRepositoryImpl(
             if (startPositionMs > 0L) incoming.seekTo(startPositionMs)
         } else {
             incoming.stop()
+            applyPendingAudioSession(incoming)
             incoming.setMediaItem(item, startPositionMs)
             incoming.prepare()
         }
@@ -368,15 +405,20 @@ class PlayerRepositoryImpl(
         activePlayerIndex = 1 - activePlayerIndex
         _activePlayerState.value = incoming
 
-        if (crossfade && isCurrentAudible && crossfadeDurationMs > 0L) {
+        if (skipFading === current && isCurrentAudible) {
+            // The user skipped and the old track is still fading: the new one comes in under its tail at once.
+            // The fade stops the outgoing player itself when it ends.
+            outgoingPlayer = current
+            setVolume(incoming, 1f)
+            incoming.playWhenReady = true
+        } else if (crossfade && isCurrentAudible && crossfadeDurationMs > 0L) {
             wakeLockHelper.acquireTransitionLock(30_000L)
             outgoingPlayer = current
             setVolume(incoming, 0f)
             incoming.playWhenReady = true
             crossfadeJob = scope.launch { runCrossfade(current, incoming) }
         } else {
-            current.stop()
-            current.clearMediaItems()
+            clearPlayer(current)
             setVolume(current, 1f)
             setVolume(incoming, 1f)
             incoming.playWhenReady = true
@@ -413,8 +455,7 @@ class PlayerRepositoryImpl(
         }
 
         outgoingPlayer = null
-        outgoing.stop()
-        outgoing.clearMediaItems()
+        clearPlayer(outgoing)
         setVolume(outgoing, 1f)
         setVolume(incoming, 1f)
         wakeLockHelper.releaseTransitionLock()
@@ -428,6 +469,7 @@ class PlayerRepositoryImpl(
         val out = outgoingPlayer ?: return
         crossfadeJob?.cancel()
         crossfadeJob = null
+        if (skipFading === out) cancelSkipFade() // a skip tail: this quick fade takes over its end
         try {
             val startVolume = logicalVolume[indexOf(out)]
             for (step in 1..QUICK_FADE_STEPS) {
@@ -436,8 +478,7 @@ class PlayerRepositoryImpl(
             }
         } finally {
             if (outgoingPlayer === out) {
-                out.stop()
-                out.clearMediaItems()
+                clearPlayer(out)
                 setVolume(out, 1f)
                 outgoingPlayer = null
             }
@@ -449,22 +490,83 @@ class PlayerRepositoryImpl(
         crossfadeJob?.cancel()
         crossfadeJob = null
         outgoingPlayer?.let { out ->
-            out.stop()
-            out.clearMediaItems()
+            clearPlayer(out)
             setVolume(out, 1f)
         }
         outgoingPlayer = null
         if (restoreActiveVolume) setVolume(activePlayer, 1f)
     }
 
+    override fun fadeOutForSkip() {
+        val player = activePlayer
+        if (skipFading === player) return // skipped again while the fade runs: nothing new to do
+        fadeJob?.cancel()
+        if (skipFading != null) {
+            // The tail of the previous skip is still fading as the outgoing side: it is not needed any more.
+            cancelSkipFade()
+            finishCrossfadeNow(restoreActiveVolume = false)
+        }
+        if (!player.isPlaying || player.playerError != null) {
+            // Nothing audible to fade (buffering, paused, ended): drop it now so the next track starts clean
+            // and the engine reports nothing playing while the controller resolves the target.
+            finishCrossfadeNow(restoreActiveVolume = false)
+            clearPlayer(player)
+            setVolume(player, 1f)
+            _currentTrackId.value = null
+            _progress.value = 0L
+            refreshPlaybackState()
+            return
+        }
+        skipFading = player
+        skipFadeJob = scope.launch {
+            // A crossfade that is still running: its outgoing side leaves quickly, the audible one fades below.
+            fadeOutRunningCrossfade()
+            val start = logicalVolume[indexOf(player)]
+            for (step in 1..SKIP_FADE_STEPS) {
+                setVolume(player, start * (1f - step.toFloat() / SKIP_FADE_STEPS))
+                delay(SKIP_FADE_MS / SKIP_FADE_STEPS)
+            }
+            // Silent now. It keeps "playing" at zero volume so the media session and the notification keep
+            // their item and state while the controller resolves the target (as the audible old track did
+            // before). A target that never comes must not leave a silent track behind: give up after a while.
+            val silentSince = SystemClock.elapsedRealtime()
+            while (activePlayer === player && outgoingPlayer !== player && player.isPlaying &&
+                SystemClock.elapsedRealtime() - silentSince < SKIP_SILENCE_MAX_MS
+            ) delay(100)
+            // Cancelled above means pause/seek/stop took the player over. From here the fade owns it.
+            skipFading = null
+            when {
+                outgoingPlayer === player -> outgoingPlayer = null // the next track came in under the tail
+                activePlayer === player -> {
+                    // Nothing came: silence and nothing playing until the controller starts something.
+                    _currentTrackId.value = null
+                    _progress.value = 0L
+                }
+            }
+            clearPlayer(player)
+            setVolume(player, 1f)
+            refreshPlaybackState()
+        }
+    }
+
+    private fun cancelSkipFade() {
+        skipFadeJob?.cancel()
+        skipFadeJob = null
+        skipFading = null
+    }
+
     override fun pause() {
         fadeJob?.cancel()
+        cancelSkipFade()
         finishCrossfadeNow(restoreActiveVolume = true)
         activePlayer.pause()
         refreshPlaybackState()
     }
 
     private var fadeJob: Job? = null
+    /** Running quick fade of a track the user skipped away from (see [fadeOutForSkip]), and its player. */
+    private var skipFadeJob: Job? = null
+    private var skipFading: ExoPlayer? = null
 
     override fun fadeOutAndPause(durationMs: Long) {
         fadeJob?.cancel()
@@ -504,10 +606,10 @@ class PlayerRepositoryImpl(
 
     override fun stop() {
         playJob?.cancel()
+        cancelSkipFade()
         finishCrossfadeNow(restoreActiveVolume = true)
         for (p in listOf(playerA, playerB)) {
-            p.stop()
-            p.clearMediaItems()
+            clearPlayer(p)
             setVolume(p, 1f)
         }
         preloadedTrackId = null
@@ -522,6 +624,7 @@ class PlayerRepositoryImpl(
     override fun release() {
         scope.cancel()
         crossfadeJob?.cancel()
+        skipFadeJob?.cancel()
         playJob?.cancel()
         wakeLockHelper.releaseTransitionLock()
         playerA.release()
@@ -529,6 +632,7 @@ class PlayerRepositoryImpl(
     }
 
     override fun seekTo(position: Long) {
+        cancelSkipFade()
         finishCrossfadeNow(restoreActiveVolume = true)
         val p = activePlayer
         lastSeekTimestamp = SystemClock.elapsedRealtime()
@@ -553,6 +657,13 @@ class PlayerRepositoryImpl(
 
     private fun indexOf(player: ExoPlayer) = if (player === playerA) 0 else 1
 
+    /** Stops and empties [player]; a pending audio-session change is applied while it holds nothing. */
+    private fun clearPlayer(player: ExoPlayer) {
+        player.stop()
+        player.clearMediaItems()
+        applyPendingAudioSession(player)
+    }
+
     private fun setVolume(player: ExoPlayer, volume: Float) {
         logicalVolume[indexOf(player)] = volume
         applyVolume(player)
@@ -574,6 +685,11 @@ class PlayerRepositoryImpl(
         const val INCOMING_READY_TIMEOUT_MS = 8_000L
         const val DUCK_VOLUME = 0.2f
         const val QUICK_FADE_MS = 150L
+        /** A manual skip silences the current track this fast; the next one starts under it or after it. */
+        const val SKIP_FADE_MS = 500L
+        private const val SKIP_FADE_STEPS = 10
+        /** How long a skipped track may stay silently loaded waiting for its successor. */
+        const val SKIP_SILENCE_MAX_MS = 10_000L
         private const val FADE_STEP_MS = 50L
         private const val QUICK_FADE_STEPS = 6
         private const val PROGRESS_INTERVAL_MS = 100L

@@ -195,6 +195,7 @@ internal fun LibraryTab(
             onOpenCrashLog = onOpenCrashLog,
             onCompatibleSoundChange = settingsVm::setCompatibleSound,
             onCrossfadeChange = settingsVm::setCrossfade,
+            onSeparateAudioSessionsChange = settingsVm::setSeparateAudioSessions,
             onNormalizeVolumeChange = settingsVm::setNormalizeVolume,
             onOpenEqualizer = settingsVm::openEqualizer,
             onStartMusicChange = settingsVm::setStartMusic,

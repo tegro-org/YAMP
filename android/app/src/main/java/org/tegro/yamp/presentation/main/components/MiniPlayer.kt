@@ -103,6 +103,7 @@ fun MiniPlayer(
     onClick: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    isLoading: Boolean = false,
     swipeToDismiss: Boolean = true,
     coverModifier: Modifier = Modifier
 ) {
@@ -252,7 +253,7 @@ fun MiniPlayer(
                 contentDescription = stringResource(R.string.cd_vosproizvedenie_ili_pauza),
                 size = 44.dp
             ) {
-                PlayPauseGlyph(isPlaying = isPlaying, size = 22.dp)
+                PlayPauseGlyph(isPlaying = isPlaying, isLoading = isLoading, size = 22.dp)
             }
             Box(
                 modifier = Modifier

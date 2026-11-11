@@ -74,13 +74,22 @@ object PlayerModule {
         preloadManager: org.tegro.yamp.data.network.TrackPreloadManager,
         wakeLockHelper: org.tegro.yamp.data.player.PlaybackWakeLockHelper,
         equalizer: org.tegro.yamp.data.player.SystemEqualizer,
-        card: org.tegro.yamp.data.download.CardStorage
+        card: org.tegro.yamp.data.download.CardStorage,
+        settings: org.tegro.yamp.domain.repository.SettingsRepository
     ): org.tegro.yamp.domain.repository.PlayerRepository {
+        // Both players start in the shared session; the engine moves player B to its own one when the
+        // "separate audio sessions" setting says so (read asynchronously, applied while B is idle).
         val playerA = createConfiguredExoPlayer(context, equalizer.audioSessionId, card)
         val playerB = createConfiguredExoPlayer(context, equalizer.audioSessionId, card)
         equalizer.announce()
+        val sessions = org.tegro.yamp.data.repository.PlayerRepositoryImpl.AudioSessionPolicy(
+            shared = equalizer.audioSessionId,
+            own = equalizer.secondAudioSessionId,
+            separate = settings.separateAudioSessions,
+            announce = equalizer::announce
+        )
         return org.tegro.yamp.data.repository.PlayerRepositoryImpl(
-            playerA, playerB, downloadManager, preloadManager, wakeLockHelper
+            playerA, playerB, downloadManager, preloadManager, wakeLockHelper, sessions
         )
     }
 

@@ -78,6 +78,14 @@ interface SettingsRepository {
     val downloadsOnSdCard: Flow<Boolean>
     suspend fun setDownloadsOnSdCard(enabled: Boolean)
 
+    /**
+     * Each of the two players in its own audio session instead of one shared session. Off = shared (the
+     * system equalizer shapes both tracks of a crossfade as one). On = separate: for a head unit whose sound
+     * chain applies one volume per session and blurs the crossfade.
+     */
+    val separateAudioSessions: Flow<Boolean>
+    suspend fun setSeparateAudioSessions(enabled: Boolean)
+
     companion object {
         const val DEFAULT_CROSSFADE_SECONDS = 3
         const val MAX_CROSSFADE_SECONDS = 12

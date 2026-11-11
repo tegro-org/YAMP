@@ -110,6 +110,8 @@ fun FullScreenPlayer(
     onRemoveFromQueue: (String) -> Unit,
     onCollapse: () -> Unit,
     onCloseAndClear: () -> Unit,
+    /** A start the user asked for is still loading: the play knob shows a ring instead of pause. */
+    isLoading: Boolean = false,
     onDislikeClick: () -> Unit,
     onMoveInQueue: (trackId: String, targetId: String) -> Unit = { _, _ -> },
     onLoadMoreQueue: () -> Unit = {},
@@ -171,6 +173,7 @@ fun FullScreenPlayer(
         Spacer(Modifier.height(if (compact) 6.dp else 14.dp))
         PlayerControls(
             isPlaying = isPlaying,
+            isLoading = isLoading,
             isLiked = isLiked,
             isRadio = track.isRadio,
             compact = compact,

@@ -357,6 +357,8 @@
     <string name="settings_normalize_hint">Тихие и громкие треки звучат одинаково</string>
     <string name="settings_equalizer">Эквалайзер</string>
     <string name="settings_equalizer_hint">Эквалайзер телефона или магнитолы</string>
+    <string name="settings_audio_sessions">Раздельные аудиосессии</string>
+    <string name="settings_audio_sessions_hint">Исправляет смазанные переходы на некоторых магнитолах: у каждого плеера своя сессия</string>
     <string name="settings_start_music">Музыка при запуске</string>
     <string name="settings_start_music_off">Не включать</string>
     <string name="settings_start_music_continue">Продолжить</string>

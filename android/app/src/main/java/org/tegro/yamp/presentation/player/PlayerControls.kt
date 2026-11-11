@@ -54,6 +54,7 @@ import org.tegro.yamp.presentation.hifi.PlayPauseGlyph
 @Composable
 internal fun PlayerControls(
     isPlaying: Boolean,
+    isLoading: Boolean,
     isLiked: Boolean,
     isRadio: Boolean,
     compact: Boolean,
@@ -78,7 +79,7 @@ internal fun PlayerControls(
                 Icon(Icons.Rounded.SkipPrevious, contentDescription = null, tint = HiFi.OnMetal, modifier = Modifier.size(30.dp * k))
             }
             HiFiKnob(onClick = onPlayPause, contentDescription = stringResource(R.string.cd_vosproizvedenie_ili_pauza), size = 96.dp * k) {
-                PlayPauseGlyph(isPlaying = isPlaying, size = 40.dp * k)
+                PlayPauseGlyph(isPlaying = isPlaying, isLoading = isLoading, size = 40.dp * k)
             }
             HiFiKnob(
                 onClick = onNext,

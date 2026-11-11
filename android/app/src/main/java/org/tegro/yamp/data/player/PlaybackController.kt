@@ -455,6 +455,10 @@ class PlaybackController @Inject constructor(
             if (playlist.isNotEmpty()) playTrack(playlist.first().idString, playlist) else playAllLikedTracks()
             return
         }
+        // A manual skip must not leave the old track playing while the next stream is resolved (D36): it
+        // fades out now and the play glyph shows loading until the next one sounds. Automatic transitions
+        // keep the user's crossfade.
+        if (!isAuto) playerRepository.fadeOutForSkip()
         if (current.isRadio) {
             stepRadioStation(current, +1)
             return
@@ -498,13 +502,19 @@ class PlaybackController @Inject constructor(
     fun playPrev() {
         val current = _currentTrack.value ?: return
         if (current.isRadio) {
+            playerRepository.fadeOutForSkip()
             stepRadioStation(current, -1)
             return
         }
         val playlist = _currentPlaylist.value
         val currentIndex = playlist.indexOfFirst { it.idString == current.idString }
         val prevIndex = PlaybackQueue.previousIndex(currentIndex, progress.value)
-        if (prevIndex == null) seekTo(0) else playTrack(playlist[prevIndex].idString, playlist)
+        if (prevIndex == null) {
+            seekTo(0)
+        } else {
+            playerRepository.fadeOutForSkip()
+            playTrack(playlist[prevIndex].idString, playlist)
+        }
     }
 
     fun loadMoreQueue() {

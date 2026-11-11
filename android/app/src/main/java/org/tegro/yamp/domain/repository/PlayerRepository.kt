@@ -40,6 +40,12 @@ interface PlayerRepository {
     /** Forgets the warmed-up next track: what it was prepared with no longer holds. */
     fun dropStandby()
     fun pause()
+    /**
+     * The user skipped away from the audible track: it fades out at once (about half a second) while the
+     * next one is being requested. A [playTrack] that arrives during the fade comes in under its tail;
+     * after the fade the engine is silent and reports nothing playing until the next track starts.
+     */
+    fun fadeOutForSkip()
     /** Lowers the volume to silence over [durationMs], then pauses (sleep timer). */
     fun fadeOutAndPause(durationMs: Long)
     /** Resumes the loaded item. Returns false when nothing is loaded and the caller must start the track itself. */

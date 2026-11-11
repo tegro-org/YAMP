@@ -131,18 +131,32 @@ fun HiFiKnob(
     )
 }
 
-/** Play ↔ Pause glyph that cross-fades (120 ms) instead of jumping; play is optically nudged right. */
+private enum class PlayGlyph { Play, Pause, Loading }
+
+/**
+ * Play ↔ Pause glyph that cross-fades (120 ms) instead of jumping; play is optically nudged right.
+ * [isLoading] (a stream being resolved or buffered after the user asked for it) shows a turning ring in
+ * place of the pause bars, so a skip never looks like a hang.
+ */
 @Composable
-fun PlayPauseGlyph(isPlaying: Boolean, size: Dp, tint: Color = HiFi.OnMetal) {
-    Crossfade(targetState = isPlaying, animationSpec = HiFiMotion.quick(), label = "play_pause") { playing ->
-        Icon(
-            imageVector = if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-            contentDescription = null,
-            tint = tint,
-            modifier = Modifier
-                .size(size)
-                .offset(x = if (playing) 0.dp else size * 0.05f)
-        )
+fun PlayPauseGlyph(isPlaying: Boolean, size: Dp, tint: Color = HiFi.OnMetal, isLoading: Boolean = false) {
+    val target = when {
+        isLoading && isPlaying -> PlayGlyph.Loading
+        isPlaying -> PlayGlyph.Pause
+        else -> PlayGlyph.Play
+    }
+    Crossfade(targetState = target, animationSpec = HiFiMotion.quick(), label = "play_pause") { glyph ->
+        when (glyph) {
+            PlayGlyph.Loading -> HiFiActivityIndicator(size = size * 0.8f, color = tint)
+            else -> Icon(
+                imageVector = if (glyph == PlayGlyph.Pause) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                contentDescription = null,
+                tint = tint,
+                modifier = Modifier
+                    .size(size)
+                    .offset(x = if (glyph == PlayGlyph.Pause) 0.dp else size * 0.05f)
+            )
+        }
     }
 }
 

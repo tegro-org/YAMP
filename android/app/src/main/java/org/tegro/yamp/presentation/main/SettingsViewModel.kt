@@ -37,15 +37,15 @@ class SettingsViewModel @Inject constructor(
     private val equalizer: org.tegro.yamp.data.player.SystemEqualizer
 ) : ViewModel() {
 
-    private data class Sound(val compatible: Boolean, val crossfade: Int, val normalize: Boolean, val startMusic: StartMusic, val bluetooth: Boolean, val explicit: Boolean)
+    private data class Sound(val compatible: Boolean, val crossfade: Int, val normalize: Boolean, val separateSessions: Boolean, val startMusic: StartMusic, val bluetooth: Boolean, val explicit: Boolean)
     private data class Look(val startPage: StartPage, val expand: Boolean, val swipe: Boolean, val left: Boolean, val clock: Boolean)
     private data class Scale(val auto: Boolean, val manual: Float, val animations: AnimationMode)
     private data class Library(val reserveMb: Int, val reserveUsed: Long, val autoDownload: Boolean, val cacheBytes: Long)
 
     private val sound: Flow<Sound> = combine(
-        combine(soundMode.compatible, settings.crossfadeSeconds, settings.normalizeVolume, ::Triple),
+        combine(soundMode.compatible, settings.crossfadeSeconds, settings.normalizeVolume, settings.separateAudioSessions) { c, f, n, s -> Sound(c, f, n, s, StartMusic.OFF, false, false) },
         combine(settings.startMusic, settings.bluetoothAutoplay, settings.skipExplicit, ::Triple)
-    ) { (compatible, crossfade, normalize), (start, bluetooth, explicit) -> Sound(compatible, crossfade, normalize, start, bluetooth, explicit) }
+    ) { sound, (start, bluetooth, explicit) -> sound.copy(startMusic = start, bluetooth = bluetooth, explicit = explicit) }
 
     private val look: Flow<Look> = combine(
         settings.startPage, settings.expandPlayerOnPlay, settings.swipeToCloseMiniPlayer, settings.steeringWheelOnLeft, settings.carClock, ::Look
@@ -62,6 +62,7 @@ class SettingsViewModel @Inject constructor(
             compatibleSound = s.compatible,
             crossfadeSeconds = s.crossfade,
             normalizeVolume = s.normalize,
+            separateAudioSessions = s.separateSessions,
             equalizerAvailable = equalizer.available,
             startMusic = s.startMusic,
             bluetoothAutoplay = s.bluetooth,
@@ -95,6 +96,7 @@ class SettingsViewModel @Inject constructor(
 
     fun setCrossfade(seconds: Int) = save { setCrossfadeSeconds(seconds) }
     fun setNormalizeVolume(enabled: Boolean) = save { setNormalizeVolume(enabled) }
+    fun setSeparateAudioSessions(enabled: Boolean) = save { setSeparateAudioSessions(enabled) }
     fun openEqualizer() = equalizer.open()
     fun setStartMusic(value: StartMusic) = save { setStartMusic(value) }
     fun setBluetoothAutoplay(enabled: Boolean) = save { setBluetoothAutoplay(enabled) }

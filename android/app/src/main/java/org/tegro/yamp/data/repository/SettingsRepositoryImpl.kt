@@ -169,4 +169,8 @@ class SettingsRepositoryImpl @Inject constructor(
     private val sdCardPref = bool("downloads_on_sd_card", false)
     override val downloadsOnSdCard = sdCardPref.first
     override suspend fun setDownloadsOnSdCard(enabled: Boolean) = sdCardPref.second(enabled)
+
+    private val audioSessionsPref = bool("separate_audio_sessions", false)
+    override val separateAudioSessions = audioSessionsPref.first
+    override suspend fun setSeparateAudioSessions(enabled: Boolean) = audioSessionsPref.second(enabled)
 }
