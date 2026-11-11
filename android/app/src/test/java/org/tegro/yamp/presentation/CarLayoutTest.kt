@@ -3,6 +3,7 @@ package org.tegro.yamp.presentation
 import androidx.compose.ui.unit.dp
 import org.tegro.yamp.presentation.car.carDockClearance
 import org.tegro.yamp.presentation.car.carScaleOf
+import org.tegro.yamp.presentation.car.carSwipeStep
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -37,5 +38,22 @@ class CarLayoutTest {
         // dislike + previous + ring + next + like, standing; the panel is 544 wide at most of the design
         val controls = 60 + 80 + 196 + 80 + 60
         assertTrue(controls <= 544 - 4 * 16)
+    }
+
+    @Test
+    fun oneTrackPerSwipeHoweverManyMovesItArrivesIn() {
+        val threshold = 72f
+        assertEquals("a short drag does nothing", 0, carSwipeStep(40f, threshold))
+        assertEquals("to the right: the previous track", 1, carSwipeStep(72f, threshold))
+        assertEquals("to the left: the next one", -1, carSwipeStep(-300f, threshold))
+        // A quick swipe arrives as several moves; only their sum decides, once
+        val moves = listOf(-30f, -45f, -60f, -25f)
+        assertEquals(-1, carSwipeStep(moves.sum(), threshold))
+    }
+
+    @Test
+    fun theSystemFontSizeDoesNotGrowTheCarScreen() {
+        // At 130% the dock's labels were cut and, on a small phone, the dock left the screen
+        assertEquals(1f, org.tegro.yamp.presentation.car.CAR_MAX_FONT_SCALE, 0f)
     }
 }

@@ -22,7 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
+import org.tegro.yamp.presentation.hifi.AppDialog
 import androidx.compose.ui.window.DialogProperties
 import org.tegro.yamp.data.download.DownloadQueueState
 import org.tegro.yamp.data.network.DownloadProgressInfo
@@ -43,7 +43,7 @@ fun DownloadProgressModal(
         label = "progressAnim"
     )
 
-    Dialog(
+    AppDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
             dismissOnBackPress = true,

@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import org.tegro.yamp.data.download.DownloadScheduler
 import org.tegro.yamp.data.network.TrackDownloadManager
 import org.tegro.yamp.data.player.PlaybackController
+import org.tegro.yamp.data.player.PlaybackJournal
 import org.tegro.yamp.data.player.SoundMode
 import org.tegro.yamp.data.reserve.RoadReserve
 import org.tegro.yamp.domain.model.AnimationMode
@@ -34,13 +35,16 @@ class SettingsViewModel @Inject constructor(
     private val downloadManager: TrackDownloadManager,
     private val downloadScheduler: DownloadScheduler,
     private val storage: org.tegro.yamp.data.download.DownloadStorage,
-    private val equalizer: org.tegro.yamp.data.player.SystemEqualizer
+    private val equalizer: org.tegro.yamp.data.player.SystemEqualizer,
+    private val journal: PlaybackJournal,
+    private val diagnosticLog: org.tegro.yamp.data.diagnostics.DiagnosticLog,
+    @param:dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
 ) : ViewModel() {
 
     private data class Sound(val compatible: Boolean, val crossfade: Int, val normalize: Boolean, val separateSessions: Boolean, val startMusic: StartMusic, val bluetooth: Boolean, val explicit: Boolean)
     private data class Look(val startPage: StartPage, val expand: Boolean, val swipe: Boolean, val left: Boolean, val clock: Boolean)
     private data class Scale(val auto: Boolean, val manual: Float, val animations: AnimationMode)
-    private data class Library(val reserveMb: Int, val reserveUsed: Long, val autoDownload: Boolean, val cacheBytes: Long)
+    private data class Library(val reserveMb: Int, val reserveUsed: Long, val autoDownload: Boolean, val cacheBytes: Long, val journal: PlaybackJournal.Snapshot = PlaybackJournal.Snapshot(), val diagnosticLog: Boolean = false)
 
     private val sound: Flow<Sound> = combine(
         combine(soundMode.compatible, settings.crossfadeSeconds, settings.normalizeVolume, settings.separateAudioSessions) { c, f, n, s -> Sound(c, f, n, s, StartMusic.OFF, false, false) },
@@ -54,8 +58,12 @@ class SettingsViewModel @Inject constructor(
     private val scale: Flow<Scale> = combine(settings.uiScaleAuto, settings.uiScaleManual, settings.animationMode, ::Scale)
 
     private val library: Flow<Library> = combine(
-        settings.roadReserveMb, roadReserve.usedBytes, settings.autoDownloadLikedTracks, downloadManager.cacheSizeBytes, ::Library
-    )
+        combine(settings.roadReserveMb, roadReserve.usedBytes, settings.autoDownloadLikedTracks, downloadManager.cacheSizeBytes) { mb, used, auto, cache ->
+            Library(mb, used, auto, cache)
+        },
+        journal.state,
+        settings.diagnosticLog
+    ) { lib, journal, diag -> lib.copy(journal = journal, diagnosticLog = diag) }
 
     val state: StateFlow<SettingsUiState> = combine(sound, look, scale, library, storage.state) { s, l, sc, lib, card ->
         SettingsUiState(
@@ -63,7 +71,7 @@ class SettingsViewModel @Inject constructor(
             crossfadeSeconds = s.crossfade,
             normalizeVolume = s.normalize,
             separateAudioSessions = s.separateSessions,
-            equalizerAvailable = equalizer.available,
+            equalizerAvailable = equalizer.isAvailable(),
             startMusic = s.startMusic,
             bluetoothAutoplay = s.bluetooth,
             skipExplicit = s.explicit,
@@ -71,6 +79,8 @@ class SettingsViewModel @Inject constructor(
             reserveUsedBytes = lib.reserveUsed,
             autoDownload = lib.autoDownload,
             cacheSizeBytes = lib.cacheBytes,
+            journal = lib.journal,
+            diagnosticLog = lib.diagnosticLog,
             storage = card,
             startPage = l.startPage,
             expandPlayerOnPlay = l.expand,
@@ -98,6 +108,20 @@ class SettingsViewModel @Inject constructor(
     fun setNormalizeVolume(enabled: Boolean) = save { setNormalizeVolume(enabled) }
     fun setSeparateAudioSessions(enabled: Boolean) = save { setSeparateAudioSessions(enabled) }
     fun openEqualizer() = equalizer.open()
+    fun clearJournal() = journal.clear()
+    fun setDiagnosticLog(enabled: Boolean) = save { setDiagnosticLog(enabled) }
+    fun clearDiagnosticLog() = diagnosticLog.clear()
+    fun shareDiagnosticLog() {
+        viewModelScope.launch { diagnosticLog.share() }
+    }
+
+    /** The journal as text, to a messenger or mail of the user's choice. */
+    fun shareJournal(text: String) {
+        val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, text)
+        runCatching {
+            context.startActivity(android.content.Intent.createChooser(send, null).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+        }.onFailure { android.util.Log.w("SettingsViewModel", "Journal not shared", it) }
+    }
     fun setStartMusic(value: StartMusic) = save { setStartMusic(value) }
     fun setBluetoothAutoplay(enabled: Boolean) = save { setBluetoothAutoplay(enabled) }
     fun setSkipExplicit(enabled: Boolean) = save { setSkipExplicit(enabled) }

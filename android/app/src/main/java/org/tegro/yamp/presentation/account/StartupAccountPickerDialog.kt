@@ -29,7 +29,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.window.Dialog
+import org.tegro.yamp.presentation.hifi.AppDialog
 import androidx.compose.ui.window.DialogProperties
 import coil3.compose.SubcomposeAsyncImage
 import org.tegro.yamp.domain.model.UserAccount
@@ -46,7 +46,7 @@ fun StartupAccountPickerDialog(
     }
     var rememberAsDefault by remember { mutableStateOf(false) }
 
-    Dialog(
+    AppDialog(
         onDismissRequest = {}, // Modal startup dialog cannot be dismissed without selecting
         properties = DialogProperties(
             dismissOnBackPress = false,

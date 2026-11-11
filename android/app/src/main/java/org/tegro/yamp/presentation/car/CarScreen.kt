@@ -224,14 +224,28 @@ fun CarScreen(
         DockItem(CarSource.DOWNLOADED, Icons.Rounded.DownloadDone, stringResource(R.string.car_source_downloaded), onPlayDownloaded)
     )
 
+    // The gesture is set up once; the callbacks it fires are the latest ones
+    val latestPrev by androidx.compose.runtime.rememberUpdatedState(onPrevClick)
+    val latestNext by androidx.compose.runtime.rememberUpdatedState(onNextClick)
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(HiFi.Ground)
             .pointerInput(Unit) {
-                detectHorizontalDragGestures { _, dragAmount ->
-                    if (dragAmount > 50) onPrevClick() else if (dragAmount < -50) onNextClick()
-                }
+                // One track per swipe: the distance adds up over the whole gesture and counts once the finger
+                // lifts (a quick swipe arrives as several moves, each of which used to switch a track)
+                var travelled = 0f
+                detectHorizontalDragGestures(
+                    onDragStart = { travelled = 0f },
+                    onDragEnd = {
+                        when (carSwipeStep(travelled, CarSwipeThreshold.toPx())) {
+                            1 -> latestPrev()
+                            -1 -> latestNext()
+                        }
+                        travelled = 0f
+                    },
+                    onDragCancel = { travelled = 0f }
+                ) { _, dragAmount -> travelled += dragAmount }
             }
             .pointerInput(Unit) { detectTapGestures(onDoubleTap = { playPause() }) }
     ) {
@@ -261,7 +275,14 @@ fun CarScreen(
 
         // The theme's fixed 24sp line height would not follow the head-unit scale and clip small text:
         // lines follow the (scaled) font instead
+        // The car's type is already sized for a glance from the driver's seat and the whole layout is fitted to
+        // the screen: Android's "font size" does not grow it, or labels get cut and the dock leaves the screen
+        val systemDensity = androidx.compose.ui.platform.LocalDensity.current
+        val carDensity = remember(systemDensity) {
+            androidx.compose.ui.unit.Density(systemDensity.density, systemDensity.fontScale.coerceAtMost(CAR_MAX_FONT_SCALE))
+        }
         androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.ui.platform.LocalDensity provides carDensity,
             androidx.compose.material3.LocalTextStyle provides androidx.compose.material3.LocalTextStyle.current.copy(lineHeight = TextUnit.Unspecified)
         ) {
         // "Настроить волну": big enough to hit without aiming. Lying down it opens over the cover column,
@@ -427,6 +448,19 @@ fun CarScreen(
 }
 
 /** The car layout's scale for a screen: the 1280×720 design lying, 600×1200 standing (by the height the bars leave). */
+/** How far Android's "font size" may grow the car screen's own, already large, type: not at all. */
+internal const val CAR_MAX_FONT_SCALE = 1f
+
+/** How far a finger travels across the car screen to switch a track. */
+internal val CarSwipeThreshold = 72.dp
+
+/** A swipe's result: 1 — back a track (to the right), -1 — on to the next (to the left), 0 — too short. */
+internal fun carSwipeStep(travelledPx: Float, thresholdPx: Float): Int = when {
+    travelledPx >= thresholdPx -> 1
+    travelledPx <= -thresholdPx -> -1
+    else -> 0
+}
+
 internal fun carScaleOf(maxWidth: Dp, maxHeight: Dp, usableHeight: Dp, isLandscape: Boolean): Float {
     val s = if (isLandscape) minOf(maxWidth / 1280.dp, maxHeight / 720.dp) else minOf(maxWidth / 600.dp, usableHeight / 1200.dp)
     return s.coerceIn(0.55f, 2f)

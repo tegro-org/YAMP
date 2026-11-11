@@ -172,6 +172,26 @@
     <string name="widget_tap_to_open">Нажмите, чтобы открыть приложение</string>
     <string name="crash_log_title">Журнал сбоев</string>
     <string name="crash_log_none">Сбоев не было</string>
+    <string name="journal_title">Журнал воспроизведения</string>
+    <string name="journal_hint">Последний час музыки: остановки, переходы, пропуски, ошибки, аудиофокус, паузы с их причиной. Поможет понять, где прерывается звук: связь, трек, устройство или приложение.</string>
+    <string name="journal_none">Остановок и пауз не было</string>
+    <string name="journal_row" tools:ignore="PluralsCandidate">Остановок %1$d · пауз %2$d · ошибок %3$d</string>
+    <string name="journal_played">Играло</string>
+    <string name="journal_minutes" tools:ignore="PluralsCandidate">%1$d мин</string>
+    <string name="journal_stalls">Остановки звука</string>
+    <string name="journal_stalls_value">%1$d · %2$s с</string>
+    <string name="journal_crossfades">Кроссфейды с готовым треком</string>
+    <string name="journal_crossfades_value">%1$d из %2$d</string>
+    <string name="journal_errors">Ошибки</string>
+    <string name="journal_pauses">Паузы</string>
+    <string name="journal_events">СОБЫТИЯ</string>
+    <string name="journal_share">Поделиться</string>
+    <string name="journal_clear">Очистить</string>
+    <string name="settings_g_diagnostics">Диагностика</string>
+    <string name="diag_log_title">Диагностический журнал</string>
+    <string name="diag_log_hint">Файл на устройстве: события воспроизведения, ошибки, аудиофокус, паузы и их причины. Без токенов и ссылок на потоки. Около 2 МБ, последние сутки</string>
+    <string name="diag_log_share">Отправить журнал</string>
+    <string name="diag_log_clear">Очистить журнал</string>
     <string name="crash_log_send">Отправить разработчику</string>
     <string name="crash_log_clear">Очистить</string>
     <string name="crash_log_close">Закрыть</string>

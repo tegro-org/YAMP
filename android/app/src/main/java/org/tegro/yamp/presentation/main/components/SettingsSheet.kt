@@ -49,6 +49,9 @@ import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.Login
 import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.rounded.Animation
+import androidx.compose.material.icons.rounded.Timeline
+import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Bluetooth
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CloudDownload
@@ -101,7 +104,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
+import org.tegro.yamp.presentation.hifi.AppDialog
 import androidx.compose.ui.window.DialogProperties
 import org.tegro.yamp.BuildConfig
 import org.tegro.yamp.R
@@ -153,7 +156,7 @@ fun SettingsSheet(
 
     val pageActions = actions.copyWith(onLogout = { confirmLogout = true }, onClearDownloads = { confirmClear = true }, close = close)
 
-    Dialog(onDismissRequest = close, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+    AppDialog(onDismissRequest = close, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         // Inside the dialog's window: Back there first steps out of a page to the root list, then closes
         BackHandler(enabled = !isLandscape && page != null) { pageName = null }
         Box(Modifier.fillMaxSize()) {
@@ -606,6 +609,7 @@ private fun ColumnScope.InterfacePage(state: SettingsUiState, actions: SettingsA
 @Composable
 private fun ColumnScope.AboutPage(state: SettingsUiState, actions: SettingsActions) {
     val uri = LocalUriHandler.current
+    var journalOpen by remember { mutableStateOf(false) }
     SettingsGroup(stringResource(R.string.settings_g_version)) {
         SettingsRow(
             icon = Icons.Rounded.Info,
@@ -621,6 +625,25 @@ private fun ColumnScope.AboutPage(state: SettingsUiState, actions: SettingsActio
             value = if (state.crashReports == 0) stringResource(R.string.crash_log_none) else state.crashReports.toString(),
             onClick = actions.onOpenCrashLog
         )
+        SettingsRow(
+            icon = Icons.Rounded.Timeline,
+            title = stringResource(R.string.journal_title),
+            value = state.journal.summary.let { s ->
+                if (s.stalls == 0 && s.pauses == 0 && s.errors == 0) stringResource(R.string.journal_none)
+                else stringResource(R.string.journal_row, s.stalls, s.pauses, s.errors)
+            },
+            onClick = { journalOpen = true }
+        )
+    }
+    SettingsGroup(stringResource(R.string.settings_g_diagnostics)) {
+        SwitchRow(Icons.Rounded.Timeline, stringResource(R.string.diag_log_title), stringResource(R.string.diag_log_hint), state.diagnosticLog, actions.onDiagnosticLogChange)
+        if (state.diagnosticLog) {
+            SettingsRow(icon = Icons.Rounded.Share, title = stringResource(R.string.diag_log_share), onClick = actions.onShareDiagnosticLog)
+            SettingsRow(icon = Icons.Rounded.DeleteOutline, title = stringResource(R.string.diag_log_clear), onClick = actions.onClearDiagnosticLog)
+        }
+    }
+    if (journalOpen) {
+        PlaybackJournalDialog(state.journal, onShare = actions.onShareJournal, onClear = actions.onClearJournal, onDismiss = { journalOpen = false })
     }
     SettingsGroup(stringResource(R.string.settings_g_project)) {
         SettingsRow(icon = Icons.Rounded.Code, title = stringResource(R.string.settings_source_code), subtitle = "github.com/tegro-org/YAMP", onClick = { runCatching { uri.openUri(SOURCE_URL) } })

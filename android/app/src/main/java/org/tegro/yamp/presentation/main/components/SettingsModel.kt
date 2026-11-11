@@ -5,6 +5,7 @@ import androidx.compose.runtime.Immutable
 import org.tegro.yamp.domain.model.AnimationMode
 import org.tegro.yamp.domain.model.StartMusic
 import org.tegro.yamp.domain.model.StartPage
+import org.tegro.yamp.data.player.PlaybackJournal
 
 /** The pages of the settings: a short root list and one page per section. */
 enum class SettingsPage { ACCOUNT, PLAYBACK, INTERFACE, ABOUT }
@@ -18,6 +19,10 @@ data class SettingsUiState(
     val defaultAccountName: String? = null,
     val updateStatus: String? = null,
     val crashReports: Int = 0,
+    /** The last hour of music, for "Playback journal" in About. */
+    val journal: PlaybackJournal.Snapshot = PlaybackJournal.Snapshot(),
+    /** The diagnostic log file on the device (D48). */
+    val diagnosticLog: Boolean = false,
     val compatibleSound: Boolean = false,
     val crossfadeSeconds: Int = 3,
     val normalizeVolume: Boolean = false,
@@ -48,6 +53,11 @@ data class SettingsActions(
     val onLogout: () -> Unit = {},
     val onCheckForUpdates: () -> Unit = {},
     val onOpenCrashLog: () -> Unit = {},
+    val onShareJournal: (String) -> Unit = {},
+    val onClearJournal: () -> Unit = {},
+    val onDiagnosticLogChange: (Boolean) -> Unit = {},
+    val onShareDiagnosticLog: () -> Unit = {},
+    val onClearDiagnosticLog: () -> Unit = {},
     val onCompatibleSoundChange: (Boolean) -> Unit = {},
     val onCrossfadeChange: (Int) -> Unit = {},
     val onNormalizeVolumeChange: (Boolean) -> Unit = {},
