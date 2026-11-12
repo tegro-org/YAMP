@@ -106,6 +106,9 @@ class MainViewModel @Inject constructor(
     val streamQuality: StateFlow<String?> = playbackController.streamQuality
     val sleepTimer: StateFlow<SleepTimerState?> = playbackController.sleepTimer
     val playbackMessages: SharedFlow<String> = playbackController.messages
+    /** The queues for the count badge, and the active one for the queue sheet's rows and modes. */
+    val queues: StateFlow<List<org.tegro.yamp.domain.queue.QueueSummary>> = playbackController.queues
+    val activeQueue: StateFlow<org.tegro.yamp.data.queue.ActiveQueue?> = playbackController.activeQueue
 
     // endregion
 
@@ -289,6 +292,18 @@ class MainViewModel @Inject constructor(
     fun moveInQueue(trackId: String, targetId: String) = playbackController.moveInQueue(trackId, targetId)
 
     fun enqueueNext(track: TrackDetailsDto) = playbackController.enqueueNext(track)
+
+    /** "Add to end of queue" for a track or a whole list. */
+    fun addToEnd(tracks: List<TrackDetailsDto>) = playbackController.addToEnd(tracks)
+
+    /** The queue sheet's row: that entry, so a track that is in the queue twice works. */
+    fun playEntry(entryId: Long) {
+        playRequests.userStarted()
+        playbackController.playEntry(entryId)
+    }
+
+    fun setShuffle(on: Boolean) = playbackController.setShuffle(on)
+    fun setRepeat(mode: org.tegro.yamp.domain.queue.RepeatMode) = playbackController.setRepeat(mode)
 
     fun stopAndClearPlayer() = playbackController.stopAndClear()
 

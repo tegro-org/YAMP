@@ -35,6 +35,10 @@ object HiFi {
     val BarFill = Color(0xB81C1E26)
     val Scrim = Color(0xE605060A)
     val SheetFill = Color(0xFF10121A)
+    /** Behind a bottom sheet / a side panel (the panel leaves more of the page visible). */
+    val SheetScrim = Color.Black.copy(alpha = 0.55f)
+    val PanelScrim = Color.Black.copy(alpha = 0.35f)
+    val SheetHandle = Color.White.copy(alpha = 0.28f)
     val Danger = Color(0xFFFF6B6B)
     val Live = Color(0xFFFF4D4D)
     /** Behind a cover while it loads, and for a missing cover. */

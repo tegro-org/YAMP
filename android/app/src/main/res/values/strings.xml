@@ -1,4 +1,5 @@
-<resources xmlns:tools="http://schemas.android.com/tools">
+<!-- MissingTranslation is ignored until the string migration (ARCHITECTURE K4) gives every key a values-ru twin. -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
     <string name="app_name">YAMP</string>
     <string name="account_management_upravlenie_akkauntami">Управление аккаунтами</string>
     <string name="account_management_pereklyuchenie_profiley_i_nastroyki">Переключение профилей и настройки входа</string>
@@ -477,4 +478,36 @@
     <string name="car_next_wave">Далее в волне</string>
     <string name="car_next_track_wave">Далее · волна по треку</string>
     <string name="car_next_play_cd">Включить «%1$s»</string>
+
+    <!-- Phase 1 queues: English here, Russian in values-ru (ARCHITECTURE K1) -->
+    <string name="queue_switcher_title">Queues</string>
+    <string name="queue_switcher_hint">Tap to switch · hold for more</string>
+    <string name="queue_new">New queue</string>
+    <string name="queue_new_hint">Starts empty. Add music with “Add to queue…”, or make it active and play something.</string>
+    <string name="queue_name_hint">Name</string>
+    <string name="queue_create">Create</string>
+    <string name="queue_cancel">Cancel</string>
+    <string name="queue_rename">Rename</string>
+    <string name="queue_duplicate">Duplicate</string>
+    <string name="queue_clear">Clear</string>
+    <string name="queue_delete">Delete queue</string>
+    <string name="queue_delete_confirm_title">Delete queue?</string>
+    <string name="queue_delete_confirm_text">“%1$s” and its %2$s will be removed from the app. The music itself is not deleted.</string>
+    <string name="queue_delete_action">Delete</string>
+    <plurals name="queue_tracks">
+        <item quantity="one">%1$d track</item>
+        <item quantity="other">%1$d tracks</item>
+    </plurals>
+    <string name="queue_paused_at">%1$s · paused at %2$d</string>
+    <string name="queue_position">%1$d / %2$d</string>
+    <string name="queue_endless">∞</string>
+    <string name="queue_add_title">Add to queue</string>
+    <string name="queue_added_to">Added to “%1$s”</string>
+    <string name="track_menu_add_to_end">Add to end of queue</string>
+    <string name="track_menu_add_to_queue">Add to queue…</string>
+    <string name="queue_default_name">Queue %1$d</string>
+    <string name="queue_duplicate_name">%1$s (copy)</string>
+    <string name="cd_queues">Queues</string>
+    <string name="cd_queue_shuffle">Shuffle</string>
+    <string name="cd_queue_repeat">Repeat</string>
 </resources>

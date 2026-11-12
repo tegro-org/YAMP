@@ -459,10 +459,16 @@ class PlaybackController @Inject constructor(
 
     // region Queues: switching, modes, adding
 
-    /** Makes [id] the active queue: shown paused at its saved track and position; keeps playing if the player was. */
-    fun switchQueue(id: Long) = playOp {
-        if (active?.queue?.id == id) return@playOp
-        val wasPlaying = isPlaying.value
+    /**
+     * Makes [id] the active queue: shown paused at its saved track and position; keeps playing if the player
+     * was, or starts it when [play] asks (a queue picked in Android Auto).
+     */
+    fun switchQueue(id: Long, play: Boolean = false) = playOp {
+        if (active?.queue?.id == id) {
+            if (play && !isPlaying.value) this.play()
+            return@playOp
+        }
+        val wasPlaying = isPlaying.value || play
         val position = progress.value.takeIf { liveStation.value == null }
         currentPlayJob?.cancel()
         _isStarting.value = false
@@ -495,6 +501,48 @@ class PlaybackController @Inject constructor(
         if (active == null) playFromNow(tracks, null, null, crossfade = true, startPositionMs = 0L)
         else queueManager.insertAfterCursor(tracks)
     }
+
+    /** The switcher's edits, each one a queue operation in call order; nothing to wait for. */
+    fun createQueue(name: String) = queueOp { queueManager.create(name) }
+
+    /** A new queue that at once gets [tracks] ("New queue" in the "Add to queue…" picker). */
+    fun createQueueWith(name: String, tracks: List<TrackDetailsDto>) = queueOp {
+        queueManager.appendTo(queueManager.create(name).id, tracks)
+    }
+
+    fun renameQueue(queueId: Long, name: String) = queueOp { queueManager.rename(queueId, name) }
+
+    /** Deleting the active queue: the next one becomes active, shown paused at its cursor (open question 5). */
+    fun deleteQueue(queueId: Long) = playOp {
+        val wasActive = active?.queue?.id == queueId
+        if (wasActive) {
+            currentPlayJob?.cancel()
+            _isStarting.value = false
+            playerRepository.stop()
+            leaveStation()
+        }
+        queueManager.delete(queueId)
+        if (wasActive) {
+            val target = active ?: return@playOp
+            restoredPositionMs.value = target.queue.positionMs
+            followWaveStation(target)
+        }
+    }
+
+    fun duplicateQueue(queueId: Long, name: String) = queueOp { queueManager.duplicate(queueId, name) }
+
+    /** Clearing the active queue stops what plays from it; the queue stays, empty. */
+    fun clearQueue(queueId: Long) = playOp {
+        if (active?.queue?.id == queueId) {
+            currentPlayJob?.cancel()
+            _isStarting.value = false
+            playerRepository.stop()
+            restoredPositionMs.value = 0L
+        }
+        queueManager.clear(queueId)
+    }
+
+    fun reorderQueues(idsInOrder: List<Long>) = queueOp { queueManager.reorderQueues(idsInOrder) }
 
     fun removeEntry(entryId: Long) = queueOp { keepingStandby { queueManager.remove(entryId) } }
 

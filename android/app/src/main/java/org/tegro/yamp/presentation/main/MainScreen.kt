@@ -80,6 +80,11 @@ import org.tegro.yamp.presentation.main.components.DockBottomGap
 import org.tegro.yamp.presentation.main.components.DockClearance
 import org.tegro.yamp.presentation.main.components.FloatingGlassDock
 import org.tegro.yamp.presentation.main.components.LocalTrackMenu
+import org.tegro.yamp.presentation.player.QueueModes
+import org.tegro.yamp.presentation.queues.LocalQueueSwitcher
+import org.tegro.yamp.presentation.queues.QueueSwitcherHost
+import org.tegro.yamp.presentation.queues.QueueSwitcherLauncher
+import org.tegro.yamp.presentation.queues.QueueSwitcherViewModel
 import org.tegro.yamp.presentation.main.components.MainTab
 import org.tegro.yamp.presentation.main.components.MiniPlayer
 import org.tegro.yamp.presentation.main.components.TrackMenuLauncher
@@ -112,7 +117,8 @@ fun MainScreen(
     radioVm: RadioViewModel = hiltViewModel(),
     updateVm: UpdateViewModel = hiltViewModel(),
     catalogVm: CatalogViewModel = hiltViewModel(),
-    crashVm: CrashLogViewModel = hiltViewModel()
+    crashVm: CrashLogViewModel = hiltViewModel(),
+    queuesVm: QueueSwitcherViewModel = hiltViewModel()
 ) {
     val currentTrack by viewModel.currentTrack.collectAsStateWithLifecycle()
     val isPlaying by viewModel.isPlaying.collectAsStateWithLifecycle()
@@ -159,6 +165,7 @@ fun MainScreen(
     val trackMenuLauncher = remember {
         TrackMenuLauncher { track, playlist -> trackMenu = TrackMenuRequest(track, playlist, pickPlaylist = false) }
     }
+    val queueSwitcherLauncher = remember(queuesVm) { QueueSwitcherLauncher { queuesVm.open(it) } }
     val catalogActions = remember(catalogVm, viewModel) {
         CatalogActions(
             onBack = { catalogVm.back() },
@@ -166,7 +173,8 @@ fun MainScreen(
             onOpenArtist = { id, name -> catalogVm.openArtist(id, name) },
             onOpenAlbum = { id, title -> catalogVm.openAlbum(id, title) },
             onPlay = { tracks, trackId, shuffle -> catalogVm.play(tracks, trackId, shuffle) },
-            onToggleLike = { viewModel.toggleLike(it) }
+            onToggleLike = { viewModel.toggleLike(it) },
+            onAddToEnd = viewModel::addToEnd
         )
     }
     // Another tab: the catalog pages belong to where they were opened
@@ -205,6 +213,7 @@ fun MainScreen(
         LocalStreamQuality provides streamQuality,
         LocalLinkState provides linkState,
         LocalTrackMenu provides trackMenuLauncher,
+        LocalQueueSwitcher provides queueSwitcherLauncher,
         LocalHiFiLite provides lite,
         LocalArtworkTint provides appTint
     ) {
@@ -402,6 +411,7 @@ fun MainScreen(
                         onLeavePlayer = { isPlayerExpanded = false }
                     )
                 }
+                QueueSwitcherHost(queuesVm, snackbar)
                 UpdateHost(updateVm)
                 AccountHost(
                     accountVm,
@@ -443,9 +453,21 @@ private fun PlayerHost(
     coverModifier: Modifier
 ) {
     val queue by viewModel.currentPlaylist.collectAsStateWithLifecycle()
+    val activeQueue by viewModel.activeQueue.collectAsStateWithLifecycle()
     val isFetchingMoreQueue by viewModel.isFetchingMoreQueue.collectAsStateWithLifecycle()
     val sleepTimer by viewModel.sleepTimer.collectAsStateWithLifecycle()
     val stationId = track.idString.removePrefix("radio_")
+    // The sheet's rows are the queue's entries (a track twice = two rows) while a queue is what plays
+    val entries = activeQueue?.takeIf { !track.isRadio && it.tracks == queue }
+    val queueModes = remember(entries?.queue?.shuffle, entries?.queue?.repeat, entries != null) {
+        QueueModes(
+            shuffle = entries?.queue?.shuffle == true,
+            repeat = entries?.queue?.repeat ?: org.tegro.yamp.domain.queue.RepeatMode.ALL,
+            shown = entries != null,
+            onShuffle = viewModel::setShuffle,
+            onRepeat = viewModel::setRepeat
+        )
+    }
     FullScreenPlayer(
         track = track,
         isPlaying = now.isPlaying,
@@ -477,7 +499,11 @@ private fun PlayerHost(
         onCancelSleepTimer = { viewModel.cancelSleepTimer() },
         onAddToPlaylist = onAddToPlaylist,
         onQualityClick = onQualityClick,
-        coverModifier = coverModifier
+        coverModifier = coverModifier,
+        queueEntryIds = entries?.entries?.map { it.entryId }.orEmpty(),
+        queueCursorIndex = entries?.cursorIndex ?: -1,
+        queueModes = queueModes,
+        onEntrySelect = viewModel::playEntry
     )
 }
 

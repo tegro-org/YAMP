@@ -248,6 +248,17 @@ class HiFiLogicTest {
         assertEquals("last track: nothing next", 0, org.tegro.yamp.presentation.player.queueSplitOf(q, "4").next.size)
     }
 
+    /** A track in the queue twice: the cursor says which one plays, and the entry ids follow the rows. */
+    @Test
+    fun playerQueueSplitFollowsTheCursorForDuplicates() {
+        val q = listOf(track("1"), track("2"), track("1"), track("3"))
+        val split = org.tegro.yamp.presentation.player.queueSplitOf(q, "1", entryIds = listOf(10L, 11L, 12L, 13L), cursorIndex = 2)
+        assertEquals(listOf("3"), split.next.map { it.idString })
+        assertEquals(listOf(13L), split.nextEntryIds)
+        val stale = org.tegro.yamp.presentation.player.queueSplitOf(q, "1", entryIds = listOf(10L, 11L, 12L, 13L), cursorIndex = 3)
+        assertEquals("a cursor on another track: the first occurrence", listOf(11L, 12L, 13L), stale.nextEntryIds)
+    }
+
     // --- Wave page shelf -------------------------------------------------------------------------
 
     private fun track(id: String) = TrackDetailsDto(id = kotlinx.serialization.json.JsonPrimitive(id), title = "T$id")

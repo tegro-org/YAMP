@@ -11,6 +11,12 @@ import org.tegro.yamp.presentation.hifi.hifiPress
 import androidx.compose.foundation.lazy.itemsIndexed
 import org.tegro.yamp.presentation.hifi.HiFiType
 import org.tegro.yamp.presentation.hifi.GlassCircleButton
+import org.tegro.yamp.presentation.queues.AddToQueueMenu
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import org.tegro.yamp.presentation.hifi.HiFiErrorState
 import org.tegro.yamp.presentation.hifi.HiFiSkeletonRows
 import org.tegro.yamp.presentation.hifi.appearOnce
@@ -79,7 +85,8 @@ class CatalogActions(
     val onOpenArtist: (id: String, name: String) -> Unit,
     val onOpenAlbum: (id: String, title: String) -> Unit,
     val onPlay: (tracks: List<TrackDetailsDto>, trackId: String?, shuffle: Boolean) -> Unit,
-    val onToggleLike: (TrackDetailsDto) -> Unit
+    val onToggleLike: (TrackDetailsDto) -> Unit,
+    val onAddToEnd: (List<TrackDetailsDto>) -> Unit = {}
 )
 
 /** The page on top of the catalog stack: an artist or an album. Back returns to the previous page. */
@@ -136,6 +143,12 @@ fun CatalogPageScreen(
                                 actions.onPlay(tracks, null, true)
                             }
                         }
+                    },
+                    trailing = {
+                        if (tracks.isNotEmpty()) {
+                            Spacer(Modifier.width(12.dp))
+                            ListMenuButton(tracks, state.page.title, actions.onAddToEnd)
+                        }
                     }
                 )
             } else Column(
@@ -144,8 +157,13 @@ fun CatalogPageScreen(
                     .statusBarsPadding()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
-                GlassCircleButton(onClick = actions.onBack, contentDescription = stringResource(R.string.cd_nazad)) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    GlassCircleButton(onClick = actions.onBack, contentDescription = stringResource(R.string.cd_nazad)) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+                    }
+                    Spacer(Modifier.weight(1f))
+                    // The list's queue actions sit where the playlist page keeps its menu
+                    if (tracks.isNotEmpty()) ListMenuButton(tracks, state.page.title, actions.onAddToEnd)
                 }
                 Spacer(Modifier.height(12.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -293,4 +311,16 @@ internal fun Cover(uri: String?, placeholder: ImageVector, shape: Shape, size: D
 private fun PlayButton(icon: ImageVector, label: String, primary: Boolean, modifier: Modifier, onClick: () -> Unit) {
     if (primary) MetalPillButton(label, onClick, modifier, icon = icon, height = 48.dp)
     else GlassPillButton(label, onClick, modifier, icon = icon, height = 48.dp)
+}
+
+/** "⋮" in the header: the whole list to the end of the queue, or to a chosen queue. */
+@Composable
+private fun ListMenuButton(tracks: List<TrackDetailsDto>, title: String, onAddToEnd: (List<TrackDetailsDto>) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        GlassCircleButton(onClick = { open = true }, contentDescription = stringResource(R.string.cd_playlist_menu)) {
+            Icon(Icons.Default.MoreVert, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+        }
+        AddToQueueMenu(expanded = open, onDismiss = { open = false }, tracks = tracks, title = title, onAddToEnd = onAddToEnd)
+    }
 }

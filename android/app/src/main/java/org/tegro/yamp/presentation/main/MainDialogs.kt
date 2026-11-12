@@ -17,6 +17,8 @@ import org.tegro.yamp.presentation.catalog.CatalogViewModel
 import org.tegro.yamp.presentation.crash.CrashLogDialog
 import org.tegro.yamp.presentation.crash.CrashLogViewModel
 import org.tegro.yamp.presentation.main.components.TrackContextMenu
+import org.tegro.yamp.presentation.queues.LocalQueueSwitcher
+import org.tegro.yamp.presentation.queues.QueueSwitcherRequest
 import org.tegro.yamp.presentation.update.UpdateDialog
 import org.tegro.yamp.presentation.update.UpdateViewModel
 import kotlinx.coroutines.launch
@@ -45,6 +47,8 @@ internal fun TrackMenuHost(
     val playNextDone = stringResource(R.string.track_menu_play_next_done)
     val scope = rememberCoroutineScope()
     val track = request.track
+    val queueSwitcher = LocalQueueSwitcher.current
+    val trackLabel = listOfNotNull(track.title, track.artists.joinToString { it.name.orEmpty() }.takeIf { it.isNotBlank() }).joinToString(" · ")
     TrackContextMenu(
         track = track,
         inPlaylist = request.playlist,
@@ -61,6 +65,8 @@ internal fun TrackMenuHost(
         onCreatePlaylist = { playlistsVm.create(it, thenAdd = track) },
         onRemoveFromPlaylist = { request.playlist?.let { playlistsVm.removeTrack(it, track.idString) } },
         onTrackWave = { viewModel.startTrackWave(track) },
+        onAddToEnd = { viewModel.addToEnd(listOf(track)) },
+        onAddToQueue = { queueSwitcher?.open(QueueSwitcherRequest.AddTo(listOf(track), trackLabel)) },
         onOpenArtist = track.artists.firstNotNullOfOrNull { artist -> artist.idString?.let { id -> id to artist.name.orEmpty() } }
             ?.let { (id, name) ->
                 {

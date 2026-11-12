@@ -59,6 +59,8 @@ import androidx.compose.ui.zIndex
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.rounded.Layers
+import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.DropdownMenu
@@ -135,7 +137,8 @@ fun PlaylistScreen(
     onRename: (String) -> Unit,
     onDelete: () -> Unit,
     onReorder: (shownOrder: List<String>, newOrder: List<String>) -> Unit = { _, _ -> },
-    onSetPublic: (Boolean) -> Unit = {}
+    onSetPublic: (Boolean) -> Unit = {},
+    onAddToEnd: (List<org.tegro.yamp.data.dto.TrackDetailsDto>) -> Unit = {}
 ) {
     val playlist = opened.playlist
     // Track order being edited (null — normal view); saved as one change with "Done"
@@ -216,6 +219,22 @@ fun PlaylistScreen(
                 val appDensity = androidx.compose.ui.platform.LocalDensity.current
                 DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
         org.tegro.yamp.presentation.hifi.AppScale(appDensity) {
+                    if (opened.tracks.isNotEmpty()) {
+                        val queueSwitcher = org.tegro.yamp.presentation.queues.LocalQueueSwitcher.current
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.track_menu_add_to_end)) },
+                            leadingIcon = { Icon(Icons.AutoMirrored.Rounded.PlaylistPlay, contentDescription = null) },
+                            onClick = { showMenu = false; onAddToEnd(opened.tracks) }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.track_menu_add_to_queue)) },
+                            leadingIcon = { Icon(Icons.Rounded.Layers, contentDescription = null) },
+                            onClick = {
+                                showMenu = false
+                                queueSwitcher?.open(org.tegro.yamp.presentation.queues.QueueSwitcherRequest.AddTo(opened.tracks, playlist.title.orEmpty()))
+                            }
+                        )
+                    }
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.playlist_rename)) },
                         leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },

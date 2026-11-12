@@ -1,6 +1,8 @@
 package org.tegro.yamp.presentation.main.components
 
 import androidx.compose.material.icons.rounded.Waves
+import androidx.compose.material.icons.rounded.Layers
+import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.ui.platform.LocalContext
 import coil3.request.ImageRequest
 import org.tegro.yamp.utils.cover
@@ -95,7 +97,9 @@ fun TrackContextMenu(
     onRemoveFromPlaylist: () -> Unit,
     onOpenArtist: (() -> Unit)? = null,
     onOpenAlbum: (() -> Unit)? = null,
-    onTrackWave: (() -> Unit)? = null
+    onTrackWave: (() -> Unit)? = null,
+    onAddToEnd: () -> Unit = {},
+    onAddToQueue: () -> Unit = {}
 ) {
     var picking by remember { mutableStateOf(startWithPlaylists) }
     var naming by remember { mutableStateOf(false) }
@@ -194,6 +198,16 @@ fun TrackContextMenu(
                     onPlayNext()
                     onDismiss()
                 }
+                if (!track.isRadio) {
+                    ContextMenuItem(Icons.AutoMirrored.Rounded.PlaylistPlay, stringResource(R.string.track_menu_add_to_end)) {
+                        onAddToEnd()
+                        onDismiss()
+                    }
+                    ContextMenuItem(Icons.Rounded.Layers, stringResource(R.string.track_menu_add_to_queue)) {
+                        onAddToQueue()
+                        onDismiss()
+                    }
+                }
                 ContextMenuItem(Icons.AutoMirrored.Filled.PlaylistAdd, stringResource(R.string.track_context_menu_dobavit_v_pleylist)) {
                     picking = true
                 }
@@ -265,11 +279,13 @@ private fun PlaylistPickerRow(playlist: UserPlaylistDto, onClick: () -> Unit) {
     }
 }
 
+/** A row of a menu sheet: the track menu's and the queue menu's. */
 @Composable
-private fun ContextMenuItem(
+internal fun ContextMenuItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     text: String,
     iconTint: Color = Color.White.copy(alpha = 0.75f),
+    textColor: Color = Color.White,
     onClick: () -> Unit
 ) {
     Row(
@@ -288,7 +304,7 @@ private fun ContextMenuItem(
         Text(
             text = text,
             fontSize = 16.sp,
-            color = Color.White
+            color = textColor
         )
     }
 }

@@ -18,6 +18,9 @@ import org.tegro.yamp.data.player.PlaylistSource
 import org.tegro.yamp.domain.model.RadioCategory
 import org.tegro.yamp.presentation.account.AccountViewModel
 import org.tegro.yamp.presentation.car.CarScreen
+import org.tegro.yamp.presentation.hifi.PanelSide
+import org.tegro.yamp.presentation.queues.LocalQueueSwitcher
+import org.tegro.yamp.presentation.queues.QueueSwitcherRequest
 import org.tegro.yamp.presentation.catalog.CatalogViewModel
 import org.tegro.yamp.presentation.crash.CrashLogViewModel
 import org.tegro.yamp.presentation.radio.RadioScreen
@@ -65,6 +68,7 @@ internal fun HomeTab(
     val waveActive = now.waveActive
     val tuning by viewModel.waveTuning.collectAsStateWithLifecycle()
     val seed by viewModel.waveSeed.collectAsStateWithLifecycle()
+    val queues by viewModel.queues.collectAsStateWithLifecycle()
     var tuneOpen by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     if (tuneOpen) {
         org.tegro.yamp.presentation.main.components.WaveTuneSheet(tuning, onChange = viewModel::setWaveTuning, onDismiss = { tuneOpen = false })
@@ -90,7 +94,8 @@ internal fun HomeTab(
         tuning = tuning,
         trackWaveSeed = seed?.takeIf { waveActive },
         onTune = { tuneOpen = true },
-        onBackToMyWave = viewModel::returnToMyWave
+        onBackToMyWave = viewModel::returnToMyWave,
+        queueCount = queues.size
     )
 }
 
@@ -254,7 +259,8 @@ internal fun LibraryTab(
         onRenamePlaylist = { playlist, title -> playlistsVm.rename(playlist, title) },
         onDeletePlaylist = { playlistsVm.delete(it) },
         onReorderPlaylist = { playlist, shown, new -> playlistsVm.reorder(playlist, shown, new) },
-        onSetPlaylistPublic = { playlist, public -> playlistsVm.setPublic(playlist, public) }
+        onSetPlaylistPublic = { playlist, public -> playlistsVm.setPublic(playlist, public) },
+        onAddToEnd = viewModel::addToEnd
     )
 }
 
@@ -300,6 +306,8 @@ internal fun CarTab(
     val waveTuning by viewModel.waveTuning.collectAsStateWithLifecycle()
     val waveSeed by viewModel.waveSeed.collectAsStateWithLifecycle()
     val skipExplicit by viewModel.skipExplicit.collectAsStateWithLifecycle()
+    val activeQueue by viewModel.activeQueue.collectAsStateWithLifecycle()
+    val queueSwitcher = LocalQueueSwitcher.current
     val track = now.track
     // What will really play next, by the player's own rule (explicit passed over, a playlist goes on from its start)
     val upcoming = remember(queue, now.trackId, now.source, skipExplicit, track?.isRadio) {
@@ -337,6 +345,9 @@ internal fun CarTab(
         trackWaveSeed = waveSeed,
         onWaveTuningChange = viewModel::setWaveTuning,
         onTrackWave = viewModel::startTrackWave,
-        onBackToMyWave = viewModel::returnToMyWave
+        onBackToMyWave = viewModel::returnToMyWave,
+        activeQueueName = activeQueue?.queue?.name,
+        // The panel opens on the driver's side, as the tune panel does
+        onQueues = { queueSwitcher?.open(QueueSwitcherRequest.Switch(car = true, side = if (steeringWheelOnLeft) PanelSide.LEFT else PanelSide.RIGHT)) }
     )
 }

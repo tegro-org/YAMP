@@ -43,7 +43,17 @@ import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.RepeatMode as AnimationRepeatMode
+import org.tegro.yamp.domain.queue.RepeatMode
+import org.tegro.yamp.presentation.queues.LocalQueueSwitcher
+import org.tegro.yamp.presentation.queues.QueueSwitcherRequest
+import org.tegro.yamp.presentation.hifi.GlassPillButton
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.material.icons.rounded.Layers
+import androidx.compose.material.icons.rounded.Repeat
+import androidx.compose.material.icons.rounded.RepeatOne
+import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -121,7 +131,9 @@ internal fun QueueSheet(
     onTrackSelect: (String) -> Unit,
     onRemove: (String) -> Unit,
     onMove: (String, String) -> Unit,
-    onLoadMore: () -> Unit
+    onLoadMore: () -> Unit,
+    modes: QueueModes = QueueModes(),
+    onEntrySelect: (Long) -> Unit = {}
 ) {
     // Back closes the sheet first; the predictive gesture lowers it under the finger
     val back = rememberPredictiveBack(enabled = visible, onBack = onDismiss)
@@ -150,6 +162,8 @@ internal fun QueueSheet(
                 onRemove = onRemove,
                 onMove = onMove,
                 onLoadMore = onLoadMore,
+                modes = modes,
+                onEntrySelect = onEntrySelect,
                 modifier = Modifier
                     .graphicsLayer { translationY = back.value * 160.dp.toPx() }
                     .widthIn(max = 640.dp)
@@ -171,11 +185,17 @@ private fun QueueSheetContent(
     onRemove: (String) -> Unit,
     onMove: (String, String) -> Unit,
     onLoadMore: () -> Unit,
+    modes: QueueModes,
+    onEntrySelect: (Long) -> Unit,
     modifier: Modifier
 ) {
     val listState = rememberLazyListState()
     val reorder = rememberReorderState(listState)
-    val nextIds = remember(split.next) { split.next.map { it.idString }.toHashSet() }
+    // Rows are keyed by their queue entry, so a track that is in the queue twice is two rows (E2); lists that
+    // come without entries (the screenshots) fall back to the track id
+    val rowKeys = remember(split) { split.next.mapIndexed { i, t -> split.nextEntryIds.getOrNull(i)?.let { "e$it" } ?: t.idString } }
+    val nextIds = remember(rowKeys) { rowKeys.toHashSet() }
+    val trackIdOf = remember(split, rowKeys) { rowKeys.zip(split.next.map { it.idString }).toMap() }
     val fetching by rememberUpdatedState(isFetchingMore)
     val loadMore by rememberUpdatedState(onLoadMore)
     // Prefetch as soon as the list is within 12 rows of its end
@@ -239,6 +259,17 @@ private fun QueueSheetContent(
                     )
                     Text(subtitle, color = Color.White.copy(alpha = 0.62f), fontSize = 14.sp, lineHeight = 20.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
+                val queues = LocalQueueSwitcher.current
+                GlassPillButton(
+                    text = stringResource(R.string.queue_switcher_title),
+                    onClick = {
+                        onDismiss()
+                        queues?.open(QueueSwitcherRequest.Switch())
+                    },
+                    icon = Icons.Rounded.Layers,
+                    height = 44.dp
+                )
+                Spacer(Modifier.width(10.dp))
                 GlassCircleButton(onClick = onDismiss, contentDescription = stringResource(R.string.cd_zakryt), size = 44.dp) {
                     Icon(Icons.Default.Close, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                 }
@@ -257,24 +288,30 @@ private fun QueueSheetContent(
                 item(key = "now_row") { NowPlayingRow(now, isPlaying) }
             }
             if (split.next.isNotEmpty()) {
-                item(key = "next_caption") { QueueCaption(stringResource(R.string.full_player_dalee), top = 18.dp) }
+                item(key = "next_caption") {
+                    QueueCaption(stringResource(R.string.full_player_dalee), top = 18.dp) {
+                        if (modes.shown) QueueModeToggles(modes)
+                    }
+                }
             }
-            itemsIndexed(split.next, key = { _, t -> t.idString }) { index, item ->
+            itemsIndexed(split.next, key = { i, _ -> rowKeys[i] }) { index, item ->
                 val id = item.idString
-                val dragged = reorder.draggedKey == id
+                val key = rowKeys[index]
+                val entryId = split.nextEntryIds.getOrNull(index)
+                val dragged = reorder.draggedKey == key
                 QueueRow(
                     item = item,
                     modifier = Modifier
                         // Neighbours glide into their new places; the dragged row follows the finger instead
                         .animateItem(placementSpec = if (dragged) null else HiFiMotion.spring())
-                        .reorderItem(reorder, id)
-                        .reorderHandle(reorder, id, canMoveTo = { it in nextIds }, afterLongPress = true) { from, to ->
-                            onMove(from as String, to as String)
+                        .reorderItem(reorder, key)
+                        .reorderHandle(reorder, key, canMoveTo = { it in nextIds }, afterLongPress = true) { from, to ->
+                            onMove(trackIdOf.getValue(from as String), trackIdOf.getValue(to as String))
                         },
                     moveUp = split.next.getOrNull(index - 1)?.let { prev -> { onMove(id, prev.idString) } },
                     moveDown = split.next.getOrNull(index + 1)?.let { nxt -> { onMove(id, nxt.idString) } },
                     onClick = {
-                        onTrackSelect(id)
+                        if (entryId != null) onEntrySelect(entryId) else onTrackSelect(id)
                         onDismiss()
                     },
                     onRemove = { onRemove(id) }
@@ -287,17 +324,71 @@ private fun QueueSheetContent(
     }
 }
 
+/** The active queue's modes for the toggles next to "Далее" (docs/phase-1-queues.md: per-queue shuffle and repeat). */
+@androidx.compose.runtime.Immutable
+data class QueueModes(
+    val shuffle: Boolean = false,
+    val repeat: RepeatMode = RepeatMode.ALL,
+    /** False while the list is not a queue (a station on air, a list without entries): no toggles. */
+    val shown: Boolean = false,
+    val onShuffle: (Boolean) -> Unit = {},
+    val onRepeat: (RepeatMode) -> Unit = {}
+)
+
 @Composable
-private fun QueueCaption(text: String, top: Dp) {
-    Text(
-        text = text.uppercase(),
-        color = Color.White.copy(alpha = 0.62f),
-        fontSize = 13.sp,
-        lineHeight = 18.sp,
-        fontWeight = FontWeight.ExtraBold,
-        letterSpacing = 0.10.em,
-        modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = top, bottom = 8.dp)
+private fun QueueCaption(text: String, top: Dp, trailing: @Composable RowScope.() -> Unit = {}) {
+    Row(Modifier.fillMaxWidth().padding(start = 22.dp, end = 16.dp, top = top, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = text.uppercase(),
+            color = Color.White.copy(alpha = 0.62f),
+            fontSize = 13.sp,
+            lineHeight = 18.sp,
+            fontWeight = FontWeight.ExtraBold,
+            letterSpacing = 0.10.em,
+            modifier = Modifier.weight(1f)
+        )
+        trailing()
+    }
+}
+
+/** Shuffle on/off and repeat Off → All → One: lit when on, as the canvas `PhonePlayerQueue` shows them. */
+@Composable
+private fun QueueModeToggles(modes: QueueModes) {
+    ModeToggle(
+        icon = Icons.Rounded.Shuffle,
+        on = modes.shuffle,
+        description = stringResource(R.string.cd_queue_shuffle),
+        onClick = { modes.onShuffle(!modes.shuffle) }
     )
+    ModeToggle(
+        icon = if (modes.repeat == RepeatMode.ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
+        on = modes.repeat != RepeatMode.OFF,
+        description = stringResource(R.string.cd_queue_repeat),
+        onClick = {
+            modes.onRepeat(
+                when (modes.repeat) {
+                    RepeatMode.OFF -> RepeatMode.ALL
+                    RepeatMode.ALL -> RepeatMode.ONE
+                    RepeatMode.ONE -> RepeatMode.OFF
+                }
+            )
+        }
+    )
+}
+
+@Composable
+private fun ModeToggle(icon: androidx.compose.ui.graphics.vector.ImageVector, on: Boolean, description: String, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .then(if (on) Modifier.background(HiFi.GlassFill) else Modifier)
+            .clickable(role = Role.Switch, onClick = onClick)
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(icon, contentDescription = null, tint = if (on) Color.White else HiFi.TextTertiary, modifier = Modifier.size(22.dp))
+    }
 }
 
 @Composable
@@ -438,7 +529,7 @@ private fun QueueSkeletonRow() {
         rememberInfiniteTransition(label = "queue_skeleton").animateFloat(
             initialValue = 0.06f,
             targetValue = 0.14f,
-            animationSpec = infiniteRepeatable(tween(700), RepeatMode.Reverse),
+            animationSpec = infiniteRepeatable(tween(700), AnimationRepeatMode.Reverse),
             label = "queue_skeleton_alpha"
         )
     } else null

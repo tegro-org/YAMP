@@ -52,12 +52,15 @@ import org.tegro.yamp.utils.toCoverUrl
 import kotlinx.coroutines.launch
 
 /** The queue around the current track: what plays now and what follows it. */
-data class QueueSplit(val current: TrackDetailsDto?, val next: List<TrackDetailsDto>)
+data class QueueSplit(val current: TrackDetailsDto?, val next: List<TrackDetailsDto>, val nextEntryIds: List<Long> = emptyList())
 
-/** Pure; unit-tested. A current track missing from the queue leaves the whole queue as "next". */
-fun queueSplitOf(queue: List<TrackDetailsDto>, currentId: String): QueueSplit {
-    val i = queue.indexOfFirst { it.idString == currentId }
-    return if (i == -1) QueueSplit(null, queue) else QueueSplit(queue[i], queue.drop(i + 1))
+/**
+ * Pure; unit-tested. A current track missing from the queue leaves the whole queue as "next". [cursorIndex]
+ * names the current row when the queue knows it (a track in the queue twice); [entryIds] run alongside [queue].
+ */
+fun queueSplitOf(queue: List<TrackDetailsDto>, currentId: String, entryIds: List<Long> = emptyList(), cursorIndex: Int = -1): QueueSplit {
+    val i = if (cursorIndex in queue.indices && queue[cursorIndex].idString == currentId) cursorIndex else queue.indexOfFirst { it.idString == currentId }
+    return if (i == -1) QueueSplit(null, queue, entryIds) else QueueSplit(queue[i], queue.drop(i + 1), entryIds.drop(i + 1))
 }
 
 /** The source name under "СЕЙЧАС ИГРАЕТ"; null where it would be vague (search, catalog pages). */
@@ -126,13 +129,18 @@ fun FullScreenPlayer(
     onQualityClick: () -> Unit = {},
     coverModifier: Modifier = Modifier,
     /** Opens with the queue sheet up (screenshots). */
-    initialQueueOpen: Boolean = false
+    initialQueueOpen: Boolean = false,
+    /** The active queue's entry ids alongside [queue], its cursor and its modes; empty / -1 for a plain list. */
+    queueEntryIds: List<Long> = emptyList(),
+    queueCursorIndex: Int = -1,
+    queueModes: QueueModes = QueueModes(),
+    onEntrySelect: (Long) -> Unit = {}
 ) {
     var showQueue by remember { mutableStateOf(initialQueueOpen) }
     val back = rememberPredictiveBack(enabled = !showQueue, onBack = onCollapse)
 
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-    val split = remember(queue, track.idString) { queueSplitOf(queue, track.idString) }
+    val split = remember(queue, track.idString, queueEntryIds, queueCursorIndex) { queueSplitOf(queue, track.idString, queueEntryIds, queueCursorIndex) }
     val nextTrack = if (track.isRadio) null else split.next.firstOrNull()
     val durationMs = (track.durationMs ?: 0L).coerceAtLeast(0L)
     val direction = rememberTrackDirection(track.idString, queue.indexOfFirst { it.idString == track.idString })
@@ -288,7 +296,9 @@ fun FullScreenPlayer(
             onTrackSelect = onTrackSelect,
             onRemove = onRemoveFromQueue,
             onMove = onMoveInQueue,
-            onLoadMore = onLoadMoreQueue
+            onLoadMore = onLoadMoreQueue,
+            modes = queueModes,
+            onEntrySelect = onEntrySelect
         )
     }
 }

@@ -31,6 +31,21 @@ class ArchitectureTest {
         assertTrue(File(sourceDir, "presentation/main/MainViewModel.kt").readText().contains("session.syncAll()"))
     }
 
+    /** ARCHITECTURE B3: the queue switcher talks to the controller only — no repositories, no store, no manager. */
+    @Test
+    fun theQueueSwitcherDependsOnThePlaybackControllerOnly() {
+        val allowed = listOf("import org.tegro.yamp.data.dto.", "import org.tegro.yamp.data.player.PlaybackController")
+        val offenders = File(sourceDir, "presentation/queues").walk()
+            .filter { it.isFile && it.extension == "kt" }
+            .flatMap { file ->
+                file.readLines()
+                    .filter { line -> line.startsWith("import org.tegro.yamp.data.") && allowed.none { line.startsWith(it) } }
+                    .map { "${file.name}: $it" }
+            }
+            .toList()
+        assertEquals(emptyList<String>(), offenders)
+    }
+
     /** ARCHITECTURE B1: the domain is pure Kotlin — no Android, no Media3, no data layer, no DTOs. */
     @Test
     fun theDomainQueueModelImportsNothingFromAndroidOrData() {

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Russian texts of the keys introduced since Phase 1 (ARCHITECTURE K1). The older keys are Russian in
+     values/ until the string migration (K4) moves them here. -->
+<resources>
+    <string name="queue_switcher_title">Очереди</string>
+    <string name="queue_switcher_hint">Нажмите, чтобы переключить · удерживайте для действий</string>
+    <string name="queue_new">Новая очередь</string>
+    <string name="queue_new_hint">Создаётся пустой. Добавляйте музыку через «Добавить в очередь…» или сделайте её активной и включите что-нибудь.</string>
+    <string name="queue_name_hint">Название</string>
+    <string name="queue_create">Создать</string>
+    <string name="queue_cancel">Отмена</string>
+    <string name="queue_rename">Переименовать</string>
+    <string name="queue_duplicate">Дублировать</string>
+    <string name="queue_clear">Очистить</string>
+    <string name="queue_delete">Удалить очередь</string>
+    <string name="queue_delete_confirm_title">Удалить очередь?</string>
+    <string name="queue_delete_confirm_text">«%1$s» и %2$s будут убраны из приложения. Сама музыка не удаляется.</string>
+    <string name="queue_delete_action">Удалить</string>
+    <plurals name="queue_tracks">
+        <item quantity="one">%1$d трек</item>
+        <item quantity="few">%1$d трека</item>
+        <item quantity="many">%1$d треков</item>
+        <item quantity="other">%1$d трека</item>
+    </plurals>
+    <string name="queue_paused_at">%1$s · остановлена на %2$d-м</string>
+    <string name="queue_position">%1$d / %2$d</string>
+    <string name="queue_endless">∞</string>
+    <string name="queue_add_title">Добавить в очередь</string>
+    <string name="queue_added_to">Добавлено в «%1$s»</string>
+    <string name="track_menu_add_to_end">Добавить в конец очереди</string>
+    <string name="track_menu_add_to_queue">Добавить в очередь…</string>
+    <string name="queue_default_name">Очередь %1$d</string>
+    <string name="queue_duplicate_name">%1$s (копия)</string>
+    <string name="cd_queues">Очереди</string>
+    <string name="cd_queue_shuffle">Перемешать</string>
+    <string name="cd_queue_repeat">Повтор</string>
+</resources>

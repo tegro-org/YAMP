@@ -78,6 +78,7 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import org.tegro.yamp.R
+import org.tegro.yamp.presentation.queues.QueueButton
 import org.tegro.yamp.data.dto.TrackDetailsDto
 import org.tegro.yamp.presentation.hifi.GlassCircleButton
 import org.tegro.yamp.presentation.hifi.HiFi
@@ -141,7 +142,9 @@ fun HomeScreen(
     tuning: WaveTuning = WaveTuning(),
     trackWaveSeed: TrackDetailsDto? = null,
     onTune: () -> Unit = {},
-    onBackToMyWave: () -> Unit = {}
+    onBackToMyWave: () -> Unit = {},
+    /** How many queues the user has: the badge on the queue button. */
+    queueCount: Int = 0
 ) {
     val title = trackWaveSeed?.let { stringResource(R.string.wave_by_track_title, it.title.orEmpty()) } ?: stringResource(R.string.wave_title)
     val chips: @Composable (Modifier) -> Unit = { modifier ->
@@ -189,6 +192,7 @@ fun HomeScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     HiFiLargeTitle(title, modifier = Modifier.weight(1f))
                     HiFiLinkBadge()
+                    QueueButton(queueCount, modifier = Modifier.padding(start = 8.dp))
                 }
                 if (!chipsOverKnob) chips(Modifier.padding(top = 10.dp))
                 Spacer(Modifier.weight(1f))
@@ -208,6 +212,7 @@ fun HomeScreen(
                         Row(Modifier.fillMaxWidth().heightIn(min = 40.dp), verticalAlignment = Alignment.CenterVertically) {
                             HiFiLargeTitle(title, modifier = Modifier.weight(1f))
                             HiFiLinkBadge()
+                            QueueButton(queueCount, modifier = Modifier.padding(start = 8.dp))
                         }
                         chips(Modifier.padding(top = 10.dp).height(36.dp))
                     }

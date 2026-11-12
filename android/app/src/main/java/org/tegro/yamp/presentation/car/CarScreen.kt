@@ -59,6 +59,8 @@ import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.automirrored.rounded.TrendingUp
 import androidx.compose.material.icons.rounded.Waves
+import androidx.compose.material.icons.rounded.Layers
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -176,7 +178,10 @@ fun CarScreen(
     onWaveTuningChange: (WaveTuning) -> Unit = {},
     onTrackWave: (TrackDetailsDto) -> Unit = {},
     onBackToMyWave: () -> Unit = {},
-    initialTuneOpen: Boolean = false
+    initialTuneOpen: Boolean = false,
+    /** The active queue's name on the queue pill; the pill opens the switcher (2 taps to switch, D26). */
+    activeQueueName: String? = null,
+    onQueues: () -> Unit = {}
 ) {
     var tuneOpen by rememberSaveable { mutableStateOf(initialTuneOpen) }
     androidx.activity.compose.BackHandler(enabled = tuneOpen) { tuneOpen = false }
@@ -318,6 +323,7 @@ fun CarScreen(
         val wavePills: @Composable () -> Unit = {
             val pillHeight = u(56f)
             val pillFont = u.sp(18f)
+            CarQueuePill(activeQueueName ?: stringResource(R.string.queue_switcher_title), height = pillHeight, fontSize = pillFont, onClick = onQueues)
             if (trackWaveSeed != null && onWave) {
                 WavePill(Icons.Rounded.Waves, stringResource(R.string.wave_back_to_mine), active = false, height = pillHeight, fontSize = pillFont, onClick = onBackToMyWave)
                 WavePill(Icons.Rounded.Tune, stringResource(R.string.wave_tune_short), active = !waveTuning.isDefault, height = pillHeight, fontSize = pillFont,
@@ -515,6 +521,28 @@ private fun CarHeader(u: Scale, onExit: () -> Unit, showClock: Boolean, pills: (
             Spacer(Modifier.width(u(16f)))
             CarClock(u)
         }
+    }
+}
+
+/** The queue pill (canvas `CarPill`): anodized, the active queue's name, a chevron — opens the switcher. */
+@Composable
+private fun CarQueuePill(name: String, height: Dp, fontSize: TextUnit, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(height / 2)
+    val label = stringResource(R.string.cd_queues)
+    Row(
+        Modifier
+            .heightIn(min = height)
+            .widthIn(max = height * 6.8f)
+            .hifiAnodized(shape)
+            .clickable(role = Role.Button, onClickLabel = label, onClick = onClick)
+            .padding(start = height * 0.3f, end = height * 0.25f),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(Icons.Rounded.Layers, contentDescription = null, tint = Color.White, modifier = Modifier.size(height * 0.5f))
+        Spacer(Modifier.width(height * 0.2f))
+        Text(name, color = Color.White, fontSize = fontSize, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+        Spacer(Modifier.width(height * 0.12f))
+        Icon(Icons.Rounded.ExpandMore, contentDescription = null, tint = HiFi.TextSecondary, modifier = Modifier.size(height * 0.5f))
     }
 }
 

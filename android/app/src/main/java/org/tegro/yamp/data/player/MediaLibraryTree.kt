@@ -59,13 +59,23 @@ class MediaLibraryTree @Inject constructor(
                 folder(DOWNLOADED_ID, context.getString(R.string.auto_downloaded), MediaMetadata.MEDIA_TYPE_PLAYLIST),
                 folder(PLAYLISTS_ID, context.getString(R.string.auto_playlists), MediaMetadata.MEDIA_TYPE_FOLDER_PLAYLISTS),
                 folder(RADIO_ID, context.getString(R.string.auto_radio), MediaMetadata.MEDIA_TYPE_FOLDER_RADIO_STATIONS)
-                    .withExtras(Bundle().apply { putInt(CONTENT_STYLE_PLAYABLE_HINT, CONTENT_STYLE_GRID) })
+                    .withExtras(Bundle().apply { putInt(CONTENT_STYLE_PLAYABLE_HINT, CONTENT_STYLE_GRID) }),
+                folder(QUEUES_ID, context.getString(R.string.queue_switcher_title), MediaMetadata.MEDIA_TYPE_FOLDER_PLAYLISTS)
             )
             LIKED_ID -> libraryRepository.likedTracks.value.map { trackItem(LIKED_PREFIX, it) }
             DOWNLOADED_ID -> downloaded().map { trackItem(DOWNLOADED_PREFIX, it) }
             PLAYLISTS_ID -> playlistsRepository.playlists.value.map { playlist ->
                 folder(PLAYLIST_PREFIX + playlist.kindString, playlist.title.orEmpty(), MediaMetadata.MEDIA_TYPE_PLAYLIST)
                     .withArtwork(playlist.coverUri.toCoverUrl(CoverSize.Medium))
+            }
+            // One playable item per queue (docs/phase-1-queues.md §5); the car's own switcher holds no more either
+            QUEUES_ID -> playbackController.queues.value.take(MAX_QUEUE_ITEMS).map { summary ->
+                playable(
+                    QUEUE_PREFIX + summary.queue.id, summary.queue.name,
+                    summary.current?.let { listOf(it.title, it.artist).filter(String::isNotBlank).joinToString(" · ") }.orEmpty(),
+                    artwork = summary.current?.coverUrl.toCoverUrl(CoverSize.Medium)?.let(Uri::parse),
+                    mediaType = MediaMetadata.MEDIA_TYPE_PLAYLIST
+                )
             }
             RADIO_ID -> radioRepository.getBuiltinStations().map { station ->
                 playable(
@@ -87,6 +97,7 @@ class MediaLibraryTree @Inject constructor(
             mediaId.startsWith(LIKED_PREFIX) -> LIKED_ID
             mediaId.startsWith(DOWNLOADED_PREFIX) -> DOWNLOADED_ID
             mediaId.startsWith(RADIO_PREFIX) -> RADIO_ID
+            mediaId.startsWith(QUEUE_PREFIX) -> QUEUES_ID
             else -> ROOT_ID
         }
         return children(parent)?.firstOrNull { it.mediaId == mediaId }
@@ -113,6 +124,11 @@ class MediaLibraryTree @Inject constructor(
             mediaId.startsWith(RADIO_PREFIX) -> radioRepository.getBuiltinStations()
                 .firstOrNull { it.id == mediaId.removePrefix(RADIO_PREFIX) }
                 ?.let { station -> { playbackController.playRadioStation(station) } }
+            mediaId.startsWith(QUEUE_PREFIX) -> mediaId.removePrefix(QUEUE_PREFIX).toLongOrNull()
+                ?.takeIf { id -> playbackController.queues.value.any { it.queue.id == id } }
+                ?.let { id ->
+                    { playbackController.switchQueue(id, play = true) }
+                }
             else -> null
         }
     }
@@ -209,6 +225,10 @@ class MediaLibraryTree @Inject constructor(
         const val DOWNLOADED_ID = "downloaded"
         const val RADIO_ID = "radio"
         const val PLAYLISTS_ID = "playlists"
+        const val QUEUES_ID = "queues"
+        private const val QUEUE_PREFIX = "queue/"
+        /** Android Auto lists are paged at a few hundred items; the user's queues never come near. */
+        private const val MAX_QUEUE_ITEMS = 100
         private const val PLAYLIST_PREFIX = "playlist/"
         private const val PLAYLIST_TRACK_PREFIX = "pltrack/"
         private const val LIKED_PREFIX = "liked/"
