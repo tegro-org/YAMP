@@ -122,13 +122,19 @@ fun HiFiTimeline(
 
     var touching by remember { mutableStateOf(false) }
     var dragFraction by remember { mutableFloatStateOf(0f) }
-    // A jump (new track, seek) glides: the offset from the old position springs back to 0
+    // The finger's own seek must not glide: the next progress seen after it is the target, not a jump
+    val seekByFinger = remember { mutableStateOf(false) }
+    // A jump (new track, a seek from elsewhere) glides: the offset from the old position springs back to 0
     val glide = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
         var last = TimelineMath.fraction(progress(), duration)
         snapshotFlow { TimelineMath.fraction(progress(), duration) }.collect { now ->
             val jump = last - now
             last = now
+            if (seekByFinger.value) {
+                seekByFinger.value = false
+                return@collect
+            }
             if (!touching && abs(jump) > TimelineMath.JUMP) {
                 launch {
                     glide.snapTo((glide.value + jump).coerceIn(-1f, 1f))
@@ -193,6 +199,7 @@ fun HiFiTimeline(
                     }
                     val target = dragFraction
                     scope.launch { glide.snapTo(0f) }
+                    seekByFinger.value = true
                     seek(TimelineMath.seekPosition(target, duration))
                     view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
                     touching = false
