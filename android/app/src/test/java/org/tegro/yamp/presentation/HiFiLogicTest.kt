@@ -6,8 +6,19 @@ import org.tegro.yamp.domain.model.RadioStation
 import org.tegro.yamp.presentation.car.CarSource
 import org.tegro.yamp.presentation.car.carSourceOf
 import org.tegro.yamp.presentation.hifi.TimelineMath
+import org.tegro.yamp.presentation.main.HomeMode
+import org.tegro.yamp.presentation.main.NowPlaying
+import org.tegro.yamp.presentation.main.homeModeOf
+import org.tegro.yamp.presentation.main.homePagePlays
+import org.tegro.yamp.presentation.main.queueShelfOf
+import org.tegro.yamp.presentation.main.shelfEntryOf
 import org.tegro.yamp.presentation.main.waveShelfOf
 import org.tegro.yamp.data.dto.TrackDetailsDto
+import org.tegro.yamp.data.queue.ActiveQueue
+import org.tegro.yamp.domain.queue.PlayQueue
+import org.tegro.yamp.domain.queue.QueueEntry
+import org.tegro.yamp.domain.queue.QueueKind
+import org.tegro.yamp.domain.queue.TrackRef
 import org.tegro.yamp.presentation.hifi.HiFiLitePolicy
 import org.tegro.yamp.presentation.hifi.RingMode
 import org.tegro.yamp.presentation.hifi.SpectrumMath
@@ -293,5 +304,76 @@ class HiFiLogicTest {
         val single = waveShelfOf(waveActive = false, upcoming = emptyList(), preview = listOf(track("1")))
         assertEquals("1", single.startsWith?.idString)
         assertTrue(single.loading)
+    }
+
+    // --- The first tab as the active queue's page (D49) ------------------------------------------
+
+    private fun activeQueue(kind: QueueKind, ids: List<String>, cursor: Int, name: String = "With family") = ActiveQueue(
+        queue = PlayQueue(id = 1L, name = name, kind = kind),
+        entries = ids.mapIndexed { i, id -> QueueEntry(entryId = 100L + i, queueId = 1L, position = i, originalPosition = i, ref = TrackRef.yandex(id), title = "T$id", artist = "") },
+        tracks = ids.map { track(it) },
+        cursorIndex = cursor
+    )
+
+    private fun now(track: TrackDetailsDto?, source: PlaylistSource) = NowPlaying(track, isPlaying = true, isBuffering = false, source = source, likedTrackIds = emptySet())
+
+    @Test
+    fun theFirstTabIsTheWavePageWithoutAnotherActiveQueue() {
+        assertEquals(HomeMode.Wave, homeModeOf(null))
+        assertEquals(HomeMode.Wave, homeModeOf(activeQueue(QueueKind.WAVE, listOf("1"), 0, name = "My Wave")))
+        assertEquals(HomeMode.Queue("With family"), homeModeOf(activeQueue(QueueKind.STATIC, listOf("1"), 0)))
+        assertEquals(HomeMode.Queue("Radio: Time"), homeModeOf(activeQueue(QueueKind.RADIO, listOf("1"), 0, name = "Radio: Time")))
+    }
+
+    @Test
+    fun aQueuePageShowsWhatFollowsTheCursor() {
+        val active = activeQueue(QueueKind.STATIC, listOf("1", "2", "3", "4"), cursor = 1)
+        val playing = queueShelfOf(active, playing = true)
+        assertNull(playing.startsWith)
+        assertEquals(listOf("3", "4"), playing.shelf.map { it.idString })
+        assertFalse(playing.loading)
+        assertEquals("at most the limit", listOf("3"), queueShelfOf(active, playing = true, limit = 1).shelf.map { it.idString })
+    }
+
+    @Test
+    fun aQueuePageNotYetPlayingStartsWithItsCursorTrack() {
+        val active = activeQueue(QueueKind.STATIC, listOf("1", "2", "3"), cursor = 1)
+        val idle = queueShelfOf(active, playing = false)
+        assertEquals("2", idle.startsWith?.idString)
+        assertEquals(listOf("3"), idle.shelf.map { it.idString })
+        val noCursor = queueShelfOf(activeQueue(QueueKind.STATIC, listOf("1", "2"), cursor = -1), playing = false)
+        assertEquals("without a cursor the queue starts from its first entry", "1", noCursor.startsWith?.idString)
+        assertEquals(listOf("2"), noCursor.shelf.map { it.idString })
+    }
+
+    @Test
+    fun aQueuePageAtItsLastTrackOrEmptyIsNeverLoading() {
+        val last = queueShelfOf(activeQueue(QueueKind.STATIC, listOf("1", "2"), cursor = 1), playing = true)
+        assertTrue(last.shelf.isEmpty())
+        assertFalse(last.loading)
+        val empty = queueShelfOf(activeQueue(QueueKind.STATIC, emptyList(), cursor = -1), playing = false)
+        assertNull(empty.startsWith)
+        assertTrue(empty.shelf.isEmpty())
+        assertFalse(empty.loading)
+    }
+
+    @Test
+    fun aShelfCardPlaysTheEntryAfterTheCursorEvenWhenTheTrackIsInTheQueueTwice() {
+        val active = activeQueue(QueueKind.STATIC, listOf("7", "1", "2", "7", "3"), cursor = 1)
+        assertEquals("the occurrence after the cursor, not the one before it", 103L, shelfEntryOf(active, "7")?.entryId)
+        assertEquals(104L, shelfEntryOf(active, "3")?.entryId)
+        assertNull("the cursor track itself is not on the shelf", shelfEntryOf(active, "1"))
+        assertNull(shelfEntryOf(active, "9"))
+    }
+
+    @Test
+    fun theFirstTabPlaysWhatThePlayerHoldsExceptALiveStation() {
+        val station = TrackDetailsDto(id = kotlinx.serialization.json.JsonPrimitive("radio_1"), title = "Station", isRadio = true)
+        assertTrue(homePagePlays(HomeMode.Wave, now(track("1"), PlaylistSource.VIBE)))
+        assertFalse("another source on the wave page", homePagePlays(HomeMode.Wave, now(track("1"), PlaylistSource.LIBRARY)))
+        assertTrue(homePagePlays(HomeMode.Queue("q"), now(track("1"), PlaylistSource.LIBRARY)))
+        assertTrue(homePagePlays(HomeMode.Queue("q"), now(track("1"), PlaylistSource.SEARCH)))
+        assertFalse("a station plays beside the queue", homePagePlays(HomeMode.Queue("q"), now(station, PlaylistSource.RADIO)))
+        assertFalse("nothing in the player", homePagePlays(HomeMode.Queue("q"), now(null, PlaylistSource.NONE)))
     }
 }

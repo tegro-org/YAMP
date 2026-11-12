@@ -37,4 +37,6 @@
     <string name="msg_queue_empty">«%1$s» пуста — добавьте музыку через «Добавить в очередь…»</string>
     <string name="settings_eq_announce">Сообщать эквалайзеру о сессиях</string>
     <string name="settings_eq_announce_hint">Выключите, если музыка сама встаёт на паузу через секунду после старта: некоторые магнитолы забирают звук, когда их эквалайзер подключается</string>
+    <string name="home_next_up">Дальше</string>
+    <string name="home_queue_empty">Очередь пуста</string>
 </resources>

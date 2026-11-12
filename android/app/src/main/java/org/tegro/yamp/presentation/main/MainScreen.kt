@@ -204,8 +204,9 @@ fun MainScreen(
     val contentBottom = if (isLandscape) DockClearance else if (currentTrack != null) 168.dp else 100.dp
     // On a side a notch or a three-button bar sits next to the page, and the pages run edge to edge
     val sideInsets = WindowInsets.displayCutout.union(WindowInsets.navigationBars).only(WindowInsetsSides.Horizontal)
-    // The mini-player stays out of the way on the wave page, which already shows the playing wave
-    val showMini = currentTrack != null && currentTab != MainTab.CAR && !(currentTab == MainTab.HOME && now.waveActive)
+    // The mini-player stays out of the way on the first tab while that page already shows what plays (D49)
+    val activeQueue by viewModel.activeQueue.collectAsStateWithLifecycle()
+    val showMini = currentTrack != null && currentTab != MainTab.CAR && !(currentTab == MainTab.HOME && homePagePlays(homeModeOf(activeQueue), now))
     val snackbar = remember { SnackbarHostState() }
     val openPlayer = { isPlayerExpanded = true }
 

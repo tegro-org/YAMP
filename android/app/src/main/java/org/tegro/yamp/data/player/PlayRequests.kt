@@ -32,14 +32,21 @@ class PlayRequests @Inject constructor() {
     fun claimLaunchStart(): Boolean = startHandled.compareAndSet(false, true)
 }
 
-/** What the big knob on the wave page does, and whether that counts as switching music on. */
-object WaveKnob {
-    enum class Action { START_WAVE, TOGGLE }
+/**
+ * What the big knob on the first tab does, and whether that counts as switching music on. The tab is the
+ * active queue's page (D49): the wave's, or a queue of the user's own.
+ */
+object HomeKnob {
+    enum class Action { START_WAVE, START_QUEUE, TOGGLE }
     data class Press(val action: Action, val opensPlayer: Boolean)
 
-    fun press(waveActive: Boolean, isPlaying: Boolean, hasPlayed: Boolean): Press = when {
-        // Another source or nothing: the knob starts the wave
-        !waveActive -> Press(Action.START_WAVE, opensPlayer = true)
+    /**
+     * [wavePage]: the tab shows the wave (the WAVE queue is active, or none is). [pagePlays]: what the page shows
+     * is what the player holds — the wave itself, or the queue's track rather than a live station or nothing.
+     */
+    fun press(wavePage: Boolean, pagePlays: Boolean, isPlaying: Boolean, hasPlayed: Boolean): Press = when {
+        // Another source or nothing: the knob starts what the page shows
+        !pagePlays -> Press(if (wavePage) Action.START_WAVE else Action.START_QUEUE, opensPlayer = true)
         // Playing: a pause never opens anything
         isPlaying -> Press(Action.TOGGLE, opensPlayer = false)
         // Paused: the session restored at launch starts; a play after the user's own pause only resumes

@@ -181,7 +181,9 @@ fun CarScreen(
     initialTuneOpen: Boolean = false,
     /** The active queue's name on the queue pill; the pill opens the switcher (2 taps to switch, D26). */
     activeQueueName: String? = null,
-    onQueues: () -> Unit = {}
+    onQueues: () -> Unit = {},
+    /** The wave queue is active: its pills ("Волна по треку", "Настроить") are shown next to the queue pill (D49). */
+    waveActive: Boolean = true
 ) {
     var tuneOpen by rememberSaveable { mutableStateOf(initialTuneOpen) }
     androidx.activity.compose.BackHandler(enabled = tuneOpen) { tuneOpen = false }
@@ -192,10 +194,12 @@ fun CarScreen(
         onDispose { view.keepScreenOn = false }
     }
     LaunchedEffect(Unit) {
-        if (!isPlaying && currentTrack == null) onPlayMyVibe()
+        // Nothing on: start what the active queue holds (the controller falls back to the wave only when there is
+        // no queue at all, D49) — never the wave over the queue the user chose
+        if (!isPlaying && currentTrack == null) onPlayPauseClick()
     }
 
-    val playPause = { if (!isPlaying && currentTrack == null) onPlayMyVibe() else onPlayPauseClick() }
+    val playPause = onPlayPauseClick
     val isRadio = currentTrack?.isRadio == true
     val active = carSourceOf(source, isRadio)
     val nextCaption = when {
@@ -319,13 +323,16 @@ fun CarScreen(
                 WaveTuneChoices(waveTuning, onWaveTuningChange, segments = segments, optionHeight = u(56f), fontSize = u.sp(15f), captionSize = u.sp(14f), gap = u(12f))
             }
         }
-        // The wave's buttons: in the header on a wide screen, in a row under it on a tall one
+        // The queue pill and the wave's buttons: in the header on a wide screen, in a row under it on a tall one.
+        // The wave's buttons only while the wave queue is active; another queue's page has none (D49)
         val onWave = active == CarSource.WAVE
         val wavePills: @Composable () -> Unit = {
             val pillHeight = u(56f)
             val pillFont = u.sp(18f)
             CarQueuePill(activeQueueName ?: stringResource(R.string.queue_switcher_title), height = pillHeight, fontSize = pillFont, onClick = onQueues)
-            if (trackWaveSeed != null && onWave) {
+            if (!waveActive) {
+                // Nothing more
+            } else if (trackWaveSeed != null && onWave) {
                 WavePill(Icons.Rounded.Waves, stringResource(R.string.wave_back_to_mine), active = false, height = pillHeight, fontSize = pillFont, onClick = onBackToMyWave)
                 WavePill(Icons.Rounded.Tune, stringResource(R.string.wave_tune_short), active = !waveTuning.isDefault, height = pillHeight, fontSize = pillFont,
                     onClick = { tuneOpen = true }, description = stringResource(R.string.wave_tune_title))

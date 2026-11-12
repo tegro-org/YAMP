@@ -11,7 +11,7 @@ import org.tegro.yamp.domain.model.StartPage
 import org.tegro.yamp.domain.model.StartMusic
 import org.tegro.yamp.domain.model.AnimationMode
 import org.tegro.yamp.data.player.PlayRequests
-import org.tegro.yamp.data.player.WaveKnob
+import org.tegro.yamp.data.player.HomeKnob
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import org.tegro.yamp.data.account.AccountSessionManager
@@ -167,16 +167,20 @@ class MainViewModel @Inject constructor(
     }
 
     /**
-     * The big knob on the wave page. It starts the wave, or plays the session restored at launch: both count
-     * as switching music on (the full player may open). A play after the user's own pause is a resume and
-     * opens nothing; so are the mini-player's buttons.
+     * The big knob on the first tab — the active queue's page (D49). It starts what the page shows (the wave,
+     * or the queue at its cursor when a live station plays or nothing does), or plays the session restored at
+     * launch: both count as switching music on (the full player may open). A play after the user's own pause
+     * is a resume and opens nothing; so are the mini-player's buttons.
      */
-    fun waveKnob(waveActive: Boolean) {
-        val press = WaveKnob.press(waveActive, playbackController.isPlaying.value, playRequests.hasPlayed)
+    fun homeKnob(wavePage: Boolean, pagePlays: Boolean) {
+        val press = HomeKnob.press(wavePage, pagePlays, playbackController.isPlaying.value, playRequests.hasPlayed)
         if (press.opensPlayer) playRequests.userStarted()
         when (press.action) {
-            WaveKnob.Action.START_WAVE -> playbackController.playMyVibe()
-            WaveKnob.Action.TOGGLE -> playbackController.togglePlayPause()
+            HomeKnob.Action.START_WAVE -> playbackController.playMyVibe()
+            // The cursor track, where the queue was left; a queue without a cursor starts from its first entry
+            HomeKnob.Action.START_QUEUE -> activeQueue.value?.cursorEntry?.let { playbackController.playEntry(it.entryId) }
+                ?: playbackController.play()
+            HomeKnob.Action.TOGGLE -> playbackController.togglePlayPause()
         }
     }
 

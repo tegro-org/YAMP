@@ -106,8 +106,8 @@
 
 ## Phase 1 follow-up — Home follows the active queue (D49)
 
-- [ ] First tab = active queue's page (title, knob, "Дальше"); wave pills/shelf only for the WAVE queue (phone + car);
-      after the audio-session question on the unit is settled
+- [x] First tab = active queue's page (title, knob, "Дальше"); wave pills/shelf only for the WAVE queue (phone + car);
+      the car's knob and auto-start go through the controller's play rule (2026-11-12) — head-unit test pending
 
 ## Phase 1b — History (D46)
 

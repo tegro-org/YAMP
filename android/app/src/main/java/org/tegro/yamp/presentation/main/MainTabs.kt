@@ -16,6 +16,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.tegro.yamp.data.dto.TrackDetailsDto
 import org.tegro.yamp.data.player.PlaylistSource
 import org.tegro.yamp.domain.model.RadioCategory
+import org.tegro.yamp.domain.queue.QueueKind
 import org.tegro.yamp.presentation.account.AccountViewModel
 import org.tegro.yamp.presentation.car.CarScreen
 import org.tegro.yamp.presentation.hifi.PanelSide
@@ -51,6 +52,16 @@ fun upcomingOf(queue: List<TrackDetailsDto>, currentId: String?, limit: Int = 10
     return if (index < 0) emptyList() else queue.drop(index + 1).take(limit)
 }
 
+/**
+ * The first tab shows what the player holds (D49): the wave on the wave's page; on a queue's page, the queue's
+ * track — a live station plays beside the queues (D41) and is not it. Then the page is the player: the
+ * mini-player stays away and the knob toggles. Pure; unit-tested.
+ */
+fun homePagePlays(mode: HomeMode, now: NowPlaying): Boolean = when (mode) {
+    HomeMode.Wave -> now.waveActive
+    is HomeMode.Queue -> now.track != null && !now.track.isRadio
+}
+
 @Composable
 internal fun HomeTab(
     viewModel: MainViewModel,
@@ -63,9 +74,15 @@ internal fun HomeTab(
     val queue by viewModel.currentPlaylist.collectAsStateWithLifecycle()
     val wavePreview by viewModel.wavePreview.collectAsStateWithLifecycle()
     val isFetchingWave by viewModel.isFetchingMoreQueue.collectAsStateWithLifecycle()
+    val active by viewModel.activeQueue.collectAsStateWithLifecycle()
+    val mode = remember(active) { homeModeOf(active) }
+    val wavePage = mode is HomeMode.Wave
+    val pagePlays = homePagePlays(mode, now)
     val upcoming = remember(queue, now.trackId) { upcomingOf(queue, now.trackId) }
-    val shelf = remember(now.waveActive, upcoming, wavePreview) { waveShelfOf(now.waveActive, upcoming, wavePreview) }
-    val waveActive = now.waveActive
+    val shelf = remember(mode, active, pagePlays, upcoming, wavePreview) {
+        val queuePage = active?.takeIf { !wavePage }
+        if (queuePage == null) waveShelfOf(pagePlays, upcoming, wavePreview) else queueShelfOf(queuePage, pagePlays)
+    }
     val tuning by viewModel.waveTuning.collectAsStateWithLifecycle()
     val seed by viewModel.waveSeed.collectAsStateWithLifecycle()
     val queues by viewModel.queues.collectAsStateWithLifecycle()
@@ -74,28 +91,34 @@ internal fun HomeTab(
         org.tegro.yamp.presentation.main.components.WaveTuneSheet(tuning, onChange = viewModel::setWaveTuning, onDismiss = { tuneOpen = false })
     }
     HomeScreen(
-        waveTrack = if (waveActive) now.track else null,
+        waveTrack = if (pagePlays) now.track else null,
         isPlaying = now.isPlaying,
-        isLoading = now.isBuffering && now.source == PlaylistSource.VIBE,
+        // The ring loads the page's own music: the wave, or the queue's track (never a station's stream)
+        isLoading = now.isBuffering && if (wavePage) now.source == PlaylistSource.VIBE else now.source != PlaylistSource.RADIO,
         isLiked = now.trackId?.let { it in now.likedTrackIds } == true,
         progress = progress,
         shelf = shelf,
         shimmer = isFetchingWave || now.isBuffering,
-        // Like Yandex Music: the knob controls the wave; from any other context it starts the wave
-        onPlayPause = { viewModel.waveKnob(waveActive) },
+        // Like Yandex Music: the knob controls what the page shows; from any other context it starts it
+        onPlayPause = { viewModel.homeKnob(wavePage, pagePlays) },
         onLike = { now.track?.let { viewModel.toggleLike(it) } },
         onDislike = { now.track?.let { viewModel.dislikeTrack(it) } },
         onOpenPlayer = onOpenPlayer,
-        onShelfClick = {
-            if (waveActive) viewModel.playTrack(it.idString, queue, PlaylistSource.VIBE)
-            else viewModel.playWaveFrom(it.idString)
+        onShelfClick = { track ->
+            val queuePage = active?.takeIf { !wavePage }
+            when {
+                queuePage != null -> shelfEntryOf(queuePage, track.idString)?.let { viewModel.playEntry(it.entryId) }
+                pagePlays -> viewModel.playTrack(track.idString, queue, PlaylistSource.VIBE)
+                else -> viewModel.playWaveFrom(track.idString)
+            }
         },
-        contentBottom = if (waveActive && !isLandscape) 100.dp else contentBottom,
+        contentBottom = if (pagePlays && !isLandscape) 100.dp else contentBottom,
         tuning = tuning,
-        trackWaveSeed = seed?.takeIf { waveActive },
+        trackWaveSeed = seed?.takeIf { wavePage && pagePlays },
         onTune = { tuneOpen = true },
         onBackToMyWave = viewModel::returnToMyWave,
-        queueCount = queues.size
+        queueCount = queues.size,
+        mode = mode
     )
 }
 
@@ -348,6 +371,8 @@ internal fun CarTab(
         onTrackWave = viewModel::startTrackWave,
         onBackToMyWave = viewModel::returnToMyWave,
         activeQueueName = activeQueue?.queue?.name,
+        // The wave's pills only while the wave queue is active (D49); the queue pill is always there
+        waveActive = activeQueue?.queue?.kind == QueueKind.WAVE,
         // The panel opens on the driver's side, as the tune panel does
         onQueues = { queueSwitcher?.open(QueueSwitcherRequest.Switch(car = true, side = if (steeringWheelOnLeft) PanelSide.LEFT else PanelSide.RIGHT)) }
     )

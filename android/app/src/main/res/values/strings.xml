@@ -513,4 +513,7 @@
     <string name="cd_queues">Queues</string>
     <string name="cd_queue_shuffle">Shuffle</string>
     <string name="cd_queue_repeat">Repeat</string>
+    <!-- The first tab as a queue's page (D49) -->
+    <string name="home_next_up">Up next</string>
+    <string name="home_queue_empty">The queue is empty</string>
 </resources>

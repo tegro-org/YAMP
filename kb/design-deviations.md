@@ -10,3 +10,4 @@ Where the app departs from `DESIGN_GUIDE.md` or the canvas in `Design/`, and why
 | 2026-11-12 | Queue menu (long-press) | A second bottom sheet | `HiFiSheetPanel` with wrap height; in landscape a side panel on the switcher's side | One container for every sheet/panel (§3) |
 | 2026-11-12 | Car header pill | Always the active queue's name | "Queues" when nothing is active | There is no name to show |
 | 2026-11-12 | Queue menu | "Save as playlist" row | Not present | Deferred to Phase 5 (D43) |
+| 2026-11-12 | Home page, own queue active | Canvas shows the wave hero | Title = queue name, no wave pills, "Дальше" = the queue's next tracks, knob plays the queue (D49) | The wave hero switched the user away from the chosen queue |

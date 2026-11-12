@@ -117,15 +117,25 @@ class NewPlaybackRulesTest {
     }
 
     @Test
-    fun theWaveKnobOpensThePlayerOnlyWhenItSwitchesMusicOn() {
+    fun theHomeKnobOpensThePlayerOnlyWhenItSwitchesMusicOn() {
         // Starting the wave from another source or from nothing
-        assertEquals(WaveKnob.Press(WaveKnob.Action.START_WAVE, true), WaveKnob.press(waveActive = false, isPlaying = false, hasPlayed = false))
-        assertEquals(WaveKnob.Press(WaveKnob.Action.START_WAVE, true), WaveKnob.press(waveActive = false, isPlaying = true, hasPlayed = true))
+        assertEquals(HomeKnob.Press(HomeKnob.Action.START_WAVE, true), HomeKnob.press(wavePage = true, pagePlays = false, isPlaying = false, hasPlayed = false))
+        assertEquals(HomeKnob.Press(HomeKnob.Action.START_WAVE, true), HomeKnob.press(wavePage = true, pagePlays = false, isPlaying = true, hasPlayed = true))
         // The wave restored at launch, played for the first time
-        assertEquals(WaveKnob.Press(WaveKnob.Action.TOGGLE, true), WaveKnob.press(waveActive = true, isPlaying = false, hasPlayed = false))
+        assertEquals(HomeKnob.Press(HomeKnob.Action.TOGGLE, true), HomeKnob.press(wavePage = true, pagePlays = true, isPlaying = false, hasPlayed = false))
         // A pause, and a play after the user's own pause
-        assertEquals(WaveKnob.Press(WaveKnob.Action.TOGGLE, false), WaveKnob.press(waveActive = true, isPlaying = true, hasPlayed = true))
-        assertEquals(WaveKnob.Press(WaveKnob.Action.TOGGLE, false), WaveKnob.press(waveActive = true, isPlaying = false, hasPlayed = true))
+        assertEquals(HomeKnob.Press(HomeKnob.Action.TOGGLE, false), HomeKnob.press(wavePage = true, pagePlays = true, isPlaying = true, hasPlayed = true))
+        assertEquals(HomeKnob.Press(HomeKnob.Action.TOGGLE, false), HomeKnob.press(wavePage = true, pagePlays = true, isPlaying = false, hasPlayed = true))
+    }
+
+    /** A queue's page (D49): the knob never starts the wave; from a live station or nothing it starts the queue. */
+    @Test
+    fun theHomeKnobOnAQueuePageStartsTheQueueNotTheWave() {
+        assertEquals(HomeKnob.Press(HomeKnob.Action.START_QUEUE, true), HomeKnob.press(wavePage = false, pagePlays = false, isPlaying = true, hasPlayed = true))
+        assertEquals(HomeKnob.Press(HomeKnob.Action.START_QUEUE, true), HomeKnob.press(wavePage = false, pagePlays = false, isPlaying = false, hasPlayed = false))
+        assertEquals(HomeKnob.Press(HomeKnob.Action.TOGGLE, true), HomeKnob.press(wavePage = false, pagePlays = true, isPlaying = false, hasPlayed = false))
+        assertEquals(HomeKnob.Press(HomeKnob.Action.TOGGLE, false), HomeKnob.press(wavePage = false, pagePlays = true, isPlaying = true, hasPlayed = true))
+        assertEquals(HomeKnob.Press(HomeKnob.Action.TOGGLE, false), HomeKnob.press(wavePage = false, pagePlays = true, isPlaying = false, hasPlayed = true))
     }
 
     private fun ids(list: List<TrackDetailsDto>) = list.map { it.idString }

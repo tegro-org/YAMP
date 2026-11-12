@@ -231,7 +231,7 @@ Decisions taken while restructuring the controller, to be confirmed on the phone
   request (`playOp`) is superseded by a later start or a pause before it runs.
 - `QueuePolicy.next` ends a queue that holds only skipped (explicit) tracks; the old `nextAction` played one anyway.
 
-## Follow-up: Home follows the active queue (D49, decided 2026-11-12)
+## Follow-up: Home follows the active queue (D49, decided 2026-11-12; implemented the same day)
 
 Found on the head unit: the "Волна" page is the wave page by design, so its knob always starts My Wave and
 pulls the user away from the queue they chose; the wave pills do the same. Change, after the audio-session

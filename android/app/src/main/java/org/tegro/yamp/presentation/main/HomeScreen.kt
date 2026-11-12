@@ -39,7 +39,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
@@ -80,6 +80,9 @@ import coil3.request.crossfade
 import org.tegro.yamp.R
 import org.tegro.yamp.presentation.queues.QueueButton
 import org.tegro.yamp.data.dto.TrackDetailsDto
+import org.tegro.yamp.data.queue.ActiveQueue
+import org.tegro.yamp.domain.queue.QueueEntry
+import org.tegro.yamp.domain.queue.QueueKind
 import org.tegro.yamp.presentation.hifi.GlassCircleButton
 import org.tegro.yamp.presentation.hifi.HiFi
 import org.tegro.yamp.presentation.hifi.HiFiKnob
@@ -117,12 +120,48 @@ fun waveShelfOf(waveActive: Boolean, upcoming: List<TrackDetailsDto>, preview: L
     }
 
 /**
- * "Моя волна" — the face of the app: a metal knob inside a spectrum ring (equalizer and track progress
+ * Whose page the first tab is (D49): the wave's — the WAVE queue is active, or none is — or a queue of the
+ * user's own (STATIC; later RADIO/MIX), named after it and without the wave-only controls.
+ */
+sealed interface HomeMode {
+    data object Wave : HomeMode
+    data class Queue(val name: String) : HomeMode
+}
+
+fun homeModeOf(active: ActiveQueue?): HomeMode =
+    if (active == null || active.queue.kind == QueueKind.WAVE) HomeMode.Wave else HomeMode.Queue(active.queue.name)
+
+/**
+ * A queue's page under the knob: the tracks after the cursor (a queue without a cursor counts from its first
+ * entry). While the queue is not what plays, the cursor track is what the knob starts with. Nothing is ever
+ * being fetched for a static queue, so the shelf is never "loading".
+ */
+fun queueShelfOf(active: ActiveQueue, playing: Boolean, limit: Int = 10): WaveShelfState {
+    val start = active.cursorIndex.coerceAtLeast(0)
+    return WaveShelfState(
+        startsWith = if (playing) null else active.tracks.getOrNull(start),
+        shelf = active.tracks.drop(start + 1).take(limit),
+        loading = false
+    )
+}
+
+/** The entry a shelf card stands for: the first occurrence of the track after the cursor. */
+fun shelfEntryOf(active: ActiveQueue, trackId: String): QueueEntry? {
+    val from = active.cursorIndex.coerceAtLeast(0) + 1
+    val index = (from until active.tracks.size).firstOrNull { active.tracks[it].idString == trackId } ?: return null
+    return active.entries.getOrNull(index)
+}
+
+/**
+ * The first tab — the face of the app: a metal knob inside a spectrum ring (equalizer and track progress
  * in one) in the upper part, the track and the "next up" shelf at the bottom, right above the tab bar.
  * The page never scrolls: the knob shrinks on short screens so everything always fits.
  *
- * [waveTrack] is the current track only while the wave is the playing source; otherwise [shelf] tells
- * which track the knob starts with.
+ * It is the active queue's page (D49): "Моя волна" with the wave's pills, or a queue of the user's own
+ * under its name, with the same knob, track and shelf and no wave controls — see [mode].
+ *
+ * [waveTrack] is the current track only while what the page shows is the playing source; otherwise [shelf]
+ * tells which track the knob starts with.
  */
 @Composable
 fun HomeScreen(
@@ -144,11 +183,18 @@ fun HomeScreen(
     onTune: () -> Unit = {},
     onBackToMyWave: () -> Unit = {},
     /** How many queues the user has: the badge on the queue button. */
-    queueCount: Int = 0
+    queueCount: Int = 0,
+    mode: HomeMode = HomeMode.Wave
 ) {
-    val title = trackWaveSeed?.let { stringResource(R.string.wave_by_track_title, it.title.orEmpty()) } ?: stringResource(R.string.wave_title)
+    val wave = mode is HomeMode.Wave
+    val title = when (mode) {
+        is HomeMode.Queue -> mode.name
+        HomeMode.Wave -> trackWaveSeed?.let { stringResource(R.string.wave_by_track_title, it.title.orEmpty()) } ?: stringResource(R.string.wave_title)
+    }
+    // A queue's page has no pills; the row keeps its place so the knob stays where it is across queues
     val chips: @Composable (Modifier) -> Unit = { modifier ->
-        WaveTuneChips(tuning, trackWave = trackWaveSeed != null, onTune = onTune, onBackToMyWave = onBackToMyWave, modifier = modifier)
+        if (wave) WaveTuneChips(tuning, trackWave = trackWaveSeed != null, onTune = onTune, onBackToMyWave = onBackToMyWave, modifier = modifier)
+        else Spacer(modifier)
     }
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     val windowSize = org.tegro.yamp.utils.currentWindowSizeDp()
@@ -157,7 +203,7 @@ fun HomeScreen(
 
     val duration = (waveTrack?.durationMs ?: 0L).coerceAtLeast(0L)
     val progressFraction = { if (duration > 0) progress().toFloat() / duration else 0f }
-    val mode = when {
+    val ringMode = when {
         isLoading -> RingMode.Loading
         waveTrack != null && isPlaying -> RingMode.Playing
         else -> RingMode.Paused
@@ -167,7 +213,7 @@ fun HomeScreen(
     // The knob fits the space it is given: ring = 1.72 × knob
     val instrument: @Composable (Dp) -> Unit = { maxRing ->
         val knob = waveKnobSize(preferredKnob, maxRing)
-        WaveInstrument(knobSize = knob, mode = mode, isPlaying = playing, progress = progressFraction, onPlayPause = onPlayPause)
+        WaveInstrument(knobSize = knob, mode = ringMode, isPlaying = playing, wave = wave, progress = progressFraction, onPlayPause = onPlayPause)
     }
 
     if (isLandscape) {
@@ -196,8 +242,8 @@ fun HomeScreen(
                 }
                 if (!chipsOverKnob) chips(Modifier.padding(top = 10.dp))
                 Spacer(Modifier.weight(1f))
-                WaveTrackInfo(waveTrack, shelf.startsWith, isLiked, onLike, onDislike)
-                WaveShelf(shelf, shimmer, onOpenPlayer, onShelfClick, horizontalPadding = 0.dp, cardSize = if (windowSize.heightDp < 480) 84.dp else 112.dp)
+                WaveTrackInfo(waveTrack, shelf.startsWith, wave, isLiked, onLike, onDislike)
+                WaveShelf(shelf, wave, shimmer, onOpenPlayer, onShelfClick, horizontalPadding = 0.dp, cardSize = if (windowSize.heightDp < 480) 84.dp else 112.dp)
             }
         }
     } else {
@@ -224,8 +270,8 @@ fun HomeScreen(
                 },
                 {
                     Column {
-                        Box(Modifier.padding(horizontal = 20.dp)) { WaveTrackInfo(waveTrack, shelf.startsWith, isLiked, onLike, onDislike) }
-                        WaveShelf(shelf, shimmer, onOpenPlayer, onShelfClick, horizontalPadding = 20.dp, cardSize = portraitShelfCard(windowSize.widthDp.dp))
+                        Box(Modifier.padding(horizontal = 20.dp)) { WaveTrackInfo(waveTrack, shelf.startsWith, wave, isLiked, onLike, onDislike) }
+                        WaveShelf(shelf, wave, shimmer, onOpenPlayer, onShelfClick, horizontalPadding = 20.dp, cardSize = portraitShelfCard(windowSize.widthDp.dp))
                     }
                 }
             ),
@@ -271,7 +317,7 @@ private fun waveRingSize(preferredKnob: Dp, maxRing: Dp): Dp = waveKnobSize(pref
 
 /** Knob + ring. The ring is ~1.7× the knob: room for the longest bars. */
 @Composable
-private fun WaveInstrument(knobSize: Dp, mode: RingMode, isPlaying: Boolean, progress: () -> Float, onPlayPause: () -> Unit) {
+private fun WaveInstrument(knobSize: Dp, mode: RingMode, isPlaying: Boolean, wave: Boolean, progress: () -> Float, onPlayPause: () -> Unit) {
     val ringSize = knobSize * 1.72f
     Box(Modifier.size(ringSize), contentAlignment = Alignment.Center) {
         SpectrumRing(
@@ -284,7 +330,13 @@ private fun WaveInstrument(knobSize: Dp, mode: RingMode, isPlaying: Boolean, pro
         )
         HiFiKnob(
             onClick = onPlayPause,
-            contentDescription = stringResource(if (isPlaying) R.string.wave_pause else R.string.wave_play),
+            contentDescription = stringResource(
+                when {
+                    isPlaying -> R.string.wave_pause
+                    wave -> R.string.wave_play
+                    else -> R.string.cd_slushat
+                }
+            ),
             size = knobSize
         ) {
             PlayPauseGlyph(isPlaying = isPlaying, size = knobSize * 0.3f)
@@ -294,9 +346,12 @@ private fun WaveInstrument(knobSize: Dp, mode: RingMode, isPlaying: Boolean, pro
 
 private val TrackInfoHeight = 56.dp
 
-/** The playing track with dislike/like; or, before the wave plays, the track it starts with. Fixed height. */
+/**
+ * The playing track with dislike/like; or, before the page's music plays, the track it starts with. Fixed
+ * height. With nothing at all: the wave is being fetched, a queue of the user's own is empty.
+ */
 @Composable
-private fun WaveTrackInfo(track: TrackDetailsDto?, startsWith: TrackDetailsDto?, isLiked: Boolean, onLike: () -> Unit, onDislike: () -> Unit) {
+private fun WaveTrackInfo(track: TrackDetailsDto?, startsWith: TrackDetailsDto?, wave: Boolean, isLiked: Boolean, onLike: () -> Unit, onDislike: () -> Unit) {
     AnimatedContent(
         targetState = track to startsWith,
         contentKey = { (playing, next) -> playing?.idString ?: ("idle:" + next?.idString) },
@@ -309,7 +364,7 @@ private fun WaveTrackInfo(track: TrackDetailsDto?, startsWith: TrackDetailsDto?,
         if (shown == null) {
             Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 if (next == null) {
-                    Text(stringResource(R.string.wave_loading).uppercase(), style = HiFiType.SectionCaps)
+                    Text(stringResource(if (wave) R.string.wave_loading else R.string.home_queue_empty).uppercase(), style = HiFiType.SectionCaps)
                     return@Column
                 }
                 Text(stringResource(R.string.wave_starts_with).uppercase(), style = HiFiType.SectionCaps)
@@ -365,10 +420,14 @@ private fun WaveTrackInfo(track: TrackDetailsDto?, startsWith: TrackDetailsDto?,
     }
 }
 
-/** "Дальше в волне": always in place, with the same height whether it shows tracks or placeholders. */
+/**
+ * "Дальше в волне" / a queue's "Дальше": always in place, with the same height whether it shows tracks,
+ * placeholders or nothing (a queue at its last track).
+ */
 @Composable
 private fun WaveShelf(
     state: WaveShelfState,
+    wave: Boolean,
     shimmer: Boolean,
     onOpenPlayer: (() -> Unit)?,
     onClick: (TrackDetailsDto) -> Unit,
@@ -378,7 +437,7 @@ private fun WaveShelf(
     Column {
         Spacer(Modifier.height(14.dp))
         HiFiSectionHeader(
-            text = stringResource(R.string.wave_next_up),
+            text = stringResource(if (wave) R.string.wave_next_up else R.string.home_next_up),
             modifier = Modifier.padding(start = horizontalPadding, end = (horizontalPadding - 8.dp).coerceAtLeast(0.dp))
         ) {
             // Opens the full-screen player; hidden while there is nothing to open
@@ -391,14 +450,16 @@ private fun WaveShelf(
             }
         }
         Spacer(Modifier.height(4.dp))
-        if (state.loading) {
-            SkeletonRow(cardSize, horizontalPadding, animated = shimmer && !LocalHiFiLite.current)
-        } else {
-            LazyRow(
+        when {
+            state.loading -> SkeletonRow(cardSize, horizontalPadding, animated = shimmer && !LocalHiFiLite.current)
+            // Exactly a card's height (cover + 8 + 18 + 17): the knob does not move when the shelf runs out
+            state.shelf.isEmpty() -> Spacer(Modifier.height(cardSize + 43.dp))
+            else -> LazyRow(
                 contentPadding = PaddingValues(horizontal = horizontalPadding),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(state.shelf, key = { it.idString }, contentType = { "up_next" }) { track ->
+                // Keyed by place, not by track: a queue of the user's own may hold the same track twice
+                itemsIndexed(state.shelf, key = { index, track -> "$index:${track.idString}" }, contentType = { _, _ -> "up_next" }) { _, track ->
                     UpNextCard(track, cardSize) { onClick(track) }
                 }
             }

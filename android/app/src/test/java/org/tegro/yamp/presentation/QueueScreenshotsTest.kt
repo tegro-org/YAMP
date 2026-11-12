@@ -4,10 +4,13 @@ import android.app.Application
 import android.os.Looper
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.test.core.app.ApplicationProvider
@@ -30,8 +33,12 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.tegro.yamp.data.dto.ArtistDto
 import org.tegro.yamp.data.dto.TrackDetailsDto
+import org.tegro.yamp.data.queue.ActiveQueue
+import org.tegro.yamp.domain.queue.PlayQueue
+import org.tegro.yamp.domain.queue.QueueEntry
 import org.tegro.yamp.domain.queue.QueueKind
 import org.tegro.yamp.domain.queue.RepeatMode
+import org.tegro.yamp.domain.queue.TrackRef
 import org.tegro.yamp.presentation.car.CarScreen
 import org.tegro.yamp.presentation.car.LocalCarClock
 import org.tegro.yamp.presentation.hifi.ArtworkTint
@@ -39,6 +46,12 @@ import org.tegro.yamp.presentation.hifi.HiFiBackdrop
 import org.tegro.yamp.presentation.hifi.LocalArtworkTint
 import org.tegro.yamp.presentation.hifi.PanelSide
 import org.tegro.yamp.presentation.main.HomeScreen
+import org.tegro.yamp.presentation.main.components.DockBottomGap
+import org.tegro.yamp.presentation.main.components.DockClearance
+import org.tegro.yamp.presentation.main.components.DockScrim
+import org.tegro.yamp.presentation.main.components.FloatingGlassDock
+import org.tegro.yamp.presentation.main.homeModeOf
+import org.tegro.yamp.presentation.main.queueShelfOf
 import org.tegro.yamp.presentation.main.waveShelfOf
 import org.tegro.yamp.presentation.player.FullScreenPlayer
 import org.tegro.yamp.presentation.player.QueueModes
@@ -235,14 +248,90 @@ class QueueScreenshotsTest {
         snap("wave_queue_button")
     }
 
+    /** The "With family" queue, playing its second track. */
+    private val familyQueue = ActiveQueue(
+        queue = PlayQueue(id = 1L, name = "With family", kind = QueueKind.STATIC),
+        entries = tracks.mapIndexed { i, t -> QueueEntry(entryId = 10L + i, queueId = 1L, position = i, originalPosition = i, ref = TrackRef.yandex(t.idString), title = t.title.orEmpty(), artist = "") },
+        tracks = tracks,
+        cursorIndex = 1
+    )
+
+    /** The first tab as a queue's page (D49): its name, no wave pills, "Up next" from the cursor. */
     @Composable
-    private fun Car(steeringWheelOnLeft: Boolean = true) = CompositionLocalProvider(LocalCarClock provides { FIXED_TIME }) {
+    private fun HomeQueuePage(contentBottom: androidx.compose.ui.unit.Dp = 100.dp) {
+        HomeScreen(
+            waveTrack = tracks[1], isPlaying = true, isLoading = false, isLiked = false, progress = { 70_000L },
+            shelf = queueShelfOf(familyQueue, playing = true), shimmer = false,
+            onPlayPause = {}, onLike = {}, onDislike = {}, onOpenPlayer = {}, onShelfClick = {}, queueCount = 5,
+            contentBottom = contentBottom, mode = homeModeOf(familyQueue)
+        )
+    }
+
+    @Test
+    fun homeQueuePage() {
+        show { HomeQueuePage() }
+        snap("home_queue")
+    }
+
+    /** A queue's page before it plays (a station is on, or nothing): the cursor track is what the knob starts with. */
+    @Test
+    fun homeQueuePageIdle() {
+        show {
+            HomeScreen(
+                waveTrack = null, isPlaying = false, isLoading = false, isLiked = false, progress = { 0L },
+                shelf = queueShelfOf(familyQueue, playing = false), shimmer = false,
+                onPlayPause = {}, onLike = {}, onDislike = {}, onOpenPlayer = null, onShelfClick = {}, queueCount = 5,
+                mode = homeModeOf(familyQueue)
+            )
+        }
+        snap("home_queue_idle")
+    }
+
+    /** As the app lays the page out on a side: the tab dock along the bottom. */
+    @Composable
+    private fun DockedHomeQueuePage() {
+        Box(Modifier.fillMaxSize()) {
+            HomeQueuePage(contentBottom = DockClearance)
+            DockScrim(Modifier.align(Alignment.BottomCenter))
+            FloatingGlassDock(
+                currentRoute = "home",
+                onNavigate = {},
+                modifier = Modifier.align(Alignment.BottomCenter).padding(start = 16.dp, end = 16.dp, bottom = DockBottomGap),
+                player = {}
+            )
+        }
+    }
+
+    @Test
+    @Config(qualifiers = HEAD_UNIT)
+    fun homeQueuePageHeadUnit() {
+        show { DockedHomeQueuePage() }
+        snap("head_home_queue")
+    }
+
+    @Test
+    @Config(qualifiers = WIDE_HEAD_UNIT)
+    fun homeQueuePageWideHeadUnit() {
+        show { DockedHomeQueuePage() }
+        snap("wide_head_home_queue")
+    }
+
+    /** The car header with a queue of the user's own active: the queue pill alone, no wave pills (D49). */
+    @Test
+    @Config(qualifiers = HEAD_UNIT)
+    fun carHeadUnitQueuePage() {
+        show { Car(waveActive = false) }
+        snap("head_car_queue")
+    }
+
+    @Composable
+    private fun Car(steeringWheelOnLeft: Boolean = true, waveActive: Boolean = true) = CompositionLocalProvider(LocalCarClock provides { FIXED_TIME }) {
         CarScreen(
             currentTrack = tracks[0], isPlaying = true, likedTrackIds = setOf("1"), onPlayPauseClick = {}, onNextClick = {},
             onPrevClick = {}, onToggleLike = {}, onDislikeClick = {}, onPlayMyVibe = {}, onPlayFavorites = {}, onPlayHits = {},
             onPlayDownloaded = {}, onPlayRadio = {}, onExit = {}, isLandscape = true, steeringWheelOnLeft = steeringWheelOnLeft,
             progress = { 82_000L }, durationMs = 286_000, upcoming = tracks.drop(1), source = org.tegro.yamp.data.player.PlaylistSource.LIBRARY,
-            activeQueueName = "With family"
+            activeQueueName = "With family", waveActive = waveActive
         )
     }
 
