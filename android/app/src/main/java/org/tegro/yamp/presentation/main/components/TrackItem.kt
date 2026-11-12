@@ -69,6 +69,8 @@ fun TrackItem(
     isPlaying: Boolean,
     isLiked: Boolean = false,
     isDownloaded: Boolean = false,
+    /** The second line instead of the artists (History's "artist · queue"). */
+    subtitle: String? = null,
     onClick: () -> Unit,
     onToggleLike: () -> Unit = {},
     onLongClick: () -> Unit = {}
@@ -127,7 +129,7 @@ fun TrackItem(
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = track.artists.joinToString { it.name ?: "" }.ifEmpty { stringResource(R.string.player_unknown_artist) },
+                text = subtitle ?: track.artists.joinToString { it.name ?: "" }.ifEmpty { stringResource(R.string.player_unknown_artist) },
                 style = HiFiType.Caption,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis

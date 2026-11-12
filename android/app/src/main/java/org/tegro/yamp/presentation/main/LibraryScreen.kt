@@ -63,6 +63,7 @@ import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.Settings
@@ -107,7 +108,7 @@ import org.tegro.yamp.presentation.main.components.PlaylistNameDialog
 import org.tegro.yamp.presentation.main.components.TrackItem
 import org.tegro.yamp.utils.russianQuantityString
 
-private enum class LibrarySection { LIKED, DOWNLOADED, PLAYLISTS }
+private enum class LibrarySection { LIKED, DOWNLOADED, HISTORY, PLAYLISTS }
 
 /** The list starts to show under the header; below it, nothing is cut by a hard line. */
 private val LibraryFadeStart = 56.dp
@@ -149,7 +150,11 @@ fun LibraryScreen(
     onDeletePlaylist: (UserPlaylistDto) -> Unit = {},
     onReorderPlaylist: (UserPlaylistDto, List<String>, List<String>) -> Unit = { _, _, _ -> },
     onSetPlaylistPublic: (UserPlaylistDto, Boolean) -> Unit = { _, _ -> },
-    onAddToEnd: (List<TrackDetailsDto>) -> Unit = {}
+    onAddToEnd: (List<TrackDetailsDto>) -> Unit = {},
+    /** Rows of the last seven days, on the "History" row. */
+    historyCount: Int = 0,
+    /** The History page (D46), given the page modifier, the bottom clearance and the way back. */
+    historyPage: @Composable (modifier: Modifier, contentBottom: androidx.compose.ui.unit.Dp, onBack: () -> Unit) -> Unit = { _, _, _ -> }
 ) {
     var showSettings by remember { mutableStateOf(false) }
     var showProgressModal by remember { mutableStateOf(false) }
@@ -219,6 +224,7 @@ fun LibraryScreen(
                     Column(Modifier.padding(top = 14.dp)) {
                         SectionRow(Icons.Rounded.Favorite, stringResource(R.string.library_liked), tracks.size) { sectionName = LibrarySection.LIKED.name }
                         SectionRow(Icons.Rounded.DownloadDone, stringResource(R.string.library_downloaded), downloaded.size) { sectionName = LibrarySection.DOWNLOADED.name }
+                        SectionRow(Icons.Rounded.History, stringResource(R.string.history_row), historyCount) { sectionName = LibrarySection.HISTORY.name }
                         SectionRow(Icons.AutoMirrored.Rounded.PlaylistPlay, stringResource(R.string.library_playlists_row), playlists.size) { sectionName = LibrarySection.PLAYLISTS.name }
                     }
                 }
@@ -306,6 +312,7 @@ fun LibraryScreen(
                     }
                 }
             }
+            LibrarySection.HISTORY -> historyPage(Modifier.predictiveBack(back), contentBottom) { sectionName = null }
             LibrarySection.PLAYLISTS -> PlaylistsPage(
                 modifier = Modifier.predictiveBack(back),
                 playlists = playlists,

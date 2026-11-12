@@ -8,6 +8,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import org.tegro.yamp.data.cache.CacheDao
 import org.tegro.yamp.data.cache.CacheDatabase
+import org.tegro.yamp.data.history.HistoryDao
 import org.tegro.yamp.data.queue.QueueDao
 import javax.inject.Singleton
 
@@ -24,4 +25,7 @@ object DatabaseModule {
 
     @Provides
     fun provideQueueDao(db: CacheDatabase): QueueDao = db.queueDao()
+
+    @Provides
+    fun provideHistoryDao(db: CacheDatabase): HistoryDao = db.historyDao()
 }

@@ -516,4 +516,18 @@
     <!-- The first tab as a queue's page (D49) -->
     <string name="home_next_up">Up next</string>
     <string name="home_queue_empty">The queue is empty</string>
+    <!-- Library → History (Phase 1b, D46) -->
+    <string name="history_title">History</string>
+    <string name="history_row">History</string>
+    <string name="history_today">Today</string>
+    <string name="history_yesterday">Yesterday</string>
+    <string name="history_empty">What you listen to will appear here</string>
+    <string name="history_clear">Clear history</string>
+    <string name="history_clear_confirm">Clear the history?</string>
+    <string name="history_clear_confirm_text">Every track heard so far leaves the list. The music itself is not deleted.</string>
+    <string name="history_filter_all">All</string>
+    <string name="history_filter_wave">My Wave</string>
+    <string name="history_filter_radio">Radio</string>
+    <string name="settings_history">Keep listening history</string>
+    <string name="settings_history_hint">Every track that sounded, by day, in Library → History</string>
 </resources>

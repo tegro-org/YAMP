@@ -98,6 +98,10 @@ interface SettingsRepository {
     val diagnosticLog: Flow<Boolean>
     suspend fun setDiagnosticLog(enabled: Boolean)
 
+    /** Record every track that sounded in Library → History (D46). Off: nothing is written; the list stays. */
+    val listeningHistory: Flow<Boolean>
+    suspend fun setListeningHistory(enabled: Boolean)
+
     companion object {
         const val DEFAULT_CROSSFADE_SECONDS = 3
         const val MAX_CROSSFADE_SECONDS = 12

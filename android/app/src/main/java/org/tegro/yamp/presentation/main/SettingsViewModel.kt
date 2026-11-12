@@ -41,15 +41,20 @@ class SettingsViewModel @Inject constructor(
     @param:dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
 ) : ViewModel() {
 
-    private data class Sound(val compatible: Boolean, val crossfade: Int, val normalize: Boolean, val separateSessions: Boolean, val startMusic: StartMusic, val bluetooth: Boolean, val explicit: Boolean, val announce: Boolean = true)
+    private data class Sound(
+        val compatible: Boolean, val crossfade: Int, val normalize: Boolean, val separateSessions: Boolean, val startMusic: StartMusic,
+        val bluetooth: Boolean, val explicit: Boolean, val announce: Boolean = true, val history: Boolean = true
+    )
     private data class Look(val startPage: StartPage, val expand: Boolean, val swipe: Boolean, val left: Boolean, val clock: Boolean)
     private data class Scale(val auto: Boolean, val manual: Float, val animations: AnimationMode)
     private data class Library(val reserveMb: Int, val reserveUsed: Long, val autoDownload: Boolean, val cacheBytes: Long, val journal: PlaybackJournal.Snapshot = PlaybackJournal.Snapshot(), val diagnosticLog: Boolean = false)
 
     private val sound: Flow<Sound> = combine(
         combine(soundMode.compatible, settings.crossfadeSeconds, settings.normalizeVolume, settings.separateAudioSessions) { c, f, n, s -> Sound(c, f, n, s, StartMusic.OFF, false, false) },
-        combine(settings.startMusic, settings.bluetoothAutoplay, settings.skipExplicit, settings.announceEqualizer) { s, b, e, a -> Sound(false, 0, false, false, s, b, e, a) }
-    ) { sound, rest -> sound.copy(startMusic = rest.startMusic, bluetooth = rest.bluetooth, explicit = rest.explicit, announce = rest.announce) }
+        combine(settings.startMusic, settings.bluetoothAutoplay, settings.skipExplicit, settings.announceEqualizer, settings.listeningHistory) { s, b, e, a, h ->
+            Sound(false, 0, false, false, s, b, e, a, h)
+        }
+    ) { sound, rest -> sound.copy(startMusic = rest.startMusic, bluetooth = rest.bluetooth, explicit = rest.explicit, announce = rest.announce, history = rest.history) }
 
     private val look: Flow<Look> = combine(
         settings.startPage, settings.expandPlayerOnPlay, settings.swipeToCloseMiniPlayer, settings.steeringWheelOnLeft, settings.carClock, ::Look
@@ -76,6 +81,7 @@ class SettingsViewModel @Inject constructor(
             startMusic = s.startMusic,
             bluetoothAutoplay = s.bluetooth,
             skipExplicit = s.explicit,
+            listeningHistory = s.history,
             reserveMb = lib.reserveMb,
             reserveUsedBytes = lib.reserveUsed,
             autoDownload = lib.autoDownload,
@@ -127,6 +133,7 @@ class SettingsViewModel @Inject constructor(
     fun setStartMusic(value: StartMusic) = save { setStartMusic(value) }
     fun setBluetoothAutoplay(enabled: Boolean) = save { setBluetoothAutoplay(enabled) }
     fun setSkipExplicit(enabled: Boolean) = save { setSkipExplicit(enabled) }
+    fun setListeningHistory(enabled: Boolean) = save { setListeningHistory(enabled) }
     fun setReserveMb(megabytes: Int) = save { setRoadReserveMb(megabytes) }
     fun clearReserve() {
         viewModelScope.launch { roadReserve.clear() }

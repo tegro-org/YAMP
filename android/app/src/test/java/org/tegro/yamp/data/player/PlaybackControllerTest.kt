@@ -45,6 +45,7 @@ import org.tegro.yamp.data.cache.PlaylistCacheManager
 import org.tegro.yamp.data.diagnostics.DiagnosticLog
 import org.tegro.yamp.data.dto.ArtistDto
 import org.tegro.yamp.data.dto.TrackDetailsDto
+import org.tegro.yamp.data.history.ListeningHistory
 import org.tegro.yamp.data.network.NetworkMonitor
 import org.tegro.yamp.data.network.TrackDownloadManager
 import org.tegro.yamp.data.network.YandexMusicApi
@@ -150,6 +151,12 @@ class PlaybackControllerTest {
         return QueueManager(RoomQueueStore(db.queueDao(), db.dao()), QueueTrackBridge(db.dao(), json), scope, dispatchers)
     }
 
+    /** The listening history over this test's database, written as the controller reports sound. */
+    private val history by lazy {
+        val scope = CoroutineScope(SupervisorJob() + dispatcher).also { managerScopes += it }
+        ListeningHistory(db.historyDao(), QueueTrackBridge(db.dao(), json), settings, scope, dispatchers) { 1_700_000_000_000L }
+    }
+
     /** A controller on the real stores of this test's app, with its saved session (if any) already loaded. */
     private fun controller(engine: FakePlayerRepository = this.engine, queueManager: QueueManager = manager()): PlaybackController {
         val legacyImport = LegacySessionImport(store, cacheManager, RoomQueueStore(db.queueDao(), db.dao()), QueueTrackBridge(db.dao(), json))
@@ -158,7 +165,7 @@ class PlaybackControllerTest {
             TrackDownloadManager(context, client), resolver, cacheManager, RadioRepository(context),
             queueManager, legacyImport, db.dao(),
             settings, NetworkMonitor(context), RoadReserve(context, client, json),
-            PlaybackJournal(now = { 0L }), DiagnosticLog(context, settings)
+            PlaybackJournal(now = { 0L }), DiagnosticLog(context, settings), history
         )
         controllers += controller
         await { controller.awaitRestoredSession() }
@@ -211,6 +218,55 @@ class PlaybackControllerTest {
         engine.sounds()
         assertFalse(controller.isStarting.value)
         assertTrue(controller.isPlaying.value)
+    }
+
+    /** History's tap: the track goes right after the cursor and plays; the queue goes on after it (D35). */
+    @Test
+    fun playNowKeepQueuePutsTheTrackAfterTheCursorAndPlaysIt() {
+        val controller = controller()
+        controller.playing("1", playlist("1", "2", "3"))
+        val nine = playlist("9").single()
+
+        controller.playNowKeepQueue(nine)
+        controller.settle()
+
+        assertEquals(listOf("1", "9", "2", "3"), controller.currentPlaylist.value.ids)
+        assertEquals(listOf("9"), engine.played.map { it.trackId })
+        assertEquals("9", controller.currentTrack.value?.idString)
+        assertEquals("the queue goes on after it", listOf("2"), engine.prepared)
+    }
+
+    /** With no queue at all the track starts one of its own, as "play next" does. */
+    @Test
+    fun playNowKeepQueueWithoutAQueueStartsOne() {
+        val controller = controller()
+        val nine = playlist("9").single()
+
+        controller.playNowKeepQueue(nine)
+        controller.settle()
+
+        assertEquals(listOf("9"), controller.currentPlaylist.value.ids)
+        assertEquals(listOf("9"), engine.played.map { it.trackId })
+    }
+
+    /** The history records what sounded, with its queue; a track skipped before it sounded is not listed. */
+    @Test
+    fun theHistoryListsTheTracksThatSoundedWithTheirQueue() {
+        val controller = controller()
+        controller.playing("1", playlist("1", "2", "3"))
+        controller.playNext()
+        controller.settle()
+        controller.playNext() // "2" never rendered audio
+        controller.settle()
+        engine.sounds()
+
+        val rows = await {
+            history.awaitIdle()
+            db.historyDao().recent(10).first()
+        }
+        assertEquals(listOf("3", "1"), rows.map { it.trackId })
+        assertEquals(context.getString(R.string.queue_main_name), rows[0].queueName)
+        assertEquals(controller.activeQueue.value?.queue?.id, rows[0].queueId)
     }
 
     @Test

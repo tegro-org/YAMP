@@ -109,6 +109,9 @@
 - [x] First tab = active queue's page (title, knob, "Дальше"); wave pills/shelf only for the WAVE queue (phone + car);
       the car's knob and auto-start go through the controller's play rule (2026-11-12) — head-unit test pending
 
-## Phase 1b — History (D46)
+## Phase 1b — History (D46, D50)
 
-- [ ] Short design doc + one canvas board → Room `history` table, Library row, track actions
+- [x] `docs/phase-1b-history.md` approved and implemented 2026-11-12: Room v3 `history`, recording from the sounding
+      track, Library row + page with queue chips (active queue first), "play now, keep my queue", settings switch,
+      canvas boards; 445 tests — phone/head-unit test pending
+- [ ] watch: `PlaybackControllerTest.aSavedSessionComesBackPausedAtItsPosition` timed out once (5 s) in a full run

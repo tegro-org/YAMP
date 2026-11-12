@@ -181,4 +181,8 @@ class SettingsRepositoryImpl @Inject constructor(
     private val diagnosticLogPref = bool("diagnostic_log", org.tegro.yamp.BuildConfig.DEBUG)
     override val diagnosticLog = diagnosticLogPref.first
     override suspend fun setDiagnosticLog(enabled: Boolean) = diagnosticLogPref.second(enabled)
+
+    private val historyPref = bool("listening_history", true)
+    override val listeningHistory = historyPref.first
+    override suspend fun setListeningHistory(enabled: Boolean) = historyPref.second(enabled)
 }

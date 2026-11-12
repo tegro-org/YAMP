@@ -181,7 +181,7 @@ class ScreenshotTest {
                 tracks = tracks, isLoading = false, currentTrackId = "1", isPlaying = true, likedTrackIds = setOf("1", "2", "3"), downloadedTrackIds = setOf("2"),
                 downloadProgress = null, onTrackClick = {}, onPlayAllClick = {}, onShuffleClick = {},
                 onDownloadAllClick = {}, onCancelDownload = {}, onToggleLike = {},
-                playlists = playlists
+                playlists = playlists, historyCount = 23
             )
         }
         snap("library")

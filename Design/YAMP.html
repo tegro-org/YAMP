@@ -33,6 +33,7 @@
   <script src="yamp/foundations.jsx" type="text/babel"></script>
   <script src="yamp/reference.jsx" type="text/babel"></script>
   <script src="yamp/queues.jsx" type="text/babel"></script>
+  <script src="yamp/history.jsx" type="text/babel"></script>
   <script src="yamp/folders.jsx" type="text/babel"></script>
   <script src="yamp/split.jsx" type="text/babel"></script>
   <script src="yamp/signin.jsx" type="text/babel"></script>
@@ -86,6 +87,7 @@
             { id: 'qc-panel', label: 'Car mode · queues panel (tap = switch)', ...sz(H), el: <CarQueuePanel /> },
             { id: 'qc-weak', label: 'Car mode · weak signal → the pill plays downloaded music (no Offline tile, D33)', ...sz(H), el: <Frame kind="head" tint="#8A5A22" glowY="40%"><CarHome weak /></Frame> },
           ] },
+        ...optional('historySections'),
         { id: 'folders-phone', title: '6 · Folder browser — phone (Phase 4b)',
           subtitle: 'The physical folder tree of the Jellyfin library, opened directly at the library root. Row tap = open, play button = play the whole folder. Filter on every level; pinned folders on top; breadcrumbs jump to any level.',
           boards: [

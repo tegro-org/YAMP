@@ -89,7 +89,8 @@ class PlaybackController @Inject constructor(
     private val networkMonitor: org.tegro.yamp.data.network.NetworkMonitor,
     private val reserve: RoadReserve,
     private val journal: PlaybackJournal,
-    private val diagnosticLog: org.tegro.yamp.data.diagnostics.DiagnosticLog
+    private val diagnosticLog: org.tegro.yamp.data.diagnostics.DiagnosticLog,
+    private val history: org.tegro.yamp.data.history.ListeningHistory
 ) {
     private val scope = CoroutineScope(
         SupervisorJob() + Dispatchers.Main.immediate + CoroutineExceptionHandler { _, e ->
@@ -269,6 +270,10 @@ class PlaybackController @Inject constructor(
         onStored = { prefetchCovers(context, listOf(it), listOf(CoverSize.Small, CoverSize.Medium, CoverSize.Large)) }
     )
 
+    /** The track History has open as sounding, and since when (elapsed time), for its played time. */
+    private var heard: String? = null
+    private var heardSince = 0L
+
     private var currentPlayJob: Job? = null
     private var bufferingWatchdog: Job? = null
     private var stallWatchdog: Job? = null
@@ -295,17 +300,27 @@ class PlaybackController @Inject constructor(
             .onEach { playerRepository.setCrossfadeDuration(it * 1000L) }
             .launchIn(scope)
 
-        // A track that actually renders audio resets error recovery.
+        // The track that actually renders audio: it resets error recovery, and it is what History records (D46) —
+        // a track skipped before it sounded is not listed, and the time it sounded is what is counted
         combine(playerRepository.soundingTrackId, playerRepository.isBuffering, playerRepository.currentTrackId) { sounding, buffering, current ->
-            sounding != null && sounding == current && !buffering
+            sounding?.takeIf { it == current && !buffering }
         }
             .distinctUntilChanged()
             .onEach { audible ->
-                if (audible) {
-                    _isStarting.value = false
-                    consecutiveFailedTracks = 0
-                    retriedTrackId = null
-                    if (streamingTrackId != null && streamingTrackId == currentTrackNow()?.idString) updateLink { onStreamAudible() }
+                if (heard != null) {
+                    history.stopped(android.os.SystemClock.elapsedRealtime() - heardSince)
+                    heard = null
+                }
+                if (audible == null) return@onEach
+                _isStarting.value = false
+                consecutiveFailedTracks = 0
+                retriedTrackId = null
+                val track = currentTrackNow()
+                if (streamingTrackId != null && streamingTrackId == track?.idString) updateLink { onStreamAudible() }
+                if (track != null && track.idString == audible && !track.isRadio) {
+                    heard = audible
+                    heardSince = android.os.SystemClock.elapsedRealtime()
+                    history.started(track, active?.queue)
                 }
             }
             .launchIn(scope)
@@ -408,6 +423,24 @@ class PlaybackController @Inject constructor(
     fun playEntry(entryId: Long) {
         returnPoint = null
         playOp { startEntry(entryId, crossfade = true, startPositionMs = 0L) }
+    }
+
+    /**
+     * "Play now, keep my queue" (History's tap): [track] goes right after the cursor of the active queue and
+     * plays; the queue goes on after it. Never replaces a queue (D35) — with none, it starts a new one.
+     */
+    fun playNowKeepQueue(track: TrackDetailsDto) {
+        returnPoint = null
+        playOp {
+            val queue = active
+            if (queue == null) {
+                playFromNow(listOf(track), PlaylistSource.LIBRARY.name, track.idString, crossfade = true, startPositionMs = 0L)
+                return@playOp
+            }
+            queueManager.insertAfterCursor(listOf(track))
+            val entry = active?.entries?.getOrNull(queue.cursorIndex + 1) ?: return@playOp
+            startEntry(entry.entryId, crossfade = true, startPositionMs = 0L)
+        }
     }
 
     /** Starts the wave from a track of its preview (the wave page's "next up" shelf). */

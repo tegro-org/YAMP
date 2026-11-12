@@ -62,6 +62,7 @@ import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Equalizer
 import androidx.compose.material.icons.rounded.SpeakerGroup
 import androidx.compose.material.icons.rounded.Explicit
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.MusicNote
@@ -511,6 +512,7 @@ private fun ColumnScope.PlaybackPage(state: SettingsUiState, actions: SettingsAc
     }
     SettingsGroup(stringResource(R.string.settings_g_content)) {
         SwitchRow(Icons.Rounded.Explicit, stringResource(R.string.settings_explicit), stringResource(R.string.settings_explicit_hint), state.skipExplicit, actions.onSkipExplicitChange)
+        SwitchRow(Icons.Rounded.History, stringResource(R.string.settings_history), stringResource(R.string.settings_history_hint), state.listeningHistory, actions.onListeningHistoryChange)
     }
     SettingsNote(stringResource(R.string.settings_wave_tuning_note))
     SettingsGroup(stringResource(R.string.settings_group_reserve)) {

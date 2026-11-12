@@ -302,6 +302,12 @@ class MainViewModel @Inject constructor(
     /** "Add to end of queue" for a track or a whole list. */
     fun addToEnd(tracks: List<TrackDetailsDto>) = playbackController.addToEnd(tracks)
 
+    /** History's row: the track plays now, right after the cursor; the active queue goes on after it. */
+    fun playNowKeepQueue(track: TrackDetailsDto) {
+        playRequests.userStarted()
+        playbackController.playNowKeepQueue(track)
+    }
+
     /** The queue sheet's row: that entry, so a track that is in the queue twice works. */
     fun playEntry(entryId: Long) {
         playRequests.userStarted()

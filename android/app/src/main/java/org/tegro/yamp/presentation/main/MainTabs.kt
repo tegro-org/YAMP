@@ -184,9 +184,11 @@ internal fun LibraryTab(
     onOpenAccounts: () -> Unit,
     onOpenCrashLog: () -> Unit,
     onAddAccount: () -> Unit,
-    settingsVm: SettingsViewModel = hiltViewModel()
+    settingsVm: SettingsViewModel = hiltViewModel(),
+    historyVm: org.tegro.yamp.presentation.history.HistoryViewModel = hiltViewModel()
 ) {
     val tracks by viewModel.tracks.collectAsStateWithLifecycle()
+    val historyState by historyVm.state.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val loadFailed by viewModel.libraryLoadFailed.collectAsStateWithLifecycle()
     val downloadState by viewModel.downloadAllState.collectAsStateWithLifecycle()
@@ -235,6 +237,7 @@ internal fun LibraryTab(
             onStartMusicChange = settingsVm::setStartMusic,
             onBluetoothAutoplayChange = settingsVm::setBluetoothAutoplay,
             onSkipExplicitChange = settingsVm::setSkipExplicit,
+            onListeningHistoryChange = settingsVm::setListeningHistory,
             onReserveChange = settingsVm::setReserveMb,
             onClearReserve = settingsVm::clearReserve,
             onAutoDownloadChange = settingsVm::setAutoDownload,
@@ -284,7 +287,25 @@ internal fun LibraryTab(
         onDeletePlaylist = { playlistsVm.delete(it) },
         onReorderPlaylist = { playlist, shown, new -> playlistsVm.reorder(playlist, shown, new) },
         onSetPlaylistPublic = { playlist, public -> playlistsVm.setPublic(playlist, public) },
-        onAddToEnd = viewModel::addToEnd
+        onAddToEnd = viewModel::addToEnd,
+        historyCount = historyState.weekCount,
+        historyPage = { modifier, contentBottom, onBack ->
+            org.tegro.yamp.presentation.history.HistoryScreen(
+                state = historyState,
+                currentTrackId = now.trackId,
+                isPlaying = now.isPlaying,
+                likedTrackIds = now.likedTrackIds,
+                downloadedTrackIds = downloadedTrackIds,
+                contentBottom = contentBottom,
+                onBack = onBack,
+                onOpened = historyVm::opened,
+                onSelectFilter = historyVm::select,
+                onTrackClick = viewModel::playNowKeepQueue,
+                onToggleLike = viewModel::toggleLike,
+                onClear = historyVm::clear,
+                modifier = modifier
+            )
+        }
     )
 }
 

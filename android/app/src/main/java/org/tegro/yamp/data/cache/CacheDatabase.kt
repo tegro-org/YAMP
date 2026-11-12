@@ -118,21 +118,26 @@ interface CacheDao {
         deleteAllTracks()
     }
 
-    /** Metadata no list and no queue refers to any more. */
-    @Query("DELETE FROM tracks WHERE id NOT IN (SELECT trackId FROM list_items) AND id NOT IN (SELECT trackId FROM queue_entries)")
+    /** Metadata no list, no queue and no history row refers to any more. */
+    @Query(
+        "DELETE FROM tracks WHERE id NOT IN (SELECT trackId FROM list_items) AND id NOT IN (SELECT trackId FROM queue_entries) " +
+            "AND id NOT IN (SELECT trackId FROM history)"
+    )
     suspend fun deleteOrphanTracks()
 }
 
 @Database(
     entities = [
         TrackEntity::class, ListItemEntity::class, ValueEntity::class,
-        org.tegro.yamp.data.queue.QueueEntity::class, org.tegro.yamp.data.queue.QueueEntryEntity::class
+        org.tegro.yamp.data.queue.QueueEntity::class, org.tegro.yamp.data.queue.QueueEntryEntity::class,
+        org.tegro.yamp.data.history.HistoryEntity::class
     ],
-    version = 2
+    version = 3
 )
 abstract class CacheDatabase : RoomDatabase() {
     abstract fun dao(): CacheDao
     abstract fun queueDao(): org.tegro.yamp.data.queue.QueueDao
+    abstract fun historyDao(): org.tegro.yamp.data.history.HistoryDao
 
     companion object {
         /** Owner of the lists every account shares (charts). Never a sanitized folder name. */
@@ -144,7 +149,7 @@ abstract class CacheDatabase : RoomDatabase() {
         /** One database per process, also for tests that build their own cache manager. */
         fun get(context: Context): CacheDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, CacheDatabase::class.java, "music_cache.db")
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
                 .also { instance = it }
         }
@@ -168,6 +173,20 @@ abstract class CacheDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_queue_entries_queueId_position` ON `queue_entries` (`queueId`, `position`)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_queue_entries_ref` ON `queue_entries` (`ref`)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_queue_entries_trackId` ON `queue_entries` (`trackId`)")
+            }
+        }
+
+        /** v2 → v3: the listening history (docs/phase-1b-history.md). The SQL is Room's own export (`schemas/…/3.json`). */
+        val MIGRATION_2_3 = object : androidx.room.migration.Migration(2, 3) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `history` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `ref` TEXT NOT NULL, " +
+                        "`trackId` TEXT NOT NULL, `title` TEXT NOT NULL, `artist` TEXT NOT NULL, `coverUrl` TEXT, " +
+                        "`durationMs` INTEGER NOT NULL, `startedAt` INTEGER NOT NULL, `playedMs` INTEGER NOT NULL, " +
+                        "`queueId` INTEGER, `queueName` TEXT)"
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_history_startedAt` ON `history` (`startedAt`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_history_queueId` ON `history` (`queueId`)")
             }
         }
     }
