@@ -13,7 +13,9 @@ YAMP is a hard fork: no merges. Upstream changes are reviewed in batches and eac
 
 - **Imported:** upstream `fac6af78faec620ae39ef9f2f20e37c39ba1c220` — "1.12.2: "Далее" in the car as a
   row of covers…" (2026-11-09 18:44 +1000), via `git archive` (no upstream history in our repo).
-- **Last reviewed upstream commit:** `9897e61` (1.14.1, 2026-11-11) — **triaged**, ports pending per the batches
+- **Last reviewed upstream commit:** `5c092d9` (1.14.4, 2026-11-12) — focus-handling check + the 1.14.3 hold fix ported;
+  the rest of 1.14.2–1.14.4 (lyrics, flat-unit layout, car stations, downloads on the device, AI marks, Android 7.1,
+  sign-in by code fallback) still to triage. Previous: `9897e61` (1.14.1, 2026-11-11) — **triaged**, ports pending per the batches
   in the review log below. Reviewed range: `fac6af7..9897e61`, 20 commits, 261 files (+8385/−761, more than half
   of them upstream screenshot goldens).
 - **YML last looked at:** `f923e6c` (2026-11-09). It was 35 commits ahead / 22 behind upstream (merge-base
@@ -78,6 +80,14 @@ behaviour, not by commit. Line numbers are upstream HEAD. "Ours" = already in YA
 | Gradle 9.8.2 → 9.9.1, roborazzi 1.77 → 1.78, zxing 3.5.3 → 3.5.4; actions checkout v7, setup-java v6, upload-artifact v7, gh-release v3 | 76c36ef | port via Dependabot | uiautomator 2.4.1 already merged (#10) |
 | Н11 imports instead of FQNs (71 files, mechanical) | a7bf428 | skip | conflicts with everything we touched; apply the convention as files are edited |
 | versionCode/Name bumps, release notes in `release.yml` | several | skip | versions from git (D37) |
+
+### 2026-11-12 — `9897e61..5c092d9` (1.14.2 → 1.14.4), partial
+
+| Change | Commit | Decision | Note |
+|---|---|---|---|
+| Audio focus handling (asked for the auto-pause on the unit): unchanged except a pre-Android-8 fallback | 3b0ebfd | — | upstream pauses on permanent loss exactly as we do; the loss is provoked on our side (separate sessions under test) |
+| No false stalls at crossfades: `soundingTrackId`, `inTransition`, "buffering" not reported while the crossfade's tail sounds, buffer counted from the incoming track, next track prepared once the current has 20 s in hand and no transition runs, cache yields in a track's first 30 s | 34d5b4a | **ported** 2026-11-12 | our stall watchdog could fire mid-hold (copy restart with a cut); the loading ring showed during the hold |
+| Link reasons in the journal, server check via OkHttp, lyrics, flat head-unit layout, car stations, downloads on the device, AI-credit marks, Android 7.1, sign-in code fallback, drive without a folder picker, bundled root certificates | 1.14.2–1.14.4 | to triage | |
 
 **Batch U2 — playback and head-unit fixes — ported 2026-11-11 (`fix/upstream-1.14-u2`), awaiting the user's test**; left out: the pill-label autosize (1.13.0 UI batch), the uneven-link switch and the journal (below)
 

@@ -48,6 +48,10 @@ interface PlayerRepository {
     fun fadeOutForSkip()
     /** Music in hand ahead of the playing position; as good as unlimited when unknown. */
     val bufferedAheadMs: Long get() = Long.MAX_VALUE
+    /** The track one actually hears now: during a crossfade's wait still the previous one; null in silence. */
+    val soundingTrackId: StateFlow<String?>
+    /** A track change (a crossfade, its wait) is under way: the line belongs to it. */
+    val inTransition: Boolean get() = false
     /** Lowers the volume to silence over [durationMs], then pauses (sleep timer). */
     fun fadeOutAndPause(durationMs: Long)
     /** Resumes the loaded item. Returns false when nothing is loaded and the caller must start the track itself. */

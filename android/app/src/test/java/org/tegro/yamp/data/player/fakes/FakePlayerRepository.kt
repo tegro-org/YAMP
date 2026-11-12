@@ -23,6 +23,7 @@ class FakePlayerRepository(private val context: Context) : PlayerRepository {
     override val currentTrackId = MutableStateFlow<String?>(null)
     override val isPlaying = MutableStateFlow(false)
     override val isBuffering = MutableStateFlow(false)
+    override val soundingTrackId = MutableStateFlow<String?>(null)
     override val progress = MutableStateFlow(0L)
     override val trackEndedEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
     override val prepareNextTrackEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
@@ -40,12 +41,14 @@ class FakePlayerRepository(private val context: Context) : PlayerRepository {
     /** The loaded track renders audio. */
     fun sounds() {
         isBuffering.value = false
+        soundingTrackId.value = currentTrackId.value
     }
 
     /** A player error on the loaded track, as the real engine reports it: it no longer wants to play. */
     fun fail(trackId: String, positionMs: Long, reason: String = "ERROR_CODE_IO_BAD_HTTP_STATUS") {
         isPlaying.value = false
         isBuffering.value = false
+        soundingTrackId.value = null
         check(playbackErrorEvent.tryEmit(PlaybackFailure(trackId, positionMs, reason)))
     }
 
@@ -60,6 +63,7 @@ class FakePlayerRepository(private val context: Context) : PlayerRepository {
     ) {
         calls += Call("playTrack", trackId, url, startPositionMs)
         currentTrackId.value = trackId
+        soundingTrackId.value = null
         progress.value = startPositionMs
         isBuffering.value = true
         isPlaying.value = true
@@ -81,6 +85,7 @@ class FakePlayerRepository(private val context: Context) : PlayerRepository {
         calls += Call("pause")
         isPlaying.value = false
         isBuffering.value = false
+        soundingTrackId.value = null
     }
 
     override fun fadeOutForSkip() {
@@ -124,6 +129,7 @@ class FakePlayerRepository(private val context: Context) : PlayerRepository {
         currentTrackId.value = null
         isPlaying.value = false
         isBuffering.value = false
+        soundingTrackId.value = null
     }
 
     override fun release() {

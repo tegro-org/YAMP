@@ -156,8 +156,9 @@ class PlaybackController @Inject constructor(
         playing || starting
     }.stateIn(scope, SharingStarted.Eagerly, false)
 
-    val isBuffering: StateFlow<Boolean> = combine(playerRepository.isBuffering, _isStarting) { buffering, starting ->
-        buffering || starting
+    val isBuffering: StateFlow<Boolean> = combine(playerRepository.isBuffering, _isStarting, playerRepository.soundingTrackId) { buffering, starting, sounding ->
+        // A start that waits behind a track still sounding (the crossfade's hold) is not "loading" on screen
+        buffering || (starting && sounding == null)
     }.stateIn(scope, SharingStarted.Eagerly, false)
 
     val progress: StateFlow<Long> = combine(
@@ -257,7 +258,10 @@ class PlaybackController @Inject constructor(
         },
         resolve = preloadManager::resolveOrdinaryStream,
         // The reserve fills only while the playing track has sound in hand: the two downloads must not compete
-        streamNeedsTheLine = { isBuffering.value || playerRepository.bufferedAheadMs < RESERVE_HEADROOM_MS },
+        streamNeedsTheLine = {
+            isBuffering.value || playerRepository.inTransition || progress.value < TRACK_SETTLE_MS ||
+                playerRepository.bufferedAheadMs < RESERVE_HEADROOM_MS
+        },
         upcoming = { upcomingTracks() },
         moreTracks = { wave.tracks.value },
         isDownloaded = preloadManager::hasPlayableCopy,
@@ -292,7 +296,10 @@ class PlaybackController @Inject constructor(
             .launchIn(scope)
 
         // A track that actually renders audio resets error recovery.
-        combine(playerRepository.isPlaying, playerRepository.isBuffering) { playing, buffering -> playing && !buffering }
+        combine(playerRepository.soundingTrackId, playerRepository.isBuffering, playerRepository.currentTrackId) { sounding, buffering, current ->
+            sounding != null && sounding == current && !buffering
+        }
+            .distinctUntilChanged()
             .onEach { audible ->
                 if (audible) {
                     _isStarting.value = false
@@ -992,7 +999,6 @@ class PlaybackController @Inject constructor(
 
         val upcoming = queue.tracks.drop(index + 1).take(3).map { it.idString }
         if (upcoming.isNotEmpty()) preloadManager.preloadTracks(upcoming)
-        queue.tracks.getOrNull(index + 1)?.let { prepareStandby(it) }
 
         if (queue.queue.kind == QueueKind.WAVE) {
             // Continuous queue auto-refill: fewer than 20 tracks left in My Wave
@@ -1001,6 +1007,7 @@ class PlaybackController @Inject constructor(
         }
 
         resolveAndPlay(track, crossfade, startPositionMs)
+        queue.tracks.getOrNull(index + 1)?.let { prepareStandbyWhenSettled(it) }
     }
 
     private suspend fun playNextNow(isAuto: Boolean) {
@@ -1517,6 +1524,24 @@ class PlaybackController @Inject constructor(
         prepareStandby(queue.tracks[next.index])
     }
 
+    private var standbyJob: Job? = null
+
+    /**
+     * The next track is readied once the current one has [RESERVE_HEADROOM_MS] in hand and no track change runs:
+     * both loading at the start of a track split the line exactly when the new one needs all of it (upstream 1.14.3).
+     */
+    private fun prepareStandbyWhenSettled(track: TrackDetailsDto) {
+        standbyJob?.cancel()
+        val current = currentTrackNow()?.idString
+        standbyJob = scope.launch {
+            while (playerRepository.inTransition || playerRepository.bufferedAheadMs < RESERVE_HEADROOM_MS || playerRepository.currentTrackId.value != current) {
+                if (currentTrackNow()?.idString != current) return@launch
+                delay(STANDBY_POLL_MS)
+            }
+            prepareStandby(track)
+        }
+    }
+
     private fun prepareStandby(track: TrackDetailsDto) {
         if (track.isRadio) return
         scope.launch {
@@ -1668,6 +1693,9 @@ class PlaybackController @Inject constructor(
         const val WAVE_RETRY_MAX_MS = 60_000L
         /** Sound the playing track must have ahead before the road reserve may use the line. */
         const val RESERVE_HEADROOM_MS = 20_000L
+        /** The first half-minute of a track: its own, not the cache's. */
+        private const val TRACK_SETTLE_MS = 30_000L
+        private const val STANDBY_POLL_MS = 500L
         /** `cache_values` key (owner [CacheDatabase.SHARED]) of the FM station on air, for the restore. */
         const val LIVE_STATION = "live_station"
         /** The origin that marks the app-made queue of the offline mix. */
