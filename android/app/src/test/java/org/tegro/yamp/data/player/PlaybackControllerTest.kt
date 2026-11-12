@@ -411,6 +411,27 @@ class PlaybackControllerTest {
         assertEquals("next after the second \"a\" is \"c\"", listOf("c"), engine.played.map { it.trackId })
     }
 
+    /** The user's empty queue is never swapped for My Wave by a Play or Next (found on the head unit). */
+    @Test
+    fun playOnAnEmptyOwnQueueStaysThereInsteadOfStartingTheWave() {
+        val manager = manager()
+        val controller = controller(queueManager = manager)
+        controller.playing("1", playlist("1", "2"))
+        val empty = await { manager.create("RC") }
+        controller.pause()
+        controller.switchQueue(empty.id)
+        controller.settle()
+        engine.calls.clear()
+
+        controller.play()
+        controller.playNext()
+        controller.settle()
+
+        assertEquals("nothing played", emptyList<String>(), engine.played.map { it.trackId })
+        assertEquals("still the empty queue", empty.id, controller.activeQueue.value?.queue?.id)
+        assertEquals(org.tegro.yamp.domain.queue.QueueKind.STATIC, controller.activeQueue.value?.queue?.kind)
+    }
+
     @Test
     fun switchingQueuesShowsTheTargetAtItsCursorAndKeepsPlayingIfItWas() {
         val manager = manager()

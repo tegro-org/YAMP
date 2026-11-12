@@ -562,9 +562,15 @@ class PlaybackController @Inject constructor(
     fun play() {
         val current = currentTrackNow()
         if (current == null) {
-            // A queue with entries but no cursor starts from its first one; nothing at all starts the wave
-            val first = active?.entries?.firstOrNull()
-            if (first != null) playEntry(first.entryId) else playMyVibe()
+            // A queue with entries but no cursor starts from its first one. An empty queue of the user's own stays
+            // the active one (D35: never touched by the app) and says so; only no queue at all starts the wave.
+            val queue = active
+            val first = queue?.entries?.firstOrNull()
+            when {
+                first != null -> playEntry(first.entryId)
+                queue != null && queue.queue.kind == QueueKind.STATIC -> showMessage(context.getString(R.string.msg_queue_empty, queue.queue.name))
+                else -> playMyVibe()
+            }
             return
         }
         // A start is already in flight (e.g. a second Play from a headset): don't restart it
@@ -1008,7 +1014,11 @@ class PlaybackController @Inject constructor(
         val current = queue?.cursorTrack
         if (queue == null || current == null) {
             val first = queue?.entries?.firstOrNull()
-            if (first != null) startEntry(first.entryId, crossfade = true, startPositionMs = 0L) else playAllLikedTracks()
+            when {
+                first != null -> startEntry(first.entryId, crossfade = true, startPositionMs = 0L)
+                queue != null && queue.queue.kind == QueueKind.STATIC -> showMessage(context.getString(R.string.msg_queue_empty, queue.queue.name))
+                else -> playAllLikedTracks()
+            }
             return
         }
         // A manual skip must not leave the old track playing while the next stream is resolved (D36): it

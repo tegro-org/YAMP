@@ -268,7 +268,9 @@ class MainViewModel @Inject constructor(
             if (playbackController.isPlaying.value) return@launch
             when (mode) {
                 StartMusic.CONTINUE -> playbackController.play()
-                StartMusic.WAVE -> if (playbackController.currentSource.value == PlaylistSource.VIBE && playbackController.currentTrack.value != null) {
+                // "My Wave at start" meant "play something" when the wave was the only thing that resumed; with
+                // persistent queues the queue the user chose last goes on (D35), the wave only when there is none
+                StartMusic.WAVE -> if (playbackController.currentTrack.value != null) {
                     playbackController.play()
                 } else {
                     playbackController.playMyVibe()
