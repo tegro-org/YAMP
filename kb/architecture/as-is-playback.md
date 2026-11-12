@@ -1,4 +1,22 @@
-# As-is: playback subsystem (upstream `fac6af7`)
+# As-is: playback subsystem (upstream `fac6af7`) — and the Phase 1 state
+
+**Phase 1 (2026-11-12) changed the queue side; the engine side below still holds.** Current structure:
+
+| Component | Role after Phase 1 |
+|---|---|
+| `domain/queue/*` | Pure model: `MediaRef`/`TrackRef` (C1), `PlayQueue`/`QueueEntry` (entry-id cursor), `QueueStore`, `DynamicSource`, `QueuePolicy` (next/prev/shuffle, repeat modes). |
+| `data/queue/QueueManager` | Owns the list of queues and the active one (`ActiveQueue`: entries + DTOs aligned + cursor index); every mutation written through `RoomQueueStore` before it returns (E3), serialised by a mutex. |
+| `data/queue/RoomQueueStore`, `QueueDao`, `QueueEntities` | Room v2 tables `queues`, `queue_entries`; the active queue id in `cache_values`. |
+| `data/queue/QueueTrackBridge` | Entries ↔ cached `TrackDetailsDto` (`tracks` table) until Phase 3's neutral `Track`. |
+| `data/queue/LegacySessionImport` | One-time import of `playback_state.json` into the first queue. |
+| `PlaybackController` | No longer owns a playlist: `currentPlaylist`/`currentTrack`/`currentSource` mirror the active queue; `playFrom` (replace) and `playEntry` (move) are separate (E5); queue ops run in a FIFO chain (`queueOp`); FM radio is a live station beside the queue (D41); the offline mix is its own queue; My Wave is the account's WAVE queue, still fed by `WaveQueue` (which also keeps its own list for the wave page — dual storage until Phase 2). |
+| `PlaybackStateStore` | Only read by the import; deleted after it. |
+
+Tests: `PlaybackControllerTest` (14, fake engine + resolver), `QueueManagerTest` (10, fake store), `RoomQueueStoreTest`,
+`CacheDatabaseMigrationTest`, `LegacySessionImportTest`, `QueuePolicyTest`. Device cases: `scripts/device-check.sh`.
+
+---
+
 
 Paths relative to `android/app/src/main/java/com/korenskoy/yandexmusic/`. Parent:
 [ARCHITECTURE.md](../../ARCHITECTURE.md).

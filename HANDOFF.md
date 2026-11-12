@@ -1,13 +1,18 @@
-# HANDOFF — 2026-11-11
+# HANDOFF — 2026-11-12
 
 ## State
 
 - **Released:** `v0.1.0` (tag on `main` `1bbb8dd`) — the imported upstream player 1.12.2 under YAMP's identity
   (`org.tegro.yamp`, name YAMP, Rings icon, updater → `tegro-org/YAMP`). Built and published by GitHub Actions
   from the tag; the app updates itself from the releases. No feature work yet.
-- **Branch `fix/player-skip-and-audio-session`** (from `main`): skip quick-fade + loading glyph + "Separate audio
-  sessions" setting (`docs/player-skip-and-audio-session.md`, D45). **Tested by the user on the phone 2026-11-11:
-  works.** Next: merge → tag `v0.1.1`; the head-unit test of the setting is still to do.
+- **Released `v0.1.1`** (skip fade, separate audio sessions, YAMP splash). `main` also has the upstream 1.13–1.14.1
+  ports U1 + U2 (security/data/build; buffering, crossfade hold, equalizer, head-unit UI fixes), the playback
+  journal and the diagnostic log file (D48) — not yet tagged (`v0.1.2` when the user says so).
+- **Branch `feature/phase-1-queues`** — Phase 1 implemented through step 5 (`docs/phase-1-queues.md`, checklist in
+  `tasks/todo.md`): domain model, Room v2, `QueueManager`, controller restructured onto it, queue switcher UI,
+  Android Auto "Queues". **Awaiting the user's test** on phone and head unit (build `…-p1-step5` in the share):
+  the old session must come back as "Основная"; the three decisions under "Implementation notes" in the doc;
+  `scripts/device-check.sh` for the force-stop cases. Then commit groups → merge → `v0.2.0`.
 - `main` has a ruleset (no force push, no deletion).
 - **Versions come from git (D37):** tag `vX.Y.Z` → `X.Y.Z`; otherwise `X.Y.Z-dev.N+sha`; `versionCode` = commit
   count. Releasing = `git tag -a vX.Y.Z` + push the tag. Never bump numbers by hand.
@@ -42,19 +47,22 @@
 3. **Force-stop by the head unit's DPI tool** (`kb/head-unit-dpi-app.md`): write-through persistence, nothing
    saved only in callbacks, start-up never overwrites state, test cases listed there.
 
-## Open reports from the user (2026-11-11, see `tasks/todo.md`)
+## Open reports from the user (see `tasks/todo.md`)
 
-- Crash on the Android Back button (once, then fine after restart) — trace needed.
-- The head unit's HUD / driver-screen app shows nothing for YAMP (worked for upstream and YML) — likely keyed by
-  package name or missing notification-listener access; app name/APK needed.
+- Crash on the Android Back button (once, then fine after restart) — trace needed (the diagnostic log now catches it).
+- The head unit's HUD / driver-screen app shows nothing for YAMP — likely keyed by package name or missing
+  notification-listener access; app name/APK needed.
+- Settings scaled 200 % on the head unit since dialogs keep the app's scale: waiting for the line under Settings →
+  Интерфейс → Масштаб (reported/physical dpi) to bound the auto scale sensibly (150 % looked right).
+- Auto-pause on the unit: fixed for the skip gap (focus kept) and the next-track preparation gated by buffer health;
+  if it recurs, the diagnostic log (About → Share) says why.
 
 ## Next steps (user sets the pace)
 
-1. Merge the fix branch, tag `v0.1.1`; then **Phase 1 — multiple queues**: `docs/phase-1-queues.md` is
-   **approved** (D38–D44), checklist in `tasks/todo.md`; branch `feature/phase-1-queues` exists but is empty —
-   recreate it from `main` after the merge. Order: plumbing (deps, 1920×720 qualifier, resolver seam) →
-   controller tests (E6) → Room v2 + domain model → `QueueManager` + controller restructure → UI → screenshots,
-   device checklist, HANDOFF/KB. Still to decide in step 5: `MissingTranslation` lint during the EN/RU split.
+1. **Phase 1 test and release** (above). Known follow-ups inside Phase 1's scope: wire `removeEntry`/`moveEntry`
+   into the player's queue sheet (it still removes/moves by track id), drop `WaveQueue`'s own list once the
+   dynamic source is generalised (Phase 2), the D36 resolver doc.
+2. **Phase 1b — History** (D46), then Phase 2 radio per `docs/multi-source-player.md`.
 2. Install `v0.1.0` on the head unit; measure the real split-pane sizes and which side the player gets
    (`kb/environment.md`); try the car-mode idea (D32).
 3. Regenerate the baseline profile for `org.tegro.yamp` (needs a device). Upstream reviews:

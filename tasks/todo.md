@@ -88,10 +88,12 @@
       shuffle/repeat, WAVE queue per account, live-station mode) — 14 controller tests green (2026-11-12)
   - [ ] phone test: upgrade from v0.1.2 keeps the session (the json becomes "Основная"); play/next/prev/My Wave/FM
         radio/offline as before; the three decisions in the doc's "Implementation notes"
-- [ ] 5. UI: `HiFiSheetPanel`, `QueueSwitcherHost` + VM, entry points (Home, player sheet, car pill), dialogs, track and
-      list menu actions, EN/RU strings, Android Auto "Queues" folder
-- [ ] 6. Screenshots + goldens, `verifyRoborazziDebug lintDebug`, device checklist (DPI force-stop cases), HANDOFF/KB,
-      1920×720 "as built" captures into `Design/`
+- [x] 5. UI: `HiFiSheetPanel`, `QueueSwitcherHost` + VM, entry points (Home, player sheet, car pill), dialogs, track and
+      list menu actions, EN/RU strings, Android Auto "Queues" folder — 12 new goldens, 53 re-recorded (2026-11-12);
+      deviations in `kb/design-deviations.md`
+- [ ] 6. `scripts/device-check.sh` on phone + head unit (DPI force-stop cases), the queue flows by hand (canvas
+      boards: switch, new, rename, delete, add to queue, play next, shuffle/repeat, Android Auto "Queues"), HANDOFF/KB
+      done; 1920×720 "as built" captures into `Design/` (goldens `wide_head_*`)
 
 ## Phase 1b — History (D46)
 

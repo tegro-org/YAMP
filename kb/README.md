@@ -7,6 +7,7 @@ Root index. Keep it a tree: this index → section docs. Add new docs under a se
 - [User setup & environment](environment.md) — head unit, Jellyfin/Airsonic servers, music library
   layout, repos and SSH alias.
 - [Product decisions](decisions.md) — what was decided during the design discussion and why.
+- [Design ↔ code deviations](design-deviations.md) — where the app departs from the guide or the canvas, and why.
 - [Head-unit DPI app and queue loss](head-unit-dpi-app.md) — how the per-app DPI tool force-stops apps, what
   that means for persistence and start-up, tests to run. **Read before touching queue persistence.**
 
