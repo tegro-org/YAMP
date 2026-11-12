@@ -2,7 +2,9 @@
 #
 # Build the YAMP APK and put it where it is easy to pick up:
 #
-#   dist/YAMP-<versionName>-<variant>.apk      (dist/ is git-ignored)
+#   dist/YAMP-b<versionCode>-<versionName>[-dirty-<yyyymmdd-HHMM>]-<variant>.apk   (dist/ is git-ignored)
+#   The build number first, so the files sort in build order; a build from a tree with uncommitted changes
+#   carries "dirty" and the time, since its version alone cannot tell it from the committed one.
 #
 # Usage:
 #   scripts/build-apk.sh                 # debug build (default)
@@ -58,7 +60,9 @@ CODE=$(python3 -c "import json,sys; e=json.load(open(sys.argv[1]))['elements'][0
 echo "    version $VERSION (code $CODE)"
 
 mkdir -p "$DIST"
-OUT="$DIST/YAMP-$VERSION-$VARIANT.apk"
+DIRTY=""
+[ -n "$(git -C .. status --porcelain -- android 2>/dev/null)" ] && DIRTY="-dirty-$(date +%Y%m%d-%H%M)"
+OUT="$DIST/YAMP-b$CODE-$VERSION$DIRTY-$VARIANT.apk"
 cp "$APK" "$OUT"
 SIZE=$(du -h "$OUT" | cut -f1)
 echo "==> Done: $OUT ($SIZE)"

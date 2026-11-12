@@ -211,7 +211,8 @@ fun CarScreen(
         CarSource.LIKED -> stringResource(R.string.library_liked)
         CarSource.RADIO -> stringResource(R.string.car_source_radio)
         CarSource.HITS -> stringResource(R.string.car_source_hits)
-        else -> ""
+        // A queue of the user's own: its name is the caption
+        else -> activeQueueName.orEmpty()
     }
     val coverUrl = currentTrack?.coverUri.toCoverUrl(CoverSize.Medium)
     val tint = LocalArtworkTint.current

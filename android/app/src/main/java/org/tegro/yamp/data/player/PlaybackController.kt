@@ -944,7 +944,9 @@ class PlaybackController @Inject constructor(
         if (station != null) return PlaylistSource.RADIO
         if (queue == null || queue.cursorTrack == null) return PlaylistSource.NONE
         if (queue.queue.kind == QueueKind.WAVE) return PlaylistSource.VIBE
-        return PlaylistSource.entries.firstOrNull { it.name.equals(queue.queue.origin, ignoreCase = true) } ?: PlaylistSource.LIBRARY
+        // An own queue whose content did not come from one of the old sources (built with "Add to queue…") has
+        // no source: the car lights no tile and shows the queue's name instead of "Liked"
+        return PlaylistSource.entries.firstOrNull { it.name.equals(queue.queue.origin, ignoreCase = true) } ?: PlaylistSource.NONE
     }
 
     /** The account's My Wave queue, created empty on first use. */
