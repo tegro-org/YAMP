@@ -52,6 +52,15 @@
 
 ## Reported by the user, open (2026-11-11, phone, skip-fix build)
 
+- [ ] **Auto-pause on the head unit (every next song)** — log 2026-11-12: every pause is a permanent `FOCUS lost` 1–3 s
+      after a track starts sounding; upstream 1.12.2/1.14.1 have no pauses on the same unit. Announce switch off:
+      not solved. Current suspect: **"Separate audio sessions"** (on since the first ride, when the pauses began) — the
+      unit's audio arbiter may take focus from a new session when the other player's track starts. Test with it off.
+- [ ] **Tap on a "Далее" track in the car**: the current track stops ~0.5 s, comes back for ~2 s, then the crossfade
+      (video 20261112_164222.mp4). Same suspect: the incoming track prepared on the other player opens a new audio
+      session (separate sessions on) and the unit mutes the current stream for a moment; then the crossfade hold
+      (READY + 5 s headroom) delays the fade. Re-test with the setting off; if it persists, look at the hold timing.
+
 - [ ] **Crash on the Android Back button** (once; after a restart Back works). Need the trace: Settings → About →
       crash reports, or `adb logcat -d | grep -A 30 "FATAL EXCEPTION"`.
 - [ ] **Head-unit HUD / driver-screen app** shows nothing for YAMP (worked for YandexMusicLite and YML). Likely
@@ -94,6 +103,11 @@
 - [ ] 6. `scripts/device-check.sh` on phone + head unit (DPI force-stop cases), the queue flows by hand (canvas
       boards: switch, new, rename, delete, add to queue, play next, shuffle/repeat, Android Auto "Queues"), HANDOFF/KB
       done; 1920×720 "as built" captures into `Design/` (goldens `wide_head_*`)
+
+## Phase 1 follow-up — Home follows the active queue (D49)
+
+- [ ] First tab = active queue's page (title, knob, "Дальше"); wave pills/shelf only for the WAVE queue (phone + car);
+      after the audio-session question on the unit is settled
 
 ## Phase 1b — History (D46)
 

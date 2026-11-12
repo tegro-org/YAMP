@@ -231,6 +231,22 @@ Decisions taken while restructuring the controller, to be confirmed on the phone
   request (`playOp`) is superseded by a later start or a pause before it runs.
 - `QueuePolicy.next` ends a queue that holds only skipped (explicit) tracks; the old `nextAction` played one anyway.
 
+## Follow-up: Home follows the active queue (D49, decided 2026-11-12)
+
+Found on the head unit: the "Волна" page is the wave page by design, so its knob always starts My Wave and
+pulls the user away from the queue they chose; the wave pills do the same. Change, after the audio-session
+question is settled (one thing at a time on the unit):
+
+- The first tab becomes the **active queue's page**: title = the queue's name ("Моя волна" for the wave), the big
+  knob plays/pauses the active queue, "Дальше" shows its next tracks, the queue button stays top-right.
+- **Wave-only controls** — "Настроить волну", "Волна по треку" / "Вернуться к волне", the wave preview shelf —
+  are shown only while the WAVE queue is active (phone and car header pills alike).
+- My Wave stays one tap away: the queue switcher and the car's "Моя волна" tile are explicit "switch to the
+  wave" actions. FM radio is unchanged (a live station beside the queues, D41); "Радио по треку" stays a wave
+  feature until Phase 2 gives it the Radio queue (D40).
+- Empty own queue: Play/Next say "«name» пуста — добавьте музыку…" and stay (done 2026-11-12); "Music at start =
+  My Wave" continues the chosen queue when it has a track (done).
+
 ## Order of work and verification
 
 1. Plumbing: test dependencies, `WIDE_HEAD_UNIT` qualifier + car goldens at 1920×720, `TrackUrlResolver` seam.
