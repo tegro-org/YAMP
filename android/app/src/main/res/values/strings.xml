@@ -383,6 +383,9 @@
     <string name="settings_equalizer_hint">Эквалайзер телефона или магнитолы</string>
     <string name="settings_audio_sessions">Раздельные аудиосессии</string>
     <string name="settings_audio_sessions_hint">Исправляет смазанные переходы на некоторых магнитолах: у каждого плеера своя сессия</string>
+    <string name="msg_queue_empty">“%1$s” is empty — add music with “Add to queue…”</string>
+    <string name="settings_eq_announce">Announce sessions to the equalizer</string>
+    <string name="settings_eq_announce_hint">Switch off if the music pauses by itself a second after it starts: some head units take the sound when their equalizer attaches</string>
     <string name="settings_start_music">Музыка при запуске</string>
     <string name="settings_start_music_off">Не включать</string>
     <string name="settings_start_music_continue">Продолжить</string>

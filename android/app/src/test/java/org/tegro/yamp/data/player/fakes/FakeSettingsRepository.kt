@@ -31,6 +31,7 @@ class FakeSettingsRepository : SettingsRepository {
     override val downloadsOnSdCard = MutableStateFlow(false)
     override val separateAudioSessions = MutableStateFlow(false)
     override val diagnosticLog = MutableStateFlow(false)
+    override val announceEqualizer = MutableStateFlow(true)
 
     override suspend fun setDarkTheme(enabled: Boolean) { isDarkTheme.value = enabled }
     override suspend fun setAutoDownloadLikedTracks(enabled: Boolean) { autoDownloadLikedTracks.value = enabled }
@@ -54,4 +55,5 @@ class FakeSettingsRepository : SettingsRepository {
     override suspend fun setDownloadsOnSdCard(enabled: Boolean) { downloadsOnSdCard.value = enabled }
     override suspend fun setSeparateAudioSessions(enabled: Boolean) { separateAudioSessions.value = enabled }
     override suspend fun setDiagnosticLog(enabled: Boolean) { diagnosticLog.value = enabled }
+    override suspend fun setAnnounceEqualizer(enabled: Boolean) { announceEqualizer.value = enabled }
 }

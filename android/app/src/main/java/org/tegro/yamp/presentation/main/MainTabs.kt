@@ -206,6 +206,7 @@ internal fun LibraryTab(
             onCompatibleSoundChange = settingsVm::setCompatibleSound,
             onCrossfadeChange = settingsVm::setCrossfade,
             onSeparateAudioSessionsChange = settingsVm::setSeparateAudioSessions,
+            onAnnounceEqualizerChange = settingsVm::setAnnounceEqualizer,
             onNormalizeVolumeChange = settingsVm::setNormalizeVolume,
             onOpenEqualizer = settingsVm::openEqualizer,
             onStartMusicChange = settingsVm::setStartMusic,

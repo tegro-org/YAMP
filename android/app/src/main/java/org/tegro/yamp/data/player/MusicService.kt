@@ -60,6 +60,9 @@ class MusicService : MediaLibraryService() {
     @Inject
     lateinit var diagnosticLog: org.tegro.yamp.data.diagnostics.DiagnosticLog
 
+    @Inject
+    lateinit var settings: org.tegro.yamp.domain.repository.SettingsRepository
+
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var mediaLibrarySession: MediaLibrarySession? = null
     private var audioManager: AudioManager? = null
@@ -108,6 +111,7 @@ class MusicService : MediaLibraryService() {
         AppPresence.playerServiceRunning = true
         audioManager = getSystemService(AUDIO_SERVICE) as? AudioManager
         diagnosticLog.event("SERVICE", "created")
+        serviceScope.launch { settings.announceEqualizer.collect { equalizer.announcing = it } }
         // Equalizer apps hear about the sessions when the sound starts and after a real pause, never per track
         equalizer.keepAnnounced(serviceScope, playerRepository.isPlaying)
 
@@ -185,6 +189,7 @@ class MusicService : MediaLibraryService() {
         return when (result) {
             AudioManager.AUDIOFOCUS_REQUEST_GRANTED -> {
                 hasAudioFocus = true
+                journal.record(PlaybackJournal.Kind.FOCUS, detail = "granted")
                 true
             }
             AudioManager.AUDIOFOCUS_REQUEST_DELAYED -> {
@@ -202,6 +207,7 @@ class MusicService : MediaLibraryService() {
     }
 
     private fun abandonSystemAudioFocus() {
+        if (hasAudioFocus) journal.record(PlaybackJournal.Kind.FOCUS, detail = "abandoned (nothing playing)")
         hasAudioFocus = false
         try {
             focusRequest?.let { audioManager?.abandonAudioFocusRequest(it) }

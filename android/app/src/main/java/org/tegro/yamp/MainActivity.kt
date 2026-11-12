@@ -58,6 +58,9 @@ class MainActivity : ComponentActivity() {
     @javax.inject.Inject
     lateinit var downloadStorage: org.tegro.yamp.data.download.DownloadStorage
 
+    @javax.inject.Inject
+    lateinit var diagnosticLog: org.tegro.yamp.data.diagnostics.DiagnosticLog
+
     /** Incremented on each "open the player" request (notification tap); MainScreen reacts to changes. */
     private var openPlayerSignal by mutableIntStateOf(0)
 
@@ -95,7 +98,13 @@ class MainActivity : ComponentActivity() {
             val baseDensity = LocalDensity.current
             val uiScale = remember(uiScaleAuto, uiScaleManual, resources) {
                 val info = DisplayScale.analyze(resources.displayMetrics)
-                DisplayScale.effectiveScale(uiScaleAuto, uiScaleManual, info)
+                DisplayScale.effectiveScale(uiScaleAuto, uiScaleManual, info).also { scale ->
+                    diagnosticLog.event(
+                        "SCREEN",
+                        "${info.widthPx}×${info.heightPx} px · reported ${info.reportedDpi} dpi · physical ≈${info.physicalDpi} dpi · " +
+                            "auto ${(info.autoScale * 100).toInt()} % · ${if (uiScaleAuto) "auto" else "manual"} → ${(scale * 100).toInt()} %"
+                    )
+                }
             }
             CompositionLocalProvider(
                 LocalDensity provides Density(density = baseDensity.density * uiScale, fontScale = baseDensity.fontScale)

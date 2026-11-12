@@ -86,6 +86,14 @@ interface SettingsRepository {
     val separateAudioSessions: Flow<Boolean>
     suspend fun setSeparateAudioSessions(enabled: Boolean)
 
+    /**
+     * Tell equalizer apps about our audio sessions (the OPEN_AUDIO_EFFECT_CONTROL_SESSION broadcast). Off for a
+     * head unit whose sound chain takes audio focus when it attaches to the session — the music paused by itself
+     * a second after every start on the user's unit (diagnosed from the log, 2026-11-12).
+     */
+    val announceEqualizer: Flow<Boolean>
+    suspend fun setAnnounceEqualizer(enabled: Boolean)
+
     /** The diagnostic log file (Settings → About). Default: on in debug builds, off in release. */
     val diagnosticLog: Flow<Boolean>
     suspend fun setDiagnosticLog(enabled: Boolean)

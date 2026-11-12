@@ -32,10 +32,16 @@ class SystemEqualizer(
     private val context: Context,
     /** The main session, shared by both players unless separated; 0 lets each player get its own when the system cannot make one. */
     val audioSessionId: Int,
-    private val now: () -> Long = SystemClock::elapsedRealtime
+    private val now: () -> Long = SystemClock::elapsedRealtime,
+    private val log: org.tegro.yamp.data.diagnostics.DiagnosticLog? = null
 ) {
     @Inject
-    constructor(@ApplicationContext context: Context) : this(context, newSessionId(context))
+    constructor(@ApplicationContext context: Context, log: org.tegro.yamp.data.diagnostics.DiagnosticLog) :
+        this(context, newSessionId(context), log = log)
+
+    /** False: no broadcast at all (Settings → Playback, see [org.tegro.yamp.domain.repository.SettingsRepository.announceEqualizer]). */
+    @Volatile
+    var announcing: Boolean = true
 
     /** The second player's own session when the sessions are separated. */
     val secondAudioSessionId: Int by lazy { newSessionId(context) }
@@ -83,9 +89,14 @@ class SystemEqualizer(
     @Synchronized
     fun announce(sessionId: Int) {
         if (sessionId <= 0) return
+        if (!announcing) {
+            log?.event("EQ", "announce of session $sessionId skipped (switched off)")
+            return
+        }
         val at = now()
         lastAnnounced[sessionId]?.let { if (at - it < REPEAT_WINDOW_MS) return }
         lastAnnounced[sessionId] = at
+        log?.event("EQ", "announce session $sessionId")
         runCatching {
             context.sendBroadcast(
                 Intent(AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION)
@@ -103,6 +114,7 @@ class SystemEqualizer(
 
     private fun close(sessionId: Int) {
         if (sessionId <= 0) return
+        log?.event("EQ", "close session $sessionId")
         runCatching {
             context.sendBroadcast(
                 Intent(AudioEffect.ACTION_CLOSE_AUDIO_EFFECT_CONTROL_SESSION)

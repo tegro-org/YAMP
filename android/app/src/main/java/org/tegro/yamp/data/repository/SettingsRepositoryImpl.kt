@@ -174,6 +174,10 @@ class SettingsRepositoryImpl @Inject constructor(
     override val separateAudioSessions = audioSessionsPref.first
     override suspend fun setSeparateAudioSessions(enabled: Boolean) = audioSessionsPref.second(enabled)
 
+    private val announcePref = bool("announce_equalizer", true)
+    override val announceEqualizer = announcePref.first
+    override suspend fun setAnnounceEqualizer(enabled: Boolean) = announcePref.second(enabled)
+
     private val diagnosticLogPref = bool("diagnostic_log", org.tegro.yamp.BuildConfig.DEBUG)
     override val diagnosticLog = diagnosticLogPref.first
     override suspend fun setDiagnosticLog(enabled: Boolean) = diagnosticLogPref.second(enabled)

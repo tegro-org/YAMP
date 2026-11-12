@@ -34,4 +34,7 @@
     <string name="cd_queues">Очереди</string>
     <string name="cd_queue_shuffle">Перемешать</string>
     <string name="cd_queue_repeat">Повтор</string>
+    <string name="msg_queue_empty">«%1$s» пуста — добавьте музыку через «Добавить в очередь…»</string>
+    <string name="settings_eq_announce">Сообщать эквалайзеру о сессиях</string>
+    <string name="settings_eq_announce_hint">Выключите, если музыка сама встаёт на паузу через секунду после старта: некоторые магнитолы забирают звук, когда их эквалайзер подключается</string>
 </resources>

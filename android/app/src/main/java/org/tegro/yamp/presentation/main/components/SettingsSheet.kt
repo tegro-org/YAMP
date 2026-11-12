@@ -490,6 +490,7 @@ private fun ColumnScope.PlaybackPage(state: SettingsUiState, actions: SettingsAc
             SettingsRow(icon = Icons.Rounded.Equalizer, title = stringResource(R.string.settings_equalizer), subtitle = stringResource(R.string.settings_equalizer_hint), onClick = actions.onOpenEqualizer)
         }
         SwitchRow(Icons.Rounded.SpeakerGroup, stringResource(R.string.settings_audio_sessions), stringResource(R.string.settings_audio_sessions_hint), state.separateAudioSessions, actions.onSeparateAudioSessionsChange)
+        SwitchRow(Icons.Rounded.Equalizer, stringResource(R.string.settings_eq_announce), stringResource(R.string.settings_eq_announce_hint), state.announceEqualizer, actions.onAnnounceEqualizerChange)
     }
     SettingsGroup(stringResource(R.string.settings_g_start)) {
         SegmentedRow(Icons.Rounded.PowerSettingsNew, stringResource(R.string.settings_start_music)) {

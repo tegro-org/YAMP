@@ -41,15 +41,15 @@ class SettingsViewModel @Inject constructor(
     @param:dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
 ) : ViewModel() {
 
-    private data class Sound(val compatible: Boolean, val crossfade: Int, val normalize: Boolean, val separateSessions: Boolean, val startMusic: StartMusic, val bluetooth: Boolean, val explicit: Boolean)
+    private data class Sound(val compatible: Boolean, val crossfade: Int, val normalize: Boolean, val separateSessions: Boolean, val startMusic: StartMusic, val bluetooth: Boolean, val explicit: Boolean, val announce: Boolean = true)
     private data class Look(val startPage: StartPage, val expand: Boolean, val swipe: Boolean, val left: Boolean, val clock: Boolean)
     private data class Scale(val auto: Boolean, val manual: Float, val animations: AnimationMode)
     private data class Library(val reserveMb: Int, val reserveUsed: Long, val autoDownload: Boolean, val cacheBytes: Long, val journal: PlaybackJournal.Snapshot = PlaybackJournal.Snapshot(), val diagnosticLog: Boolean = false)
 
     private val sound: Flow<Sound> = combine(
         combine(soundMode.compatible, settings.crossfadeSeconds, settings.normalizeVolume, settings.separateAudioSessions) { c, f, n, s -> Sound(c, f, n, s, StartMusic.OFF, false, false) },
-        combine(settings.startMusic, settings.bluetoothAutoplay, settings.skipExplicit, ::Triple)
-    ) { sound, (start, bluetooth, explicit) -> sound.copy(startMusic = start, bluetooth = bluetooth, explicit = explicit) }
+        combine(settings.startMusic, settings.bluetoothAutoplay, settings.skipExplicit, settings.announceEqualizer) { s, b, e, a -> Sound(false, 0, false, false, s, b, e, a) }
+    ) { sound, rest -> sound.copy(startMusic = rest.startMusic, bluetooth = rest.bluetooth, explicit = rest.explicit, announce = rest.announce) }
 
     private val look: Flow<Look> = combine(
         settings.startPage, settings.expandPlayerOnPlay, settings.swipeToCloseMiniPlayer, settings.steeringWheelOnLeft, settings.carClock, ::Look
@@ -71,6 +71,7 @@ class SettingsViewModel @Inject constructor(
             crossfadeSeconds = s.crossfade,
             normalizeVolume = s.normalize,
             separateAudioSessions = s.separateSessions,
+            announceEqualizer = s.announce,
             equalizerAvailable = equalizer.isAvailable(),
             startMusic = s.startMusic,
             bluetoothAutoplay = s.bluetooth,
@@ -107,6 +108,7 @@ class SettingsViewModel @Inject constructor(
     fun setCrossfade(seconds: Int) = save { setCrossfadeSeconds(seconds) }
     fun setNormalizeVolume(enabled: Boolean) = save { setNormalizeVolume(enabled) }
     fun setSeparateAudioSessions(enabled: Boolean) = save { setSeparateAudioSessions(enabled) }
+    fun setAnnounceEqualizer(enabled: Boolean) = save { setAnnounceEqualizer(enabled) }
     fun openEqualizer() = equalizer.open()
     fun clearJournal() = journal.clear()
     fun setDiagnosticLog(enabled: Boolean) = save { setDiagnosticLog(enabled) }
