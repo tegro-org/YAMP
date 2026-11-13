@@ -148,7 +148,7 @@ function HmHomeSections({ badge }) {
       <div style={{ display: 'flex', gap: 12, paddingLeft: 20, overflow: 'hidden' }}>
         {HM_ALBUMS.map(([title, artist, hue]) => <HmTile key={title} size={112} hue={hue} title={title} sub={artist} />)}
       </div>
-      <HmCaps provider={p} style={{ margin: '8px 20px 0' }}>{t('Start a radio', 'Включить радио')}</HmCaps>
+      <HmCaps provider={p} style={{ margin: '8px 20px 0' }}>{t('Start radio', 'Запустить радио')}</HmCaps>
       <div style={{ display: 'flex', gap: 8, paddingLeft: 20, overflow: 'hidden' }}>
         {seeds.map((s) => <GlassPill key={s} icon="sensors" height={40} style={{ flex: '0 0 auto' }}>{s}</GlassPill>)}
       </div>
@@ -260,7 +260,7 @@ function HmHeadSections({ badge }) {
       <div style={{ display: 'flex', gap: 25, marginTop: 2 }}>
         {HM_ALBUMS.slice(0, 5).map(([title, artist, hue]) => <HmTile key={title} big size={150} hue={hue} title={title} sub={artist} />)}
       </div>
-      <HmCaps big provider={p} style={{ marginTop: 14 }}>{t('Start a radio', 'Включить радио')}</HmCaps>
+      <HmCaps big provider={p} style={{ marginTop: 14 }}>{t('Start radio', 'Запустить радио')}</HmCaps>
       <div style={{ display: 'flex', gap: 12, marginTop: 2 }}>
         {seeds.slice(0, 4).map((s) => <CarPill key={s} icon="sensors">{s}</CarPill>)}
       </div>
@@ -581,7 +581,7 @@ function homeSections() {
   const sz = (f) => ({ w: f.w, h: f.h });
   return [
     { id: 'home-home', title: '11a · Home — a hero plus provider sections',
-      subtitle: 'Home is composed from what the signed-in providers can do (C3, C7, D19): a hero, then sections. The hero is My Wave while Yandex is signed in — so Yandex only is today’s screen unchanged, and adding Jellyfin only adds sections below it (D23). Without My Wave the hero is “Continue” (the active queue). Folders, Recently added and Start a radio (Instant Mix) come from Jellyfin.',
+      subtitle: 'Home is composed from what the signed-in providers can do (C3, C7, D19): a hero, then sections. The hero is My Wave while Yandex is signed in — so Yandex only is today’s screen unchanged, and adding Jellyfin only adds sections below it (D23). Without My Wave the hero is “Continue” (the active queue). Folders, Recently added and Start radio (Instant Mix) come from Jellyfin.',
       boards: [
         { id: 'hm-home-a', label: '(a) Yandex only · Home = My Wave, as today', ...sz(P), el: <Frame kind="phone"><PhoneHome /></Frame> },
         { id: 'hm-home-b', label: '(b) Jellyfin only · Continue + folders, new albums, radio', ...sz(P), el: <HmPhoneHomeB /> },

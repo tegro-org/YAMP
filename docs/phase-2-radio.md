@@ -1,10 +1,11 @@
 # Phase 2 — Radio
 
-Status: **draft 2026-11-13**, awaiting approval. Part of [multi-source-player.md](multi-source-player.md)
-(Phase 2); revises D35 (see Decisions). Yandex only — Jellyfin's Instant Mix is Phase 6 on the same model.
-Rules referenced by id are from `ARCHITECTURE.md` (C1, E2–E5) and `DESIGN_GUIDE.md` (§5, §8); decisions `Dn`
-are in `kb/decisions.md`. Code paths are relative to `android/app/src/main/java/org/tegro/yamp/`; line numbers
-are `feature/phase-2-radio` at `5494fb1`.
+Status: **implemented 2026-11-13** (approved 2026-11-13; branch `feature/phase-2-radio`). Part of
+[multi-source-player.md](multi-source-player.md) (Phase 2); revises D35 (see Decisions). Yandex only — Jellyfin's
+Instant Mix is Phase 6 on the same model. Rules referenced by id are from `ARCHITECTURE.md` (C1, E2–E5) and
+`DESIGN_GUIDE.md` (§5, §8); decisions `Dn` are in `kb/decisions.md`. Code paths are relative to
+`android/app/src/main/java/org/tegro/yamp/`; line numbers are the design-time ones (`5494fb1`) and have moved.
+Where the implementation differs from the design, the text says so ("As built").
 
 ## Purpose
 
@@ -26,7 +27,8 @@ adds one flag per radio, **Keep**, that says whether its history is retained.
 - The sheet has a **Keep** switch (off by default) that applies to the radio being started.
 - A radio queue is named **"Radio: <seed>"** ("Радио: …") — the track title, the album title or the artist's
   name; it carries the radio badge (`Sensors`) in the switcher and `∞` instead of a count. With Keep on, a small
-  marker next to `∞`.
+  marker (`History`) next to `∞`. As built: the marker shows on inactive rows only — the active row's trailing slot
+  is the playing indicator, as for every queue.
 - **Keep** = retain history. On: every track that played stays in the queue, back and forward work over the whole
   session. Off: the queue holds the current track, a few behind it and the tail ahead; what played earlier is dropped
   **at the next refill**, not at once. Keep can be switched any time from the queue's long-press menu (phone,
@@ -36,7 +38,9 @@ adds one flag per radio, **Keep**, that says whether its history is retained.
   tracks follow; for an album or artist seed the first fetched track plays. When the position comes within a few
   tracks of the tail, the next batch is appended ahead of time — the same rule as My Wave; never a gap.
 - An **inactive radio does nothing**: no refill, no requests; it keeps its tracks, cursor and position. Switching
-  back shows it paused where it stopped (Phase 1's switch rule) and refilling resumes from its last track.
+  back resumes it where it stopped and refilling resumes from its last track. As built, this is Phase 1's switch
+  rule unchanged (`PlaybackController.switchQueue`): if something was playing, the radio plays on from its saved
+  position; if playback was paused, it is shown paused there.
 - Radios appear in the switcher, in Android Auto's "Queues" folder, on the first tab when active (title = the
   radio's name, knob, "Дальше" — D49) and as a History filter (D50). Long-press menu of a radio: **Keep** (switch),
   **Delete**. No Rename, Duplicate or Clear (the name follows the seed; "Add to queue…" never offers a radio).
@@ -51,13 +55,14 @@ adds one flag per radio, **Keep**, that says whether its history is retained.
   | Track menu row "Волна по треку" | `presentation/main/components/TrackContextMenu.kt:192` | wave by track (as today) | **"Start radio"** → picker |
   | Player title-row wave button | `presentation/player/PlayerParts.kt:424` (via `FullScreenPlayer.kt:174`) | wave by track | "Start radio" → picker (radio icon) |
   | Car header pill "Волна по треку" | `presentation/car/CarScreen.kt:341` (today shown only while the wave is active) | wave by track | **shown on every queue** as "Start radio" → picker |
-  | Snackbar "Волна по треку «…»" + Undo | `presentation/main/MainScreen.kt:372` | as today | "Radio: <seed>", no undo (the previous queue is one switch away) |
+  | Snackbar "Волна по треку «…»" + Undo | `presentation/main/MainScreen.kt:372` | as today | a plain message "Radio: <seed>" (the app's usual message, not the Undo snackbar; the previous queue is one switch away) |
   | Wave tuning chips / pills, "Вернуться к волне" | `presentation/main/HomeScreen.kt:200`, `CarScreen.kt:336-345` | as today | no radio equivalent — stay hidden (D49) |
   | Car caption "Далее · волна по треку" | `CarScreen.kt:206` | as today | the queue's name, as for any queue |
 
-  Album / artist header overflow has no wave counterpart and always offers "Start radio".
+  Album / artist header overflow has no wave counterpart and always offers "Start radio". The choice between wave
+  and radio is made in one place, `MainViewModel.waveOrRadio` (from `waveActive` = active queue is `WAVE`).
 
-## Decisions (proposals; recorded in `kb/decisions.md` on approval)
+## Decisions (recorded in `kb/decisions.md`)
 
 | # | Decision | Why |
 |---|---|---|
@@ -76,8 +81,8 @@ adds one flag per radio, **Keep**, that says whether its history is retained.
 - `seed` for a radio is a **provider ref** (C1, D27): `yandex:track:<id>`, `yandex:album:<id>`, `yandex:artist:<id>`.
   The rotor station id is derived in `data/` (`track:<id>`, `album:<id>`, `artist:<id>`). `QueueKind.RADIO`'s doc
   comment ("one at a time") is corrected.
-- `RadioSeed(ref: TrackRef-like MediaRef, title: String)` — what the UI hands over; for a track seed the controller
-  also has the `TrackDetailsDto` to play first.
+- `RadioSeed(ref: MediaRef, title: String)` — what the UI hands over; for a track seed the controller also has the
+  `TrackDetailsDto` to play first. `RadioTarget = New | Replace(queueId)` sits beside it (`domain/queue/RadioSeed.kt`).
 - No rotor "session" column: the rotor continues from `queue=<last queued track id>` (`WaveQueue.kt:166-168`), which
   is the radio's last entry; the response's `batchId` (`dto/ApiModels.kt:313`) is not used today and stays unused.
 
@@ -93,8 +98,10 @@ adds one flag per radio, **Keep**, that says whether its history is retained.
 
 - `startRadio(target: RadioTarget, seed: String, name: String, keepHistory: Boolean, first: List<TrackDetailsDto>)`
   where `RadioTarget = New | Replace(queueId)`. `New` → `create(name, RADIO, seed = …)` + the flag; `Replace` →
-  `restartDynamic(queueId, seed, keepUpToCursor = false, tracks = first)` (`QueueManager.kt:239`) + rename + flag.
-  Returns the queue; the controller switches to it and plays its first entry.
+  the existing radio re-seeded (name, seed, flag; `origin` cleared, shuffle off) and its entries replaced by
+  `first`. Returns the queue with the cursor on the first entry; the controller switches to it and plays it.
+  As built: `Replace` does not call `restartDynamic` — both run under the manager's `mutation` mutex, which is not
+  reentrant, so the re-seed is one mutation (`replaceEntries` + `update` + `saveCursor`) of its own.
 - `setKeepHistory(queueId, on)`: updates the flag; nothing else (the trim is tied to refills, D52).
 - `appendFetched(queueId, tracks)` (`:229`) gains the **trim rule**: for a `RADIO` queue with `keepHistory = false`,
   after appending, entries before `cursorIndex - RADIO_BEHIND` are removed (`RADIO_BEHIND = 3`, a constant, no
@@ -104,28 +111,36 @@ adds one flag per radio, **Keep**, that says whether its history is retained.
 
 ### 4. Dynamic source and the controller (`data/player/`)
 
-- **`RotorStationSource(station, api, recent, keepExplicit)`** (`data/queue/`, the first implementation of
-  `DynamicSource`, `domain/queue/QueueStore.kt:39`): `fetchBatch(exclude)` = today's two requests (continued from
-  the last queued track + a fresh one, `WaveQueue.kt:164-171`), `WaveQueue.freshOf` de-dup against `exclude` and the
-  account's `RecentlyPlayed` (100 ids, `PlaybackController.kt:173`), the explicit filter; `feedback(ref, event,
-  playedMs)` = `sendStationFeedback(station, type, id, from = feedbackFrom(station))` (`:1639-1650`). The pure helpers
-  (`trackStation`, `feedbackFrom`, `freshOf`) move to a small `RotorStations` object both classes use; `WaveQueue`
-  itself is not changed (D53).
-- The controller holds **one source for the active radio**: created from the active queue's seed when
-  `active.queue.kind == RADIO` (in the place `followWaveStation` runs, `:1193`), dropped on switch. Fetches are
-  serialised per queue and a batch that arrives after a switch or re-seed is discarded (the `generation` rule of
-  `WaveQueue.kt:81-94`, kept as a counter on the source).
+- **`RotorStationSource(station, api, heardLately, keep)`** (`data/queue/`, the first implementation of
+  `DynamicSource`, `domain/queue/QueueStore.kt:39`): today's two requests (continued from the last queued track + a
+  fresh one, `WaveQueue.kt:164-171`; one failing leaves the other), de-dup against the queue and the account's
+  recently played ids (`heardLately`), the explicit filter (`keep`); `feedback(ref, event, playedMs)` =
+  `sendStationFeedback(station, type, id, from = feedbackFrom(station))`. The pure helpers (`stationOf(MediaRef)`,
+  `feedbackFrom`, `freshOf`) live in a small `RotorStations` object both classes use; `WaveQueue` only delegates to
+  it (D53). As built: the working entry point is `fetchTracks(queued: List<TrackRef>)` — the queue **in play order**
+  (the station continues from its last entry, which a `Set` cannot give) returning the provider's track objects the
+  player still works with; `fetchBatch(exclude)` wraps it. A `Mutex` serialises fetches per source.
+- The controller holds **one source for the active radio** (`radioSourceOf`): made lazily from the active RADIO
+  queue's seed when first needed, reused while the same radio with the same station is active, replaced when another
+  radio is, dropped on a re-seed (`dropRadioSource`, which also cancels the running fetch). As built: no
+  `generation` counter — staleness is by identity: a batch lands only if the source that fetched it is still the
+  held one **and** its queue is still active (`radio === source && active.queue.id == queueId`); otherwise it is
+  discarded, so nothing is appended to an inactive or re-seeded radio.
 - The four `kind == WAVE` sites become "the active dynamic source", each keeping its WAVE branch untouched:
   trackStarted feedback + refill when ≤ 20 remain (`:1036-1040`), finished/skip feedback (`:1071-1074`), refill
   when ≤ 10 are ahead in `prepareNextTrackInQueue` (`:1552`), and `keepWaveShelfFilled` (`:1601`) — for a radio
   "short" is `PlaybackQueue.waveShelfIsShort(waveActive = true, …)` on the queue's entries (`WAVE_SHELF_MIN = 3`),
   with the same retry back-off and the same "online and signed in" gate. Nothing runs for an inactive radio.
+  As built: each WAVE branch stays literally and a RADIO branch sits beside it; the shelf watcher for radios is a
+  separate `keepRadioShelfFilled`; "load more" at the end of the queue sheet and the end-of-queue advance also
+  fetch the radio.
 - **`startRadio(seed: RadioSeed, target, keepHistory)`**: offline → today's message and nothing else
   (`:825-828`); otherwise `queueOp`: `queueManager.startRadio(…)` with `first = [seed track]` for a track seed or
   `[]` otherwise → `switchTo` the radio if it is not active → if the seed track is what sounds now, `moveCursor` to
   it and `dropStandby`, else `startEntry(first entry)`; for an empty radio (album / artist seed) the first batch is
-  awaited and its first entry started, with the player's loading state meanwhile. `returnPoint = null` as for the
-  wave. A snackbar "Radio: <seed>" (no undo: the previous queue is one switch away).
+  awaited and its first entry started, with the player's loading state meanwhile (no batch → "The radio could not
+  be loaded" message). `returnPoint = null` as for the wave. A plain message "Radio: <seed>" (no undo: the previous
+  queue is one switch away).
 - `startTrackWave` / `undoTrackWave` / `returnToMyWave` stay as they are (D53); the UI calls them only while the
   `WAVE` queue is active and `startRadio` otherwise (D54) — the choice is made in `MainViewModel` from
   `active.queue.kind`, one place.
@@ -138,6 +153,8 @@ adds one flag per radio, **Keep**, that says whether its history is retained.
   (each "re-seeds this radio"), a **"New radio"** row/`+`, and a **Keep** switch row (`HiFi` switch, off). The VM
   (`QueueSwitcherViewModel.kt`) gets `startRadioIn(queueId?)` → `PlaybackController.startRadio(seed, target, keep)`.
   Car: same panel (720u), big rows, `+` in the header as today; the Keep switch is a big row too (§5).
+  As built: the Keep row is the list's first item (above the radios); on the phone "New radio" is the bottom pill,
+  in the car the header `+`; long-press is off in picker mode.
 - Switcher rows: `QueueRowState` gains `keepHistory`; a radio row shows `∞` (`:202`) plus the marker. Long-press menu
   for a radio (`QueueDialog.Menu`, `:37`): **Keep** (menu row with a switch — `ContextMenuItem` gets an optional
   trailing switch) and **Delete**; `editable` stays `kind == STATIC` so "Add to queue…" keeps excluding radios.
@@ -161,7 +178,7 @@ adds one flag per radio, **Keep**, that says whether its history is retained.
 - `RotorStationSourceTest` (fake `YandexMusicApi`): two requests merged and de-duplicated, `exclude` and recent
   honoured, explicit filtered, one request failing leaves the other, feedback carries `from = radio-track-<id>`.
 - `PlaybackControllerTest`: a radio refills when ≤ 10 ahead and sends started / finished / skip through the source;
-  an inactive radio gets no requests; switching back resumes paused at its position and refills; a batch for a
+  an inactive radio gets no requests; switching back resumes at its position and refills; a batch for a
   re-seeded radio is discarded; the wave cases stay green unchanged.
 - Screenshots (I2): the picker on the phone, landscape panel, car at `w1280dp-h720dp` and `WIDE_HEAD_UNIT`
   (both locales); switcher with radio rows and the Keep marker; the radio queue menu; track menu with the new row.
@@ -192,7 +209,9 @@ Each step is a commit group; the user tests on the phone after 3 and on the unit
   `presentation/main/{MainViewModel,MainScreen,MainDialogs}.kt`, `presentation/catalog/CatalogScreens.kt`,
   `presentation/queues/QueueButton.kt`, `res/values/strings.xml`, `res/values-ru/strings.xml`, goldens,
   `presentation/car/CarScreen.kt`, `kb/decisions.md` (D35′, D51–D54), `docs/multi-source-player.md` (Phase 2
-  paragraph).
+  paragraph). As built, also: `presentation/player/FullScreenPlayer.kt`, `presentation/main/MainTabs.kt`,
+  `PlaybackControllerTest.kt`, `QueueScreenshotsTest.kt`, `kb/as-is-playback.md`; temporary for step 1:
+  `data/player/RadioStationProbe.kt` and its About button (removed at the end of Phase 2).
 
 ## Out of scope
 
@@ -203,7 +222,10 @@ number of radios.
 
 ## Risks and side effects
 
-- `album:`/`artist:` stations are unverified (step 1). `track:` is what upstream uses today.
+- `album:`/`artist:` stations were unverified at design time. Step 1 (2026-11-13, debug "Probe radio stations"
+  button) showed all three seed types behave alike (200, batches of 5, `queue=` continuation works). It also showed
+  that rotor `feedback` answers 400 "condition is not met" for every station, My Wave included — an existing issue,
+  not Phase 2's; radios send feedback the same way and it fails the same way until that is solved.
 - `PlaybackController` is the file that changes most (four sites + start flow); the controller tests from Phase 1
   are the guard, and every WAVE branch is kept literally.
 - A radio with Keep off whose tail never refills (offline for a long ride) is never trimmed either — by design,

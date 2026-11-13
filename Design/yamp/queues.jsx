@@ -10,7 +10,7 @@ function useQueues() {
     { id: 'solo', kind: 'static', name: t('Solo drive', 'Один за рулём'), track: 'Du hast', artist: 'Rammstein', hue: 'rose', pos: 3, total: 112, progress: 0.71 },
     { id: 'book', kind: 'static', name: t('Audiobook', 'Аудиокнига'), track: t('Chapter 14', 'Глава 14'), artist: t('Roadside Picnic', 'Пикник на обочине'), hue: 'teal', pos: 14, total: 31, progress: 0.18 },
     { id: 'wave', kind: 'wave', name: t('My Wave', 'Моя волна'), track: t('First song', 'Первая песня'), artist: t('The Band', 'Группа'), hue: 'blue', progress: 0.3 },
-    { id: 'radio', kind: 'radio', name: t('Radio: Time', 'Радио: Time'), track: 'Echoes', artist: 'Pink Floyd', hue: 'violet', pos: 7, total: 25, progress: 0.55 },
+    { id: 'radio', kind: 'radio', name: t('Radio: Time', 'Радио: Time'), track: 'Echoes', artist: 'Pink Floyd', hue: 'violet', progress: 0.55 },
   ];
 }
 
@@ -132,13 +132,15 @@ function PhoneQueueMenu({ radio }) {
     <Frame kind="phone">
       <PhoneHome dim />
       <Sheet height={640} style={{ opacity: 0.35 }} />
-      <Sheet height={330}>
+      <Sheet height={280}>
         <div style={{ padding: '18px 24px 0' }}>
           <Txt t="dialogTitle">{q.name}</Txt>
-          <Txt t="caption" color={HF.text2} style={{ marginBottom: 10 }}>{t('Radio · replaced when you start another radio', 'Радио · заменяется, когда вы включаете другое радио')}</Txt>
-          <MenuRow icon="bookmark_add">{t('Keep as a queue…', 'Сохранить как очередь…')}</MenuRow>
-          <MenuRow icon="sensors">{t('Start again from the same seed', 'Начать заново с того же')}</MenuRow>
-          <MenuRow icon="delete" color={HF.danger}>{t('Delete radio', 'Удалить радио')}</MenuRow>
+          <Txt t="caption" color={HF.text2} style={{ marginBottom: 10 }}>{t('25 tracks · paused at 7', '25 треков · остановлена на 7-м')}</Txt>
+          {/* Phase 2 (D52): Keep history is a switch on the row; no rename / duplicate / clear — the name follows the seed */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <MenuRow icon="history">{t('Keep history', 'Хранить историю')}</MenuRow><Switch on />
+          </div>
+          <MenuRow icon="delete" color={HF.danger}>{t('Delete queue', 'Удалить очередь')}</MenuRow>
         </div>
       </Sheet>
     </Frame>
@@ -229,7 +231,7 @@ function PhoneTrackMenu() {
           <MenuRow icon="skip_next">{t('Play next', 'Играть следующим')}</MenuRow>
           <MenuRow icon="playlist_play">{t('Add to end of queue', 'Добавить в конец очереди')}</MenuRow>
           <MenuRow icon="stacks">{t('Add to queue…', 'Добавить в очередь…')}</MenuRow>
-          <MenuRow icon="sensors">{t('Start radio', 'Включить радио')}</MenuRow>
+          <MenuRow icon="sensors">{t('Start radio', 'Запустить радио')}</MenuRow>
           <MenuRow icon="playlist_add">{t('Add to playlist', 'Добавить в плейлист')}</MenuRow>
           <MenuRow icon="favorite">{t('Like', 'Добавить в «Мне нравится»')}</MenuRow>
         </div>

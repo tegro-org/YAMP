@@ -34,6 +34,7 @@
   <script src="yamp/reference.jsx" type="text/babel"></script>
   <script src="yamp/queues.jsx" type="text/babel"></script>
   <script src="yamp/history.jsx" type="text/babel"></script>
+  <script src="yamp/radio.jsx" type="text/babel"></script>
   <script src="yamp/folders.jsx" type="text/babel"></script>
   <script src="yamp/split.jsx" type="text/babel"></script>
   <script src="yamp/signin.jsx" type="text/babel"></script>
@@ -68,12 +69,12 @@
           subtitle: "Real test screenshots. There is no 1920×720 capture yet — the user's head unit size is added as a screenshot qualifier in Phase 1 (ARCHITECTURE I2).",
           boards: shots(REF_WIDE) },
         { id: 'queues-phone', title: '4 · Queues — phone (Phase 1)',
-          subtitle: 'Several persistent queues; one is active. Queue button → sheet → tap a queue = switch (2 taps, D26). Hold a queue for rename / duplicate / clear / delete. No full-screen queue manager (D8). Bounded by kind (D35): your own queues, My Wave, one radio, one per saved mix, one "Last mix".',
+          subtitle: 'Several persistent queues; one is active. Queue button → sheet → tap a queue = switch (2 taps, D26). Hold a queue for rename / duplicate / clear / delete. No full-screen queue manager (D8). Bounded by kind (D35′): your own queues, My Wave, as many radios as you start (section 5c), one per saved mix, one "Last mix".',
           boards: [
             { id: 'q-home', label: 'Home · queue button (count of queues)', ...sz(P), el: <Frame kind="phone"><PhoneHome /></Frame> },
             { id: 'q-sheet', label: 'Queues sheet · active queue anodized', ...sz(P), el: <PhoneQueueSheet /> },
             { id: 'q-menu', label: 'Hold a queue · actions', ...sz(P), el: <PhoneQueueMenu /> },
-            { id: 'q-menu-radio', label: 'Hold the radio queue · Keep copies it into a queue of your own (D35)', ...sz(P), el: <PhoneQueueMenu radio /> },
+            { id: 'q-menu-radio', label: 'Hold a radio · Keep history switch, Delete (D52)', ...sz(P), el: <PhoneQueueMenu radio /> },
             { id: 'q-new', label: 'New queue', ...sz(P), el: <PhoneQueueNew /> },
             { id: 'q-delete', label: 'Delete queue · confirm', ...sz(P), el: <PhoneQueueDelete /> },
             { id: 'q-player', label: 'Player · track list of the active queue → Queues', ...sz(P), el: <PhonePlayerQueue /> },
@@ -88,6 +89,7 @@
             { id: 'qc-weak', label: 'Car mode · weak signal → the pill plays downloaded music (no Offline tile, D33)', ...sz(H), el: <Frame kind="head" tint="#8A5A22" glowY="40%"><CarHome weak /></Frame> },
           ] },
         ...optional('historySections'),
+        ...optional('radioSections'),
         { id: 'folders-phone', title: '6 · Folder browser — phone (Phase 4b)',
           subtitle: 'The physical folder tree of the Jellyfin library, opened directly at the library root. Row tap = open, play button = play the whole folder. Filter on every level; pinned folders on top; breadcrumbs jump to any level.',
           boards: [

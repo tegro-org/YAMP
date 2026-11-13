@@ -122,3 +122,25 @@
       track, Library row + page with queue chips (active queue first), "play now, keep my queue", settings switch,
       canvas boards; 445 tests — phone/head-unit test pending
 - [ ] watch: `PlaybackControllerTest.aSavedSessionComesBackPausedAtItsPosition` timed out once (5 s) in a full run
+
+## Phase 2 — Radio (`docs/phase-2-radio.md`, approved 2026-11-13; branch `feature/phase-2-radio`)
+
+- [x] 1. `album:`/`artist:` stations verified against the live API via the debug "Probe radio stations" button
+      (2026-11-13): all three behave like `track:`; rotor `feedback` answers 400 "condition is not met" for every
+      station incl. My Wave — separate issue, not Phase 2. Probe stays until the end of Phase 2, then removed.
+- [x] 2. Model (`keepHistory`, `RadioSeed`/`RadioTarget`, `QueuePolicy.radioTrim`), Room v4 + `MIGRATION_3_4` + test,
+      `RotorStations` + `RotorStationSource` (5 tests), `QueueManager.startRadio` / trim / `setKeepHistory` (3 tests)
+      — 457 unit tests, lint and detekt clean (2026-11-13)
+- [x] 3. Controller: the active-radio source (lazy per active RADIO queue, dropped on re-seed; a batch lands only on
+      the same active radio), the four `kind == WAVE` sites with a RADIO branch beside each, `startRadio`,
+      `setKeepHistory`; 3 controller tests (2026-11-13)
+- [x] 4. UI: picker mode, Keep switch and marker, radio menu (Keep + Delete), entry points (D54: track menu, player
+      button, car pill on every queue, album/artist ⋮), strings EN/RU, 7 new goldens (+ `head_car_queue`,
+      `settings_about` re-recorded: car pill / probe button); 467 tests, lint, detekt green; AVD smoke test
+      (start from the player, refill, switch away and back, Keep toggle) (2026-11-13)
+- [x] 4b. Docs: deviations from steps 2–4 folded into `docs/phase-2-radio.md` (marked implemented), `kb/decisions.md`
+      (D35′, D51–D54; D35/D40 annotated), `kb/architecture/as-is-playback.md`, `docs/multi-source-player.md` Phase 2
+      paragraph, canvas board `Design/yamp/radio.jsx` (+ the Phase 1 radio menu board updated) (2026-11-13)
+- [ ] 4c. Device checklist on the unit (phone quick test passed 2026-11-13); HANDOFF at release
+- [ ] Remove the probe (`RadioStationProbe.kt` + the About button + the `batch-id`/`timestamp` feedback params)
+- [ ] Separate: rotor feedback 400 on every station — compare the form fields / headers with upstream's current version

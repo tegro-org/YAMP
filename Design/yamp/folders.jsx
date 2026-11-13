@@ -176,7 +176,7 @@ function PhoneFolderMenu() {
           <MenuRow icon="shuffle">{t('Shuffle', 'Перемешать')}</MenuRow>
           <MenuRow icon="skip_next">{t('Play next', 'Играть следующим')}</MenuRow>
           <MenuRow icon="stacks">{t('Add to queue…', 'Добавить в очередь…')}</MenuRow>
-          <MenuRow icon="sensors">{t('Start radio', 'Включить радио')}</MenuRow>
+          <MenuRow icon="sensors">{t('Start radio', 'Запустить радио')}</MenuRow>
           <MenuRow icon="keep">{t('Pin to car home', 'Закрепить на экране авто')}</MenuRow>
         </div>
       </Sheet>

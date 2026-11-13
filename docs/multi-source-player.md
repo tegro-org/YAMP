@@ -149,17 +149,20 @@ Across providers like the queues (D22). Built right after Phase 1 on its `TrackR
 
 ### Phase 2 — Radio (Yandex), YouTube Music semantics
 
-- "Start radio" on a track / album / artist creates a new queue of kind `RADIO` with `seed` set.
-  Yandex: rotor stations — `track:<id>` already exists upstream ("wave by track", `WaveQueue.kt`);
-  `album:<id>`, `artist:<id>` to be verified against the live API. Reuse upstream's station code, do not
-  build a second one.
-- **Persistent list:** fetched tracks are appended to the queue and never replaced, so back/forward through
-  history works. When near the end, the next batch is appended (like My Wave today) by the queue's
-  `DynamicSource` (E4) — the same mechanism as My Wave, not a second one.
-- **One radio queue at a time (D35):** "Start radio" replaces the radio queue (its name follows the seed,
-  e.g. "Radio: Time"); going back and forward inside it still works and it survives restarts. "Keep" copies
-  it into a named queue of the user's. No pruning setting.
-- Rotor feedback (skip/like) is sent for Yandex radio queues as it is for My Wave.
+Implemented 2026-11-13; design and as-built notes in [phase-2-radio.md](phase-2-radio.md).
+
+- **Many radios (D35′, revises D35):** "Start radio" on a track / album / artist opens a picker — the existing
+  `RADIO` queues and "New radio". Picking a radio re-seeds it in place (its tracks dropped, the name follows the
+  seed, e.g. "Radio: Time"); the user's own queues are never a target (D51). Yandex rotor stations `track:<id>`,
+  `album:<id>`, `artist:<id>` (all three verified against the live API).
+- **Persistent list:** fetched tracks are appended to the queue, so back/forward works and it survives restarts.
+  When near the end, the next batch is appended by the queue's `DynamicSource` (`RotorStationSource`, E4), only
+  while the radio is active; an inactive radio keeps its state and does nothing.
+- **Keep (D52)**, per radio, off by default, switchable any time: on = every played track stays; off = the played
+  head is dropped at the next refill (3 behind the cursor stay). No "copy into a named queue".
+- Wave controls follow the active queue (D54): wave by track on My Wave, "Start radio" elsewhere. My Wave itself
+  is unchanged in Phase 2 (D53).
+- Rotor feedback (started/finished/skip) is sent for a radio's station as for My Wave.
 
 ### Phase 3 — Provider abstraction
 

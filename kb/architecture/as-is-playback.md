@@ -1,4 +1,4 @@
-# As-is: playback subsystem (upstream `fac6af7`) — and the Phase 1 state
+# As-is: playback subsystem (upstream `fac6af7`) — and the Phase 1 / Phase 2 state
 
 **Phase 1 (2026-11-12) changed the queue side; the engine side below still holds.** Current structure:
 
@@ -11,6 +11,19 @@
 | `data/queue/LegacySessionImport` | One-time import of `playback_state.json` into the first queue. |
 | `PlaybackController` | No longer owns a playlist: `currentPlaylist`/`currentTrack`/`currentSource` mirror the active queue; `playFrom` (replace) and `playEntry` (move) are separate (E5); queue ops run in a FIFO chain (`queueOp`); FM radio is a live station beside the queue (D41); the offline mix is its own queue; My Wave is the account's WAVE queue, still fed by `WaveQueue` (which also keeps its own list for the wave page — dual storage until Phase 2). |
 | `PlaybackStateStore` | Only read by the import; deleted after it. |
+| `data/queue/RotorStationSource`, `RotorStations` (Phase 2) | The first `DynamicSource`: one rotor station (`track:`/`album:`/`artist:` from the RADIO queue's seed), two requests per batch (continued from the queue's last entry + fresh), de-dup vs the queue + recently played, explicit filter, station feedback. `RotorStations` holds the station-id / `from` / de-dup helpers shared with `WaveQueue` (which is otherwise unchanged, D53). |
+
+**Phase 2 (2026-11-13, `docs/phase-2-radio.md`) — radio queues.** Any number of `RADIO` queues (D35′), Room v4
+adds `queues.keepHistory` (D52). Refill is generalised beside the wave, never instead of it: each of the
+controller's `kind == WAVE` sites (track start ≤ 20 left + `trackStarted`, finished/skip feedback, ≤ 10 ahead in
+`prepareNextTrackInQueue`, the end-of-queue advance, "load more") has a `RADIO` branch next to it, and
+`keepRadioShelfFilled` mirrors `keepWaveShelfFilled` (≥ 3 ahead, back-off, online + signed in). The controller
+holds one source for the active radio (`radioSourceOf`, lazy; replaced when another radio becomes active, dropped
+on re-seed); a batch lands only while its source is still held and its queue still active — an inactive radio
+gets no requests and keeps its tracks, cursor and position. Trim: `QueueManager.appendFetched` on a RADIO queue
+with Keep off drops entries more than `RADIO_BEHIND = 3` behind the cursor (`QueuePolicy.radioTrim`) in the same
+mutation — so Keep off trims at the next refill, not when switched. "Start radio" = `PlaybackController.startRadio`
+→ `QueueManager.startRadio(New | Replace)`; the UI picks wave vs radio in `MainViewModel.waveOrRadio` (D54).
 
 Tests: `PlaybackControllerTest` (14, fake engine + resolver), `QueueManagerTest` (10, fake store), `RoomQueueStoreTest`,
 `CacheDatabaseMigrationTest`, `LegacySessionImportTest`, `QueuePolicyTest`. Device cases: `scripts/device-check.sh`.
