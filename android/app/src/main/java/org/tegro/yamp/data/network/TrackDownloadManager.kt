@@ -42,7 +42,7 @@ class TrackDownloadManager @Inject constructor(
     private fun cardFile(dir: File, trackId: String) = File(dir, "$trackId.${CardStorage.EXTENSION}")
 
     /** True when new downloads go to the card: chosen in the settings, and the card is in and usable. */
-    private fun downloadsToCard(): Boolean = card?.wanted?.value == true && card.cardUsable
+    private suspend fun downloadsToCard(): Boolean = card != null && card.wantedNow() && card.cardUsable
 
     private val _downloadedTrackIds = MutableStateFlow<Set<String>>(emptySet())
     val downloadedTrackIds = _downloadedTrackIds.asStateFlow()

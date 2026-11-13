@@ -24,6 +24,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import java.io.File
 import java.io.InputStream
@@ -51,7 +52,7 @@ import javax.inject.Singleton
 @Singleton
 class CardStorage(
     private val context: Context,
-    wantsCard: kotlinx.coroutines.flow.Flow<Boolean>,
+    private val wantsCard: kotlinx.coroutines.flow.Flow<Boolean>,
     private val keyProvider: () -> ByteArray?,
     private val cardRootOverride: (() -> File?)? = null
 ) {
@@ -63,6 +64,12 @@ class CardStorage(
 
     /** The user's choice; whether the card is there is checked separately each time. */
     val wanted: StateFlow<Boolean> = wantsCard.stateIn(scope, SharingStarted.Eagerly, false)
+
+    /**
+     * The choice as stored, for a download about to start: [wanted] reads false until the setting has loaded,
+     * and a download right after the start (the liked tracks) would go inside although the card is chosen.
+     */
+    suspend fun wantedNow(): Boolean = wantsCard.first()
 
     /** The app's own folder on a mounted removable card; null without a card. */
     fun cardRoot(): File? {
