@@ -83,6 +83,16 @@ class RoomQueueStoreTest {
     }
 
     @Test
+    fun aRadioKeepsItsSeedAndKeepFlagThroughTheStore() = runBlocking {
+        val radio = store.create(PlayQueue(id = 0L, name = "Radio: Time", kind = QueueKind.RADIO, seed = "yandex:track:1", keepHistory = true))
+        val read = store.queue(radio.id)!!
+        assertTrue(read.keepHistory)
+        assertEquals("yandex:track:1", read.seed)
+        store.update(read.copy(keepHistory = false))
+        assertEquals(false, store.queue(radio.id)!!.keepHistory)
+    }
+
+    @Test
     fun deletingAQueueTakesItsEntriesAlong() = runBlocking {
         val q = store.create(PlayQueue(id = 0L, name = "Gone", kind = QueueKind.STATIC))
         store.replaceEntries(q.id, listOf(entry("1")))

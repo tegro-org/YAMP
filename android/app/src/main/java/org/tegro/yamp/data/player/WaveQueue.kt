@@ -5,6 +5,7 @@ import org.tegro.yamp.data.cache.PlaylistCacheManager
 import org.tegro.yamp.data.dto.TrackDetailsDto
 import org.tegro.yamp.data.network.TrackUrlResolver
 import org.tegro.yamp.data.network.YandexMusicApi
+import org.tegro.yamp.data.queue.RotorStations
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
@@ -131,7 +132,7 @@ internal class WaveQueue(
                 val batch = withContext(Dispatchers.IO) { fetchBatch() }.filter(keep)
                 // The station changed meanwhile: these tracks belong to the old one
                 if (fetchingFor != generation) return@launch
-                val fresh = freshOf(batch, _tracks.value.map { it.idString }.toSet()) { it in recent }
+                val fresh = RotorStations.freshOf(batch, _tracks.value.map { it.idString }.toSet()) { it in recent }
                 if (fresh.isNotEmpty()) {
                     _tracks.value = _tracks.value + fresh
                     hasNew = true
@@ -182,20 +183,13 @@ internal class WaveQueue(
 
     companion object {
         private const val TAG = "WaveQueue"
-        const val MY_WAVE = "user:onyourwave"
-
-        fun trackStation(trackId: String) = "track:$trackId"
-
-        /** The "from" the service expects with feedback for [station]. */
-        fun feedbackFrom(station: String) = "radio-" + station.replace(':', '-')
+        const val MY_WAVE = RotorStations.MY_WAVE
         const val PREVIEW_SIZE = 10
 
-        /**
-         * Which tracks of a fetched [batch] to add: not queued yet and not heard lately; if every one was heard
-         * lately, still the ones not queued. Pure; unit-tested.
-         */
+        // The station rules live in RotorStations (shared with the radios, Phase 2); these names stay for the callers
+        fun trackStation(trackId: String) = RotorStations.trackStation(trackId)
+        fun feedbackFrom(station: String) = RotorStations.feedbackFrom(station)
         fun freshOf(batch: List<TrackDetailsDto>, queued: Set<String>, heardLately: (String) -> Boolean): List<TrackDetailsDto> =
-            batch.filter { it.idString !in queued && !heardLately(it.idString) }
-                .ifEmpty { batch.filter { it.idString !in queued } }
+            RotorStations.freshOf(batch, queued, heardLately)
     }
 }

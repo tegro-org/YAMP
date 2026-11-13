@@ -132,7 +132,7 @@ interface CacheDao {
         org.tegro.yamp.data.queue.QueueEntity::class, org.tegro.yamp.data.queue.QueueEntryEntity::class,
         org.tegro.yamp.data.history.HistoryEntity::class
     ],
-    version = 3
+    version = 4
 )
 abstract class CacheDatabase : RoomDatabase() {
     abstract fun dao(): CacheDao
@@ -149,7 +149,7 @@ abstract class CacheDatabase : RoomDatabase() {
         /** One database per process, also for tests that build their own cache manager. */
         fun get(context: Context): CacheDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, CacheDatabase::class.java, "music_cache.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build()
                 .also { instance = it }
         }
@@ -187,6 +187,13 @@ abstract class CacheDatabase : RoomDatabase() {
                 )
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_history_startedAt` ON `history` (`startedAt`)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_history_queueId` ON `history` (`queueId`)")
+            }
+        }
+
+        /** v3 → v4: a radio's Keep flag (docs/phase-2-radio.md §2). */
+        val MIGRATION_3_4 = object : androidx.room.migration.Migration(3, 4) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `queues` ADD COLUMN `keepHistory` INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

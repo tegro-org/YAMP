@@ -16,6 +16,7 @@ import org.tegro.yamp.data.dto.TrackDetailsDto
 import org.tegro.yamp.di.DispatcherProvider
 import org.tegro.yamp.domain.queue.QueueEntry
 import org.tegro.yamp.domain.queue.QueueKind
+import org.tegro.yamp.domain.queue.RadioTarget
 import org.tegro.yamp.domain.queue.RepeatMode
 import org.tegro.yamp.domain.queue.TrackRef
 
@@ -159,6 +160,65 @@ class QueueManagerTest {
         m.appendFetched(wave.id, listOf(dto("1"), dto("2")))
         m.appendFetched(wave.id, listOf(dto("2"), dto("3")))
         assertEquals(listOf("1", "2", "3"), store.entriesByQueue[wave.id]!!.map { it.ref.id })
+    }
+
+    // ---- radios (docs/phase-2-radio.md §3)
+
+    @Test
+    fun startingARadioCreatesAQueueWithTheSeedTrackFirstOrReseedsAnExistingOne() = runTest {
+        val m = manager(StandardTestDispatcher(testScheduler))
+        m.load()
+        val radio = m.startRadio(RadioTarget.New, seed = "yandex:track:1", name = "Radio: One", keepHistory = false, first = listOf(dto("1")))
+        assertEquals(QueueKind.RADIO, radio.kind)
+        assertEquals("yandex:track:1", radio.seed)
+        assertEquals(listOf("1"), store.entriesByQueue[radio.id]!!.map { it.ref.id })
+        assertEquals("the cursor is on the seed track", store.entriesByQueue[radio.id]!![0].entryId, radio.cursorEntryId)
+        m.appendFetched(radio.id, listOf(dto("2"), dto("3")))
+
+        val reseeded = m.startRadio(RadioTarget.Replace(radio.id), seed = "yandex:artist:7", name = "Radio: Band", keepHistory = true, first = emptyList())
+        assertEquals(radio.id, reseeded.id)
+        assertEquals("Radio: Band", reseeded.name)
+        assertEquals("yandex:artist:7", reseeded.seed)
+        assertTrue(reseeded.keepHistory)
+        assertEquals("the old tracks are gone", emptyList<String>(), store.entriesByQueue[radio.id]!!.map { it.ref.id })
+        assertNull("an empty radio has no cursor until its first batch", reseeded.cursorEntryId)
+        assertEquals(1, store.queuesById.size)
+    }
+
+    @Test
+    fun aRadioWithoutKeepDropsItsPlayedHeadAtARefillAndWithKeepRetainsIt() = runTest {
+        val m = manager(StandardTestDispatcher(testScheduler))
+        m.load()
+        val radio = m.startRadio(RadioTarget.New, "yandex:track:1", "Radio: One", keepHistory = false, first = listOf(dto("1")))
+        m.appendFetched(radio.id, (2..7).map { dto("$it") })
+        m.switchTo(radio.id, null)
+        m.moveCursor(m.active.value!!.entries[5].entryId) // "6" plays: 1..5 are behind, 3 of them stay
+        assertEquals((1..7).map { "$it" }, m.active.value!!.entries.map { it.ref.id })
+
+        m.appendFetched(radio.id, listOf(dto("8")))
+        assertEquals(listOf("3", "4", "5", "6", "7", "8"), m.active.value!!.entries.map { it.ref.id })
+        assertEquals("6", m.active.value!!.cursorEntry!!.ref.id)
+        assertEquals(listOf(0, 1, 2, 3, 4, 5), store.entriesByQueue[radio.id]!!.map { it.position })
+
+        m.setKeepHistory(radio.id, true)
+        assertTrue(m.active.value!!.queue.keepHistory)
+        assertEquals("the flag alone changes no entries", 6, m.active.value!!.size)
+        m.moveCursor(m.active.value!!.entries[5].entryId)
+        m.appendFetched(radio.id, listOf(dto("9")))
+        assertEquals(listOf("3", "4", "5", "6", "7", "8", "9"), m.active.value!!.entries.map { it.ref.id })
+    }
+
+    @Test
+    fun onlyARadioIsTrimmedOrGetsTheKeepFlag() = runTest {
+        val m = manager(StandardTestDispatcher(testScheduler))
+        m.load()
+        val wave = m.waveQueue("u1", "My Wave")
+        m.appendFetched(wave.id, (1..6).map { dto("$it") })
+        store.saveCursor(wave.id, store.entriesByQueue[wave.id]!![5].entryId, 0L)
+        m.appendFetched(wave.id, listOf(dto("7")))
+        assertEquals(7, store.entriesByQueue[wave.id]!!.size)
+        m.setKeepHistory(wave.id, true)
+        assertEquals(false, store.queuesById[wave.id]!!.keepHistory)
     }
 
     @Test

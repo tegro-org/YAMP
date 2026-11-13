@@ -60,6 +60,16 @@ class QueuePolicyTest {
         assertEquals(listOf(10L, 11L, 12L, 13L), QueuePolicy.unshuffled(shuffledEntries))
     }
 
+    /** D52: a radio without Keep drops what is more than RADIO_BEHIND tracks behind the cursor; with Keep, nothing. */
+    @Test
+    fun aRadioWithoutKeepDropsItsPlayedHeadAndWithKeepDropsNothing() {
+        val entries = (0..9).map { entry(10L + it, it) }
+        assertEquals(listOf(10L, 11L, 12L), QueuePolicy.radioTrim(entries, cursorIndex = 6, keepHistory = false))
+        assertEquals(emptyList<Long>(), QueuePolicy.radioTrim(entries, cursorIndex = 3, keepHistory = false))
+        assertEquals(emptyList<Long>(), QueuePolicy.radioTrim(entries, cursorIndex = -1, keepHistory = false))
+        assertEquals(emptyList<Long>(), QueuePolicy.radioTrim(entries, cursorIndex = 9, keepHistory = true))
+    }
+
     @Test
     fun aShuffledInsertLandsAfterTheCursor() {
         repeat(20) {

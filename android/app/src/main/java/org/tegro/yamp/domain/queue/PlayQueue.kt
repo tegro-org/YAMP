@@ -6,7 +6,7 @@ enum class QueueKind {
     STATIC,
     /** My Wave: one per Yandex account, not editable, extended by a [DynamicSource]. */
     WAVE,
-    /** Radio from a seed (Phase 2): one at a time, extended by a [DynamicSource]. */
+    /** Radio from a seed (Phase 2, D35′): as many as the user starts, each extended by its own [DynamicSource]. */
     RADIO,
     /** A built mix (Phase 6). */
     MIX
@@ -24,10 +24,12 @@ data class PlayQueue(
     val kind: QueueKind,
     /** Where the content came from, for display only ("Album · Dark Side of the Moon"); null for the user's own. */
     val origin: String? = null,
-    /** What a wave/radio/mix was started from (a ref or a station id); null for STATIC. */
+    /** What a wave/radio/mix was started from: a [MediaRef] for a radio, a station id for a wave; null for STATIC. */
     val seed: String? = null,
     /** The provider account a WAVE queue belongs to; null for app-wide queues (D22). */
     val account: String? = null,
+    /** A radio retains what it played (D52); meaningful on RADIO only, false for every other kind. */
+    val keepHistory: Boolean = false,
     val cursorEntryId: Long? = null,
     val positionMs: Long = 0L,
     val shuffle: Boolean = false,

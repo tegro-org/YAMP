@@ -20,7 +20,9 @@ data class QueueEntity(
     val shuffle: Boolean = false,
     val repeat: String = "ALL",
     val sortOrder: Int = 0,
-    val updatedAt: Long = 0L
+    val updatedAt: Long = 0L,
+    /** Phase 2 (v4): a radio retains its history (D52). */
+    @ColumnInfo(defaultValue = "0") val keepHistory: Boolean = false
 )
 
 /**

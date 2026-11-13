@@ -19,6 +19,7 @@ import org.tegro.yamp.domain.queue.QueueKind
 import org.tegro.yamp.domain.queue.QueuePolicy
 import org.tegro.yamp.domain.queue.QueueStore
 import org.tegro.yamp.domain.queue.QueueSummary
+import org.tegro.yamp.domain.queue.RadioTarget
 import org.tegro.yamp.domain.queue.RepeatMode
 import org.tegro.yamp.domain.queue.TrackRef
 import javax.inject.Inject
@@ -225,13 +226,62 @@ class QueueManager @Inject constructor(
             ?: store.create(PlayQueue(id = 0L, name = name, kind = QueueKind.WAVE, account = account, sortOrder = -1))
     }
 
-    /** Appends a fetched batch to a dynamic queue; what is already there is not added twice. */
+    /**
+     * Appends a fetched batch to a dynamic queue; what is already there is not added twice. A radio without
+     * Keep drops its played head at the same time (D52), in the same mutation.
+     */
     suspend fun appendFetched(queueId: Long, tracks: List<TrackDetailsDto>) = mutation {
-        val have = store.entries(queueId).map { it.ref.id }.toSet()
+        val queue = store.queue(queueId) ?: return@mutation
+        val existing = store.entries(queueId)
+        val have = existing.map { it.ref.id }.toSet()
         val fresh = tracks.filter { it.idString !in have }
         if (fresh.isEmpty()) return@mutation
         this.tracks.remember(fresh)
-        store.insertEntries(queueId, store.entries(queueId).size, fresh.map { entryOf(it) })
+        store.insertEntries(queueId, existing.size, fresh.map { entryOf(it) })
+        if (queue.kind == QueueKind.RADIO) {
+            val cursor = queue.cursorEntryId?.let { id -> existing.indexOfFirst { it.entryId == id } } ?: -1
+            val trimmed = QueuePolicy.radioTrim(existing, cursor, queue.keepHistory)
+            if (trimmed.isNotEmpty()) {
+                trimmed.forEach { store.removeEntry(it) }
+                store.reorder(queueId, store.entries(queueId).map { it.entryId })
+            }
+        }
+        refreshIfActive(queueId)
+    }
+
+    // ---- radios (docs/phase-2-radio.md §3)
+
+    /**
+     * Starts a radio (D51): a new RADIO queue, or an existing radio re-seeded in place — its tracks dropped, the
+     * name following the seed. [first] is what plays before the first batch (the seed track, or nothing). The
+     * cursor is on the first entry; the caller switches to the queue and plays it.
+     */
+    suspend fun startRadio(target: RadioTarget, seed: String, name: String, keepHistory: Boolean, first: List<TrackDetailsDto>): PlayQueue = mutation {
+        val queue = when (target) {
+            is RadioTarget.New -> {
+                val order = (store.queues().maxOfOrNull { it.sortOrder } ?: -1) + 1
+                store.create(PlayQueue(id = 0L, name = name, kind = QueueKind.RADIO, seed = seed, keepHistory = keepHistory, sortOrder = order))
+            }
+            is RadioTarget.Replace -> {
+                val existing = store.queue(target.queueId)
+                require(existing != null && existing.kind == QueueKind.RADIO) { "not a radio: ${target.queueId}" }
+                existing.copy(name = name, seed = seed, keepHistory = keepHistory, origin = null, shuffle = false)
+            }
+        }
+        this.tracks.remember(first)
+        val written = store.replaceEntries(queue.id, first.map { entryOf(it) })
+        val cursor = written.firstOrNull()?.entryId
+        store.update(queue)
+        store.saveCursor(queue.id, cursor, 0L)
+        refreshIfActive(queue.id)
+        queue.copy(cursorEntryId = cursor, positionMs = 0L)
+    }
+
+    /** Keep on or off (D52): the flag only — the trim is tied to refills. */
+    suspend fun setKeepHistory(queueId: Long, on: Boolean) = mutation {
+        val queue = store.queue(queueId)?.takeIf { it.kind == QueueKind.RADIO } ?: return@mutation
+        if (queue.keepHistory == on) return@mutation
+        store.update(queue.copy(keepHistory = on))
         refreshIfActive(queueId)
     }
 

@@ -69,4 +69,16 @@ object QueuePolicy {
     /** Where new entries go when added "to the end" in shuffle mode: a random spot after the cursor. */
     fun randomInsertPosition(cursorIndex: Int, size: Int, random: Random = Random.Default): Int =
         if (size <= cursorIndex + 1) size else random.nextInt(cursorIndex + 1, size + 1)
+
+    /** How many played tracks a radio without Keep holds behind the cursor — enough for "previous" (D52). */
+    const val RADIO_BEHIND = 3
+
+    /**
+     * The entries a radio drops at a refill (D52): with [keepHistory] off, everything more than [RADIO_BEHIND]
+     * before the cursor; nothing when Keep is on or there is no cursor. Returns entry ids in play order.
+     */
+    fun radioTrim(entries: List<QueueEntry>, cursorIndex: Int, keepHistory: Boolean): List<Long> {
+        if (keepHistory || cursorIndex < 0) return emptyList()
+        return entries.take((cursorIndex - RADIO_BEHIND).coerceAtLeast(0)).map { it.entryId }
+    }
 }

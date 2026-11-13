@@ -15,7 +15,7 @@ import java.io.File
 
 /**
  * Every schema change ships a migration and a test (ARCHITECTURE F1). v1 → v2: the queues of Phase 1; v2 → v3:
- * the listening history (Phase 1b). An old database is built from the exported `schemas/…/N.json` exactly as
+ * the listening history (Phase 1b); v3 → v4: a radio's Keep flag (Phase 2). An old database is built from the exported `schemas/…/N.json` exactly as
  * Room created it; Room then opens it with the migrations and validates the result against the entities — a
  * wrong CREATE in a migration fails here, not on a user's device. (Robolectric does not see test assets,
  * hence no MigrationTestHelper.)
@@ -37,7 +37,7 @@ class CacheDatabaseMigrationTest {
             assertEquals(listOf("42"), db.dao().loadIds("u", "liked"))
             assertEquals(0, db.queueDao().count())
             assertEquals(0, db.historyDao().count())
-            assertEquals(3, db.openHelper.readableDatabase.version)
+            assertEquals(4, db.openHelper.readableDatabase.version)
         } finally {
             db.close()
         }
@@ -66,14 +66,41 @@ class CacheDatabaseMigrationTest {
             // The orphan rule now reads the history table too
             db.dao().deleteOrphanTracks()
             assertEquals(listOf("42"), db.dao().tracksById(listOf("42")).map { it.id })
-            assertEquals(3, db.openHelper.readableDatabase.version)
+            assertEquals(4, db.openHelper.readableDatabase.version)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    fun aV3DatabaseKeepsItsQueuesAndHistoryAndGainsTheKeepFlag() = runBlocking {
+        val file = File(context.filesDir, "migration-test-3.db").apply { delete() }
+        createFromSchema(file, version = 3) { db ->
+            db.execSQL(
+                "INSERT INTO queues (id, name, kind, seed, positionMs, shuffle, `repeat`, sortOrder, updatedAt) " +
+                    "VALUES (1, 'My Wave', 'WAVE', 'track:42', 0, 0, 'ALL', -1, 0)"
+            )
+            db.execSQL(
+                "INSERT INTO history (ref, trackId, title, artist, durationMs, startedAt, playedMs, queueId, queueName) " +
+                    "VALUES ('yandex:track:42', '42', 'Track', 'Band', 0, 1, 1, 1, 'My Wave')"
+            )
+        }
+
+        val db = open(file)
+        try {
+            val wave = db.queueDao().queues().single()
+            assertEquals("My Wave", wave.name)
+            assertEquals("track:42", wave.seed)
+            assertEquals("an old queue has Keep off", false, wave.keepHistory)
+            assertEquals(1, db.historyDao().count())
+            assertEquals(4, db.openHelper.readableDatabase.version)
         } finally {
             db.close()
         }
     }
 
     private fun open(file: File): CacheDatabase = Room.databaseBuilder(context, CacheDatabase::class.java, file.absolutePath)
-        .addMigrations(CacheDatabase.MIGRATION_1_2, CacheDatabase.MIGRATION_2_3)
+        .addMigrations(CacheDatabase.MIGRATION_1_2, CacheDatabase.MIGRATION_2_3, CacheDatabase.MIGRATION_3_4)
         .allowMainThreadQueries()
         .build()
 

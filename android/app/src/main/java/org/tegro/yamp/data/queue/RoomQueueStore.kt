@@ -91,13 +91,13 @@ internal fun QueueEntity.toDomain() = PlayQueue(
     id = id, name = name, kind = QueueKind.valueOf(kind), origin = origin, seed = seed, account = account,
     cursorEntryId = cursorEntryId, positionMs = positionMs, shuffle = shuffle,
     repeat = RepeatMode.entries.firstOrNull { it.name == repeat } ?: RepeatMode.ALL,
-    sortOrder = sortOrder, updatedAt = updatedAt
+    sortOrder = sortOrder, updatedAt = updatedAt, keepHistory = keepHistory
 )
 
 internal fun PlayQueue.toEntity() = QueueEntity(
     id = id, name = name, kind = kind.name, origin = origin, seed = seed, account = account,
     cursorEntryId = cursorEntryId, positionMs = positionMs, shuffle = shuffle, repeat = repeat.name,
-    sortOrder = sortOrder, updatedAt = updatedAt
+    sortOrder = sortOrder, updatedAt = updatedAt, keepHistory = keepHistory
 )
 
 internal fun QueueEntryEntity.toDomain() = QueueEntry(
