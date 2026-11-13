@@ -32,7 +32,7 @@ object DisplayScale {
             heightPx = metrics.heightPixels,
             reportedDpi = reportedDpi,
             physicalDpi = physicalDpi,
-            autoScale = autoScale(reportedDpi, physicalDpi)
+            autoScale = autoScale(reportedDpi, physicalDpi, shortSidePx = minOf(metrics.widthPixels, metrics.heightPixels))
         )
     }
 
@@ -48,13 +48,20 @@ object DisplayScale {
      * both are plausible and differ by more than [MISMATCH_THRESHOLD]. Returns 1.0 otherwise, so screens
      * that report their density honestly (virtually every phone) are left untouched. Rounded to 5%.
      */
-    fun autoScale(reportedDpi: Int, physicalDpi: Int): Float {
+    fun autoScale(reportedDpi: Int, physicalDpi: Int, shortSidePx: Int = 0): Float {
         if (reportedDpi !in 80..700 || physicalDpi !in 80..700) return SettingsRepository.DEFAULT_UI_SCALE
         val ratio = physicalDpi.toFloat() / reportedDpi.toFloat()
         if (abs(ratio - 1f) < MISMATCH_THRESHOLD) return SettingsRepository.DEFAULT_UI_SCALE
-        val rounded = (ratio * 20f).roundToInt() / 20f // nearest 0.05
+        // A panel's physical dpi can be nonsense (a 1920×720 head unit claims 321 dpi → 200 %): whatever the
+        // ratio says, the screen must keep at least MIN_SHORT_SIDE_DP on its short side, or every dialog and
+        // settings page outgrows it. 720 px at 160 dpi → at most 150 %.
+        val room = if (shortSidePx > 0) shortSidePx / (reportedDpi / 160f) / MIN_SHORT_SIDE_DP else Float.MAX_VALUE
+        val rounded = (minOf(ratio, room) * 20f).toInt() / 20f // nearest 0.05, never above the room
         return rounded.coerceIn(SettingsRepository.MIN_UI_SCALE, SettingsRepository.MAX_UI_SCALE)
     }
+
+    /** The short side of the screen must stay at least this many dp after scaling (a small phone's width). */
+    const val MIN_SHORT_SIDE_DP = 480f
 
     /** The scale to apply now: the chosen automatic value, or the manual one. */
     fun effectiveScale(auto: Boolean, manualScale: Float, info: DisplayScaleInfo): Float =

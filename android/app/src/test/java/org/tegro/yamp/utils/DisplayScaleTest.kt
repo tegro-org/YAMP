@@ -38,4 +38,15 @@ class DisplayScaleTest {
         // Rare opposite case: system density too high, UI too big → scale below 1.0.
         assertEquals(0.75f, DisplayScale.autoScale(reportedDpi = 320, physicalDpi = 240), 0.001f)
     }
+
+    @Test
+    fun theScaleNeverShrinksTheShortSideBelow480dp() {
+        // The user's 1920×720 head unit: 160 dpi reported, a bogus 321 dpi "physical" → the ratio says 200 %,
+        // but 720 px must stay at least 480 dp → 150 %
+        assertEquals(1.5f, DisplayScale.autoScale(reportedDpi = 160, physicalDpi = 321, shortSidePx = 720), 0.001f)
+        // A tall screen has the room: the ratio wins
+        assertEquals(2.0f, DisplayScale.autoScale(reportedDpi = 160, physicalDpi = 321, shortSidePx = 1080), 0.001f)
+        // Without the screen size (old callers) the ratio alone decides, as before
+        assertEquals(2.0f, DisplayScale.autoScale(reportedDpi = 160, physicalDpi = 321), 0.001f)
+    }
 }
