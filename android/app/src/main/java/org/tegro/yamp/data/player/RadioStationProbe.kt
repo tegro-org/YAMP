@@ -47,6 +47,8 @@ class RadioStationProbe @Inject constructor(
         log.event(TAG, "done")
     }
 
+    /** A probe logs whatever fails (HTTP, I/O, a body that does not parse), so it catches everything. */
+    @Suppress("TooGenericExceptionCaught")
     private suspend fun feedback(variant: String, station: String, call: suspend () -> org.tegro.yamp.data.dto.ResponseWrapper<*>) {
         try {
             val r = call()
@@ -60,7 +62,8 @@ class RadioStationProbe @Inject constructor(
 
     private class Batch(val ids: List<String>, val batchId: String?)
 
-    /** Fetches one batch and logs it; returns the track ids, or null when the call failed. */
+    /** Fetches one batch and logs it; returns the track ids, or null when the call failed (anything, as above). */
+    @Suppress("TooGenericExceptionCaught")
     private suspend fun tracks(station: String, queue: String?): Batch? = try {
         val r = api.getStationTracks(station, queue = queue)
         val ids = r.result?.sequence?.mapNotNull { it.track?.idString }.orEmpty()
