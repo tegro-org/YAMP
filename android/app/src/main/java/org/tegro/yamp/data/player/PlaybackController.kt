@@ -27,12 +27,17 @@ import org.tegro.yamp.data.network.YandexMusicApi
 import org.tegro.yamp.data.queue.ActiveQueue
 import org.tegro.yamp.data.queue.LegacySessionImport
 import org.tegro.yamp.data.queue.QueueManager
+import org.tegro.yamp.data.queue.RotorStationSource
+import org.tegro.yamp.data.queue.RotorStations
 import org.tegro.yamp.data.repository.RadioRepository
 import org.tegro.yamp.domain.model.RadioStation
 import org.tegro.yamp.domain.queue.QueueKind
 import org.tegro.yamp.domain.queue.QueuePolicy
 import org.tegro.yamp.domain.queue.QueuePolicy.Advance
 import org.tegro.yamp.domain.queue.QueueSummary
+import org.tegro.yamp.domain.queue.MediaRef
+import org.tegro.yamp.domain.queue.RadioSeed
+import org.tegro.yamp.domain.queue.RadioTarget
 import org.tegro.yamp.domain.queue.RepeatMode
 import org.tegro.yamp.domain.queue.TrackRef
 import org.tegro.yamp.domain.repository.AuthRepository
@@ -44,6 +49,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.CompletableDeferred
+import retrofit2.HttpException
+import java.io.IOException
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
@@ -220,7 +230,17 @@ class PlaybackController @Inject constructor(
         // Appended to the wave queue as it is now: tracks the user removed or moved stay that way
         onFresh = { fresh -> queueOp { queueManager.appendFetched(waveQueueId(), fresh) } }
     )
-    val isFetchingMoreQueue: StateFlow<Boolean> get() = wave.isFetching
+    /**
+     * The active radio's source (docs/phase-2-radio.md §4): made for the active RADIO queue when first needed,
+     * dropped on a re-seed; a batch that lands after a switch or re-seed is discarded.
+     */
+    private var radio: RotorStationSource? = null
+    private var radioQueueId: Long? = null
+    private var radioFetch: Deferred<Boolean>? = null
+    private val radioFetching = MutableStateFlow(false)
+
+    val isFetchingMoreQueue: StateFlow<Boolean> = combine(wave.isFetching, radioFetching) { w, r -> w || r }
+        .stateIn(scope, SharingStarted.Eagerly, false)
 
     /** What the wave will play when it is started; shown on the wave page while the wave is not playing. */
     val wavePreview: StateFlow<List<TrackDetailsDto>> get() = wave.preview
@@ -359,6 +379,7 @@ class PlaybackController @Inject constructor(
             .launchIn(scope)
 
         keepWaveShelfFilled()
+        keepRadioShelfFilled()
         watchTheLink()
         reserveKeeper.start()
 
@@ -644,7 +665,11 @@ class PlaybackController @Inject constructor(
     fun playPrev() = queueOp { playPrevNow() }
 
     fun loadMoreQueue() {
-        if (active?.queue?.kind == QueueKind.WAVE) wave.fetchMore()
+        when (active?.queue?.kind) {
+            QueueKind.WAVE -> wave.fetchMore()
+            QueueKind.RADIO -> fetchRadio()
+            else -> Unit
+        }
     }
 
     fun reorderQueue(from: Int, to: Int) = queueOp {
@@ -913,6 +938,67 @@ class PlaybackController @Inject constructor(
         }
     }
 
+    /**
+     * "Start radio" (D51): [seed]'s radio in a new queue or an existing radio re-seeded, then played — the seed
+     * track first (on, if it already sounds), for an album or artist seed the first fetched track.
+     */
+    fun startRadio(seed: RadioSeed, target: RadioTarget, keepHistory: Boolean, track: TrackDetailsDto? = null) {
+        if (isOffline()) {
+            showMessage(context.getString(R.string.msg_offline_no_downloads))
+            return
+        }
+        returnPoint = null
+        playOp { startRadioNow(seed, target, keepHistory, track?.takeIf { seed.ref.kind == MediaRef.KIND_TRACK && !it.isRadio }) }
+    }
+
+    private suspend fun startRadioNow(seed: RadioSeed, target: RadioTarget, keepHistory: Boolean, track: TrackDetailsDto?) {
+        val left = active
+        val current = currentTrackNow()
+        val playsOn = liveStation.value == null && track != null && current?.idString == track.idString
+        dropRadioSource()
+        val name = context.getString(R.string.radio_queue_name, seed.title)
+        val radioQueue = queueManager.startRadio(target, seed.ref.value, name, keepHistory, listOfNotNull(track))
+        if (left?.queue?.id != radioQueue.id) {
+            queueManager.switchTo(radioQueue.id, progress.value.takeIf { left != null && liveStation.value == null })
+        }
+        showMessage(context.getString(R.string.radio_started, seed.title))
+        val first = active?.entries?.firstOrNull()
+        when {
+            first != null && playsOn -> {
+                queueManager.moveCursor(first.entryId, progress.value)
+                playerRepository.dropStandby()
+                fetchRadio()
+            }
+            first != null -> startEntry(first.entryId, crossfade = true, startPositionMs = 0L)
+            else -> awaitFirstRadioBatch(radioQueue.id)
+        }
+    }
+
+    /** An album or artist radio starts empty: the loading state until its first batch, which then plays. */
+    private fun awaitFirstRadioBatch(queueId: Long) {
+        val request = ++startRequestId
+        currentPlayJob?.cancel()
+        playerRepository.stop()
+        leaveStation()
+        _isStarting.value = true
+        fetchRadio { _ ->
+            if (request != startRequestId) return@fetchRadio
+            queueOp {
+                if (request != startRequestId) return@queueOp
+                val first = active?.takeIf { it.queue.id == queueId }?.entries?.firstOrNull()
+                if (first != null) {
+                    startEntry(first.entryId, crossfade = true, startPositionMs = 0L)
+                } else {
+                    _isStarting.value = false
+                    showMessage(context.getString(R.string.msg_radio_load_failed))
+                }
+            }
+        }
+    }
+
+    /** Keep on or off for a radio (D52): the flag only, the trim follows at the next refill. */
+    fun setKeepHistory(queueId: Long, on: Boolean) = queueOp { queueManager.setKeepHistory(queueId, on) }
+
     // endregion
 
     fun setSleepTimer(minutes: Int) = sleep.start(minutes)
@@ -1038,6 +1124,10 @@ class PlaybackController @Inject constructor(
             if (queue.size - index <= 20) wave.fetchMore()
             sendRotorFeedback("trackStarted", trackId)
         }
+        if (queue.queue.kind == QueueKind.RADIO) {
+            if (queue.size - index <= 20) fetchRadio()
+            sendRadioFeedback("trackStarted", trackId)
+        }
 
         resolveAndPlay(track, crossfade, startPositionMs)
         queue.tracks.getOrNull(index + 1)?.let { prepareStandbyWhenSettled(it) }
@@ -1072,6 +1162,7 @@ class PlaybackController @Inject constructor(
             val playedSeconds = progress.value / 1000.0
             sendRotorFeedback(if (isAuto) "trackFinished" else "skip", currentId, playedSeconds)
         }
+        if (queue.queue.kind == QueueKind.RADIO) sendRadioFeedback(if (isAuto) "trackFinished" else "skip", currentId, progress.value)
 
         when (val advance = nextAdvance(queue, manual = !isAuto)) {
             is Advance.To -> startEntry(queue.entries[advance.index].entryId, crossfade = true, startPositionMs = 0L)
@@ -1080,10 +1171,10 @@ class PlaybackController @Inject constructor(
                     skipToNextOnDeviceNow(current)
                     return
                 }
-                // End of the wave: fetch more instead of stopping; the batch joins the queue before this runs
+                // End of the wave or radio: fetch more instead of stopping; the batch joins the queue before this runs
                 val request = ++startRequestId
-                wave.fetchMore { _ ->
-                    if (request != startRequestId) return@fetchMore
+                val afterFetch: (Boolean) -> Unit = afterFetch@{ _ ->
+                    if (request != startRequestId) return@afterFetch
                     queueOp {
                         if (request != startRequestId) return@queueOp
                         val updated = active ?: return@queueOp
@@ -1095,6 +1186,7 @@ class PlaybackController @Inject constructor(
                         }
                     }
                 }
+                if (queue.queue.kind == QueueKind.RADIO) fetchRadio(afterFetch) else wave.fetchMore(afterFetch)
             }
             Advance.End -> {
                 // Repeat off: the queue ends here, the track stays on screen and Play starts it over
@@ -1552,6 +1644,7 @@ class PlaybackController @Inject constructor(
         if (queue.queue.kind == QueueKind.WAVE && queue.size - queue.cursorIndex <= 10) {
             wave.fetchMore()
         }
+        if (queue.queue.kind == QueueKind.RADIO && queue.size - queue.cursorIndex <= 10) fetchRadio()
 
         val next = nextAdvance(queue, manual = false) as? Advance.To ?: return
         prepareStandby(queue.tracks[next.index])
@@ -1624,6 +1717,110 @@ class PlaybackController @Inject constructor(
                     delay(pause)
                     pause = (pause * 2).coerceAtMost(WAVE_RETRY_MAX_MS)
                 }
+            }
+        }
+    }
+
+    /** A radio's "next up" never stays empty either (§4): the wave's rule on the radio's own entries. */
+    private fun keepRadioShelfFilled() {
+        scope.launch {
+            sessionRestored.await()
+            combine(
+                queueManager.active,
+                liveStation,
+                networkMonitor.isConnectedFlow.combine(authRepository.isAuthorized()) { online, signedIn -> online && signedIn }
+            ) { queue, station, canFetch ->
+                val radioActive = station == null && queue?.queue?.kind == QueueKind.RADIO && queue.cursorTrack != null
+                canFetch && radioActive && PlaybackQueue.waveShelfIsShort(
+                    waveActive = true,
+                    currentId = queue?.cursorEntry?.entryId?.toString(),
+                    queue = queue?.entries?.map { it.entryId.toString() }.orEmpty(),
+                    wave = emptyList()
+                )
+            }.distinctUntilChanged().collectLatest { short ->
+                if (!short) return@collectLatest
+                var pause = WAVE_RETRY_START_MS
+                while (!fetchRadioAwait()) {
+                    delay(pause)
+                    pause = (pause * 2).coerceAtMost(WAVE_RETRY_MAX_MS)
+                }
+            }
+        }
+    }
+
+    /** The source of [queue] when it is a radio: the one held, or a new one for its seed's station. */
+    private fun radioSourceOf(queue: ActiveQueue): RotorStationSource? {
+        if (queue.queue.kind != QueueKind.RADIO) return null
+        val seed = queue.queue.seed?.let { MediaRef.parse(it) } ?: return null
+        val station = RotorStations.stationOf(seed)
+        radio?.takeIf { radioQueueId == queue.queue.id && it.station == station }?.let { return it }
+        dropRadioSource()
+        return RotorStationSource(
+            station = station,
+            api = api,
+            heardLately = { it in recentPlayedTrackIds },
+            keep = { !(skipExplicit.value && it.isExplicit) }
+        ).also {
+            radio = it
+            radioQueueId = queue.queue.id
+        }
+    }
+
+    private fun dropRadioSource() {
+        radioFetch?.cancel()
+        radioFetch = null
+        radio = null
+        radioQueueId = null
+        radioFetching.value = false
+    }
+
+    /**
+     * The next batch of the active radio; one fetch at a time. It lands only while that radio is still active
+     * with the same source — nothing is appended to an inactive or re-seeded radio. True when tracks landed.
+     */
+    private fun radioFetchAsync(): Deferred<Boolean>? {
+        if (liveStation.value != null || isOffline() || authRepository.getToken().isNullOrEmpty()) return null
+        val queue = active ?: return null
+        val source = radioSourceOf(queue) ?: return null
+        radioFetch?.takeIf { it.isActive }?.let { return it }
+        val queueId = queue.queue.id
+        val queued = queue.entries.map { it.ref }
+        radioFetching.value = true
+        return scope.async {
+            try {
+                val batch = withContext(Dispatchers.IO) { source.fetchTracks(queued) }
+                if (batch.isEmpty()) return@async false
+                val landed = CompletableDeferred<Boolean>()
+                queueOp {
+                    val current = radio === source && active?.queue?.id == queueId
+                    if (current) queueManager.appendFetched(queueId, batch)
+                    landed.complete(current)
+                }
+                landed.await()
+            } finally {
+                if (radio === source) radioFetching.value = false
+            }
+        }.also { radioFetch = it }
+    }
+
+    private fun fetchRadio(onFetched: ((Boolean) -> Unit)? = null) {
+        val fetch = radioFetchAsync()
+        if (onFetched == null) return
+        if (fetch == null) onFetched(false) else scope.launch { onFetched(fetch.await()) }
+    }
+
+    private suspend fun fetchRadioAwait(): Boolean = radioFetchAsync()?.await() ?: false
+
+    /** Rotor feedback for the active radio's station (started / finished / skip), so the station learns. */
+    private fun sendRadioFeedback(type: String, trackId: String, playedMs: Long = 0L) {
+        val source = active?.let { radioSourceOf(it) } ?: return
+        scope.launch(Dispatchers.IO) {
+            try {
+                source.feedback(TrackRef.yandex(trackId), type, playedMs)
+            } catch (e: IOException) {
+                Log.w(TAG, "Radio feedback $type not sent", e)
+            } catch (e: HttpException) {
+                Log.w(TAG, "Radio feedback $type refused: ${e.code()}", e)
             }
         }
     }

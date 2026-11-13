@@ -61,6 +61,10 @@ import org.tegro.yamp.data.queue.RoomQueueStore
 import org.tegro.yamp.data.repository.RadioRepository
 import org.tegro.yamp.data.reserve.RoadReserve
 import org.tegro.yamp.di.DispatcherProvider
+import org.tegro.yamp.domain.queue.MediaRef
+import org.tegro.yamp.domain.queue.QueueKind
+import org.tegro.yamp.domain.queue.RadioSeed
+import org.tegro.yamp.domain.queue.RadioTarget
 import org.tegro.yamp.domain.queue.RepeatMode
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
@@ -77,18 +81,38 @@ class PlaybackControllerTest {
     private val context: Application = ApplicationProvider.getApplicationContext()
     private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true; isLenient = true }
 
-    /** The service is never reached: every request is refused, which the wave and the feedback survive. */
+    /** What the service was asked, as "METHOD path" — the rotor requests of the radio tests. */
+    private val requests = java.util.concurrent.CopyOnWriteArrayList<String>()
+
+    /** Rotor stations that answer, by station id, with these track ids per batch (one batch per request). */
+    private val stations = java.util.concurrent.ConcurrentHashMap<String, ArrayDeque<List<String>>>()
+
+    /**
+     * The service is never reached: every request is refused, which the wave and the feedback survive — except
+     * the station tracks the radio tests set up in [stations].
+     */
     private val client = OkHttpClient.Builder().addInterceptor(
         Interceptor { chain ->
+            val request = chain.request()
+            val path = request.url.encodedPath.removePrefix("/").replace("%3A", ":")
+            requests += "${request.method} $path"
+            val station = Regex("rotor/station/(.+)/tracks").find(path)?.groupValues?.get(1)
+            val batch = station?.let { id -> stations[id]?.let { synchronized(it) { it.removeFirstOrNull() } } }
+            val (code, body) = if (batch != null) 200 to stationBody(batch) else 404 to """{"error":{"name":"not-found","message":""}}"""
             Response.Builder()
-                .request(chain.request())
+                .request(request)
                 .protocol(Protocol.HTTP_1_1)
-                .code(404)
+                .code(code)
                 .message("")
-                .body("""{"error":{"name":"not-found","message":""}}""".toResponseBody("application/json".toMediaType()))
+                .body(body.toResponseBody("application/json".toMediaType()))
                 .build()
         }
     ).build()
+
+    private fun stationBody(ids: List<String>): String = ids.joinToString(",", """{"result":{"sequence":[""", """],"batchId":"b"}}""") { id ->
+        resolver.urls[id] = resolver.url(id)
+        """{"track":{"id":"$id","title":"Track $id","artists":[{"id":"a$id","name":"Artist $id"}],"durationMs":200000},"liked":false}"""
+    }
 
     private val api = Retrofit.Builder()
         .baseUrl("https://api.music.yandex.net/")
@@ -541,5 +565,86 @@ class PlaybackControllerTest {
         assertEquals(queue.ids, controller.currentPlaylist.value.ids)
         assertEquals("3", controller.currentTrack.value?.idString)
         assertEquals(2, controller.activeQueue.value?.cursorIndex)
+    }
+
+    // ---- radios (docs/phase-2-radio.md §4)
+
+    private fun radioSeed(id: String) = RadioSeed(MediaRef(MediaRef.PROVIDER_YANDEX, MediaRef.KIND_TRACK, id), "Track $id")
+
+    private fun PlaybackController.awaitPlaylist(size: Int) =
+        await { currentPlaylist.first { it.size >= size } }.also { settle() }
+
+    private val rotorRequests get() = requests.filter { it.contains("rotor/station/track:") }
+
+    /** A radio by the playing track: it plays on, and the station's tracks follow it in a new RADIO queue. */
+    @Test
+    fun aRadioByThePlayingTrackPlaysItOnAndTheStationFillsTheQueue() {
+        val controller = controller()
+        val library = playlist("1", "2", "3")
+        controller.playing("1", library)
+        stations["track:1"] = ArrayDeque(listOf(listOf("r1", "r2", "r3"), listOf("r4", "r5")))
+
+        controller.startRadio(radioSeed("1"), RadioTarget.New, keepHistory = false, track = library[0])
+        controller.awaitPlaylist(4)
+
+        val radio = controller.queues.value.single { it.queue.kind == QueueKind.RADIO }
+        assertTrue(radio.isActive)
+        assertEquals("Radio: Track 1", radio.queue.name)
+        assertEquals("yandex:track:1", radio.queue.seed)
+        assertEquals("1", controller.currentPlaylist.value.first().idString)
+        assertEquals("the seed track plays on, nothing restarts", emptyList<String>(), engine.played.map { it.trackId })
+        assertTrue(controller.currentPlaylist.value.ids.containsAll(listOf("r1", "r2", "r3")))
+    }
+
+    /** Skipping in a radio tells its own station; an inactive radio is never asked for anything. */
+    @Test
+    fun aRadioSendsFeedbackToItsStationAndAnInactiveOneMakesNoRequests() {
+        val controller = controller()
+        val library = playlist("1", "2", "3")
+        controller.playing("1", library)
+        val libraryQueue = controller.queues.value.single { it.queue.kind == QueueKind.STATIC }.queue.id
+        stations["track:1"] = ArrayDeque(List(5) { n -> List(5) { "r$n$it" } })
+        controller.startRadio(radioSeed("1"), RadioTarget.New, keepHistory = false, track = library[0])
+        controller.awaitPlaylist(4)
+
+        controller.playNext()
+        controller.settle()
+        await { while (rotorRequests.none { it == "POST rotor/station/track:1/feedback" }) kotlinx.coroutines.delay(10) }
+
+        controller.switchQueue(libraryQueue)
+        controller.settle()
+        requests.clear()
+        controller.playNext()
+        controller.settle()
+        controller.playNext()
+        controller.settle()
+        runBlocking { kotlinx.coroutines.delay(200) }
+        assertEquals("an inactive radio does nothing", emptyList<String>(), rotorRequests)
+    }
+
+    /** Re-seeding a radio keeps the queue and drops its tracks; the name follows the new seed (D51). */
+    @Test
+    fun reSeedingARadioReplacesItsTracksInTheSameQueue() {
+        val controller = controller()
+        val library = playlist("1", "2", "3")
+        controller.playing("1", library)
+        stations["track:1"] = ArrayDeque(listOf(listOf("r1", "r2", "r3")))
+        controller.startRadio(radioSeed("1"), RadioTarget.New, keepHistory = false, track = library[0])
+        controller.awaitPlaylist(4)
+        val radioId = controller.queues.value.single { it.queue.kind == QueueKind.RADIO }.queue.id
+        stations["track:2"] = ArrayDeque(listOf(listOf("s1", "s2", "s3")))
+
+        controller.startRadio(radioSeed("2"), RadioTarget.Replace(radioId), keepHistory = true, track = library[1])
+        controller.settle()
+        await { controller.currentPlaylist.first { "s1" in it.ids } }
+        controller.settle()
+
+        val radios = controller.queues.value.filter { it.queue.kind == QueueKind.RADIO }
+        assertEquals(1, radios.size)
+        assertEquals(radioId, radios.single().queue.id)
+        assertEquals("Radio: Track 2", radios.single().queue.name)
+        assertTrue(radios.single().queue.keepHistory)
+        assertEquals("2", controller.currentPlaylist.value.first().idString)
+        assertFalse("the old radio's tracks are gone", controller.currentPlaylist.value.ids.any { it.startsWith("r") })
     }
 }
