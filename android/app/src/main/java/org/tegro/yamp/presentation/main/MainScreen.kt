@@ -147,7 +147,8 @@ fun MainScreen(
     LaunchedEffect(Unit) { viewModel.applyStartMusic() }
     val swipeToClose by viewModel.swipeToCloseMiniPlayer.collectAsStateWithLifecycle()
     val animationMode by viewModel.animationMode.collectAsStateWithLifecycle()
-    var isPlayerExpanded by remember { mutableStateOf(false) }
+    // Saveable: a rotation recreates the screen and must not throw the user back out of the player
+    var isPlayerExpanded by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(openPlayerSignal) {
         if (openPlayerSignal > 0 && viewModel.currentTrack.value != null) isPlayerExpanded = true
     }
@@ -469,10 +470,12 @@ private fun PlayerHost(
             onRepeat = viewModel::setRepeat
         )
     }
+    val steeringWheelOnLeft by viewModel.steeringWheelOnLeft.collectAsStateWithLifecycle()
     FullScreenPlayer(
         track = track,
         isPlaying = now.isPlaying,
         isLoading = now.isBuffering,
+        controlsOnLeft = steeringWheelOnLeft,
         isLiked = if (track.isRadio) stationId in favoriteStationIds else track.idString in now.likedTrackIds,
         progress = progress,
         queue = queue,

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -115,6 +116,8 @@ fun FullScreenPlayer(
     onCloseAndClear: () -> Unit,
     /** A start the user asked for is still loading: the play knob shows a ring instead of pause. */
     isLoading: Boolean = false,
+    /** Landscape: the controls column on the driver's side (the car's steering-wheel setting), the cover on the other. */
+    controlsOnLeft: Boolean = false,
     onDislikeClick: () -> Unit,
     onMoveInQueue: (trackId: String, targetId: String) -> Unit = { _, _ -> },
     onLoadMoreQueue: () -> Unit = {},
@@ -256,12 +259,15 @@ fun FullScreenPlayer(
                     .padding(horizontal = 24.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(28.dp)
             ) {
-                cover(Modifier.fillMaxHeight().aspectRatio(1f, matchHeightConstraintsFirst = true))
-                Column(Modifier.weight(1f).fillMaxHeight().widthIn(max = 560.dp)) {
-                    header()
-                    Spacer(Modifier.weight(1f))
-                    details(true)
+                val coverSide: @Composable () -> Unit = { cover(Modifier.fillMaxHeight().aspectRatio(1f, matchHeightConstraintsFirst = true)) }
+                val controlsSide: @Composable RowScope.() -> Unit = {
+                    Column(Modifier.weight(1f).fillMaxHeight().widthIn(max = 560.dp)) {
+                        header()
+                        Spacer(Modifier.weight(1f))
+                        details(true)
+                    }
                 }
+                if (controlsOnLeft) { controlsSide(); coverSide() } else { coverSide(); controlsSide() }
             }
         } else {
             Column(
