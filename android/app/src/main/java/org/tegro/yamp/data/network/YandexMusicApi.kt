@@ -183,10 +183,7 @@ interface YandexMusicApi {
         @retrofit2.http.Field("trackId") trackId: String,
         @retrofit2.http.Field("albumId") albumId: String? = null,
         @retrofit2.http.Field("from") from: String,
-        @retrofit2.http.Field("totalPlayedSeconds") totalPlayedSeconds: Double? = null,
-        // TODO Phase 2 step 1: temporary probe parameters, remove or keep per the probe result
-        @retrofit2.http.Query("batch-id") batchId: String? = null,
-        @retrofit2.http.Field("timestamp") timestamp: String? = null
+        @retrofit2.http.Field("totalPlayedSeconds") totalPlayedSeconds: Double? = null
     ): ResponseWrapper<kotlinx.serialization.json.JsonElement>
 
     /** The station and the user's settings for it (character, mood, language). */

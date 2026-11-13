@@ -38,7 +38,6 @@ class SettingsViewModel @Inject constructor(
     private val equalizer: org.tegro.yamp.data.player.SystemEqualizer,
     private val journal: PlaybackJournal,
     private val diagnosticLog: org.tegro.yamp.data.diagnostics.DiagnosticLog,
-    private val radioProbe: org.tegro.yamp.data.player.RadioStationProbe, // TODO Phase 2 step 1: temporary probe, remove
     @param:dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
 ) : ViewModel() {
 
@@ -124,10 +123,6 @@ class SettingsViewModel @Inject constructor(
     fun clearDiagnosticLog() = diagnosticLog.clear()
     fun shareDiagnosticLog() {
         viewModelScope.launch { diagnosticLog.share() }
-    }
-    // TODO Phase 2 step 1: temporary probe, remove
-    fun probeRadioStations() {
-        viewModelScope.launch { radioProbe.run() }
     }
 
     /** The journal as text, to a messenger or mail of the user's choice. */

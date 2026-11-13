@@ -645,10 +645,6 @@ private fun ColumnScope.AboutPage(state: SettingsUiState, actions: SettingsActio
             SettingsRow(icon = Icons.Rounded.Share, title = stringResource(R.string.diag_log_share), onClick = actions.onShareDiagnosticLog)
             SettingsRow(icon = Icons.Rounded.DeleteOutline, title = stringResource(R.string.diag_log_clear), onClick = actions.onClearDiagnosticLog)
         }
-        // TODO Phase 2 step 1: temporary probe, remove
-        if (BuildConfig.DEBUG) {
-            SettingsRow(icon = Icons.Rounded.Timeline, title = stringResource(R.string.diag_probe_radio), onClick = actions.onProbeRadioStations)
-        }
     }
     if (journalOpen) {
         PlaybackJournalDialog(state.journal, onShare = actions.onShareJournal, onClear = actions.onClearJournal, onDismiss = { journalOpen = false })

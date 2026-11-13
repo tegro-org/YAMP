@@ -61,7 +61,6 @@ data class SettingsActions(
     val onDiagnosticLogChange: (Boolean) -> Unit = {},
     val onShareDiagnosticLog: () -> Unit = {},
     val onClearDiagnosticLog: () -> Unit = {},
-    val onProbeRadioStations: () -> Unit = {}, // TODO Phase 2 step 1: temporary probe, remove
     val onCompatibleSoundChange: (Boolean) -> Unit = {},
     val onCrossfadeChange: (Int) -> Unit = {},
     val onNormalizeVolumeChange: (Boolean) -> Unit = {},
