@@ -52,4 +52,6 @@
     <string name="history_filter_radio">Радио</string>
     <string name="settings_history">Вести историю прослушивания</string>
     <string name="settings_history_hint">Каждый прозвучавший трек, по дням, в «Моей музыке» → «История»</string>
+    <string name="settings_keep_streams">Не закрывать звуковые потоки</string>
+    <string name="settings_keep_streams_hint">Эксперимент для магнитолы, которая ставит музыку на паузу при старте трека: отыгравший плеер ждёт на тишине, не закрывая поток</string>
 </resources>

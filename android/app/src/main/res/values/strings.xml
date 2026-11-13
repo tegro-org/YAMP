@@ -386,6 +386,8 @@
     <string name="msg_queue_empty">“%1$s” is empty — add music with “Add to queue…”</string>
     <string name="settings_eq_announce">Announce sessions to the equalizer</string>
     <string name="settings_eq_announce_hint">Switch off if the music pauses by itself a second after it starts: some head units take the sound when their equalizer attaches</string>
+    <string name="settings_keep_streams">Keep audio streams open</string>
+    <string name="settings_keep_streams_hint">Experiment for a head unit that pauses the music when a track starts: a finished player waits on silence instead of closing its stream</string>
     <string name="settings_start_music">Музыка при запуске</string>
     <string name="settings_start_music_off">Не включать</string>
     <string name="settings_start_music_continue">Продолжить</string>

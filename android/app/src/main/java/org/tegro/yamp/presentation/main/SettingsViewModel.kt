@@ -43,14 +43,14 @@ class SettingsViewModel @Inject constructor(
 
     private data class Sound(
         val compatible: Boolean, val crossfade: Int, val normalize: Boolean, val separateSessions: Boolean, val startMusic: StartMusic,
-        val bluetooth: Boolean, val explicit: Boolean, val announce: Boolean = true, val history: Boolean = true
+        val bluetooth: Boolean, val explicit: Boolean, val announce: Boolean = true, val history: Boolean = true, val keepStreams: Boolean = false
     )
     private data class Look(val startPage: StartPage, val expand: Boolean, val swipe: Boolean, val left: Boolean, val clock: Boolean)
     private data class Scale(val auto: Boolean, val manual: Float, val animations: AnimationMode)
     private data class Library(val reserveMb: Int, val reserveUsed: Long, val autoDownload: Boolean, val cacheBytes: Long, val journal: PlaybackJournal.Snapshot = PlaybackJournal.Snapshot(), val diagnosticLog: Boolean = false)
 
     private val sound: Flow<Sound> = combine(
-        combine(soundMode.compatible, settings.crossfadeSeconds, settings.normalizeVolume, settings.separateAudioSessions) { c, f, n, s -> Sound(c, f, n, s, StartMusic.OFF, false, false) },
+        combine(soundMode.compatible, settings.crossfadeSeconds, settings.normalizeVolume, settings.separateAudioSessions, settings.keepAudioStreams) { c, f, n, s, k -> Sound(c, f, n, s, StartMusic.OFF, false, false, keepStreams = k) },
         combine(settings.startMusic, settings.bluetoothAutoplay, settings.skipExplicit, settings.announceEqualizer, settings.listeningHistory) { s, b, e, a, h ->
             Sound(false, 0, false, false, s, b, e, a, h)
         }
@@ -77,6 +77,7 @@ class SettingsViewModel @Inject constructor(
             normalizeVolume = s.normalize,
             separateAudioSessions = s.separateSessions,
             announceEqualizer = s.announce,
+            keepAudioStreams = s.keepStreams,
             equalizerAvailable = equalizer.isAvailable(),
             startMusic = s.startMusic,
             bluetoothAutoplay = s.bluetooth,
@@ -115,6 +116,7 @@ class SettingsViewModel @Inject constructor(
     fun setNormalizeVolume(enabled: Boolean) = save { setNormalizeVolume(enabled) }
     fun setSeparateAudioSessions(enabled: Boolean) = save { setSeparateAudioSessions(enabled) }
     fun setAnnounceEqualizer(enabled: Boolean) = save { setAnnounceEqualizer(enabled) }
+    fun setKeepAudioStreams(enabled: Boolean) = save { setKeepAudioStreams(enabled) }
     fun openEqualizer() = equalizer.open()
     fun clearJournal() = journal.clear()
     fun setDiagnosticLog(enabled: Boolean) = save { setDiagnosticLog(enabled) }

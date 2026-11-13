@@ -46,8 +46,22 @@ class PlayerRepositoryImpl(
     private val wakeLockHelper: org.tegro.yamp.data.player.PlaybackWakeLockHelper,
     /** Where player B's audio session comes from, and whether it is its own one (Settings → Playback). */
     private val audioSessions: AudioSessionPolicy? = null,
-    private val journal: org.tegro.yamp.data.player.PlaybackJournal? = null
+    private val journal: org.tegro.yamp.data.player.PlaybackJournal? = null,
+    /** "Keep audio streams open" (Settings → Playback) and the silent clip a parked player holds meanwhile. */
+    private val parking: ParkingPolicy? = null
 ) : PlayerRepository {
+
+    /**
+     * Instead of being stopped, a player that finished (the outgoing side of a crossfade, a skipped track, a
+     * dropped standby) is paused on a one-second silent clip: ExoPlayer then keeps its AudioTrack for the next
+     * track of the same format, and a head unit that takes the sound whenever a new stream appears sees none.
+     */
+    class ParkingPolicy(val keep: Flow<Boolean>, val silenceUri: String)
+
+    @Volatile
+    private var keepStreams = false
+
+    private fun isParked(player: ExoPlayer): Boolean = player.currentMediaItem?.mediaId == PARKED_ID
 
     private fun note(kind: org.tegro.yamp.data.player.PlaybackJournal.Kind, title: CharSequence? = null, detail: String? = null, valueMs: Long = 0L) {
         journal?.record(kind, title?.toString(), detail, valueMs)
@@ -176,6 +190,7 @@ class PlayerRepositoryImpl(
         setupPlayerListener(playerA, 0)
         setupPlayerListener(playerB, 1)
 
+        parking?.let { policy -> scope.launch { policy.keep.collect { keepStreams = it } } }
         audioSessions?.let { policy ->
             scope.launch {
                 policy.separate.collect { separate ->
@@ -216,7 +231,8 @@ class PlayerRepositoryImpl(
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     private fun applyPendingAudioSession(player: ExoPlayer) {
         val wanted = pendingSessionIdB ?: return
-        if (player !== playerB || player.mediaItemCount > 0 && player.playbackState != Player.STATE_IDLE) return
+        val busy = player.mediaItemCount > 0 && !isParked(player) && player.playbackState != Player.STATE_IDLE
+        if (player !== playerB || busy) return
         pendingSessionIdB = null
         if (player.audioSessionId != wanted) runCatching { player.setAudioSessionId(wanted) }
             .onFailure { Log.w(TAG, "Audio session not applied", it) }
@@ -344,7 +360,7 @@ class PlayerRepositoryImpl(
         val p = activePlayer
         val wantsToPlay = awaitingSkipTarget || (p.playWhenReady || awaitingIncoming) &&
             p.playerError == null &&
-            p.mediaItemCount > 0 &&
+            p.mediaItemCount > 0 && !isParked(p) &&
             p.playbackState != Player.STATE_ENDED
         _isPlaying.value = wantsToPlay
         // Only a real STATE_BUFFERING counts as loading: a paused-but-wants-to-play limbo (focus loss) is not a
@@ -395,7 +411,7 @@ class PlayerRepositoryImpl(
             if (outgoingPlayer != null || _currentTrackId.value == trackId) return@launch
 
             val standby = standbyPlayer
-            standby.stop()
+            releaseForReuse(standby)
             applyPendingAudioSession(standby)
             setVolume(standby, 0f)
             standby.playWhenReady = false
@@ -465,7 +481,7 @@ class PlayerRepositoryImpl(
         if (reusePreloaded) {
             if (startPositionMs > 0L) incoming.seekTo(startPositionMs)
         } else {
-            incoming.stop()
+            releaseForReuse(incoming)
             applyPendingAudioSession(incoming)
             incoming.setMediaItem(item, startPositionMs)
             incoming.prepare()
@@ -758,7 +774,7 @@ class PlayerRepositoryImpl(
 
     override fun resume(): Boolean {
         val player = activePlayer
-        if (player.mediaItemCount == 0) return false
+        if (player.mediaItemCount == 0 || isParked(player)) return false
         if (player.playerError != null || player.playbackState == Player.STATE_IDLE) {
             // The stream is dead (e.g. the signed URL expired during a long pause): let the controller re-resolve it.
             val trackId = _currentTrackId.value ?: return false
@@ -833,9 +849,22 @@ class PlayerRepositoryImpl(
 
     /** Stops and empties [player]; a pending audio-session change is applied while it holds nothing. */
     private fun clearPlayer(player: ExoPlayer) {
-        player.stop()
-        player.clearMediaItems()
+        val silence = parking?.silenceUri
+        if (keepStreams && silence != null) {
+            // Parked, not stopped: the AudioTrack lives on for the next track of the same format
+            player.playWhenReady = false
+            player.setMediaItem(MediaItem.Builder().setMediaId(PARKED_ID).setUri(silence).build(), 0L)
+            player.prepare()
+        } else {
+            player.stop()
+            player.clearMediaItems()
+        }
         applyPendingAudioSession(player)
+    }
+
+    /** Before a player gets a new item: a stopped player is stopped again (harmless); a parked one is left as is. */
+    private fun releaseForReuse(player: ExoPlayer) {
+        if (!(keepStreams && isParked(player))) player.stop()
     }
 
     private fun setVolume(player: ExoPlayer, volume: Float) {
@@ -873,6 +902,8 @@ class PlayerRepositoryImpl(
         const val SKIP_SILENCE_MAX_MS = 10_000L
         /** How long after a skip the engine reports "playing, loading" with nothing started. */
         const val SKIP_WAIT_MAX_MS = 30_000L
+        /** The media id of the silent clip a parked player holds (never a track id). */
+        const val PARKED_ID = "~parked"
         private const val FADE_STEP_MS = 50L
         private const val PROGRESS_INTERVAL_MS = 100L
         private const val IDLE_INTERVAL_MS = 500L

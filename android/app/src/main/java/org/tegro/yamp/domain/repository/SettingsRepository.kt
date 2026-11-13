@@ -94,6 +94,14 @@ interface SettingsRepository {
     val announceEqualizer: Flow<Boolean>
     suspend fun setAnnounceEqualizer(enabled: Boolean)
 
+    /**
+     * Keep the two players' audio streams open between tracks (a finished player is parked on a silent clip
+     * instead of being stopped). An experiment for a head unit that takes the sound whenever a new stream
+     * appears (2026-11-13).
+     */
+    val keepAudioStreams: Flow<Boolean>
+    suspend fun setKeepAudioStreams(enabled: Boolean)
+
     /** The diagnostic log file (Settings → About). Default: on in debug builds, off in release. */
     val diagnosticLog: Flow<Boolean>
     suspend fun setDiagnosticLog(enabled: Boolean)

@@ -52,6 +52,13 @@
 
 ## Reported by the user, open (2026-11-11, phone, skip-fix build)
 
+- [ ] **Auto-pause on the head unit — 2026-11-13 log:** with "Separate audio sessions" and the announce both off, 3 focus
+      losses in 1 h 15 (vs 9 in the last hour with sessions on), each 0.1–3 s after a track start. Next: `dumpsys audio`
+      focus stack right after a loss (names the taker); one ride on upstream 1.14.4 for a baseline count; then maybe
+      the "keep the AudioTracks alive" experiment (pause instead of stop on the outgoing/standby player).
+- [x] Settings 200 % on the unit: reported 160 dpi, bogus physical ≈321 dpi → auto 200 %; auto is now bounded so the short
+      side keeps ≥ 480 dp → 150 % on 1920×720 (2026-11-13)
+- [ ] Back-button crash: no CRASH line in the log (handler never ran) — ask for the About → "Журнал сбоев" entry
 - [ ] **Auto-pause on the head unit (every next song)** — log 2026-11-12: every pause is a permanent `FOCUS lost` 1–3 s
       after a track starts sounding; upstream 1.12.2/1.14.1 have no pauses on the same unit. Announce switch off:
       not solved. Current suspect: **"Separate audio sessions"** (on since the first ride, when the pauses began) — the

@@ -32,6 +32,7 @@ class FakeSettingsRepository : SettingsRepository {
     override val separateAudioSessions = MutableStateFlow(false)
     override val diagnosticLog = MutableStateFlow(false)
     override val announceEqualizer = MutableStateFlow(true)
+    override val keepAudioStreams = MutableStateFlow(false)
     override val listeningHistory = MutableStateFlow(true)
 
     override suspend fun setDarkTheme(enabled: Boolean) { isDarkTheme.value = enabled }
@@ -57,5 +58,6 @@ class FakeSettingsRepository : SettingsRepository {
     override suspend fun setSeparateAudioSessions(enabled: Boolean) { separateAudioSessions.value = enabled }
     override suspend fun setDiagnosticLog(enabled: Boolean) { diagnosticLog.value = enabled }
     override suspend fun setAnnounceEqualizer(enabled: Boolean) { announceEqualizer.value = enabled }
+    override suspend fun setKeepAudioStreams(enabled: Boolean) { keepAudioStreams.value = enabled }
     override suspend fun setListeningHistory(enabled: Boolean) { listeningHistory.value = enabled }
 }

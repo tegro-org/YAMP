@@ -178,6 +178,10 @@ class SettingsRepositoryImpl @Inject constructor(
     override val announceEqualizer = announcePref.first
     override suspend fun setAnnounceEqualizer(enabled: Boolean) = announcePref.second(enabled)
 
+    private val keepStreamsPref = bool("keep_audio_streams", false)
+    override val keepAudioStreams = keepStreamsPref.first
+    override suspend fun setKeepAudioStreams(enabled: Boolean) = keepStreamsPref.second(enabled)
+
     private val diagnosticLogPref = bool("diagnostic_log", org.tegro.yamp.BuildConfig.DEBUG)
     override val diagnosticLog = diagnosticLogPref.first
     override suspend fun setDiagnosticLog(enabled: Boolean) = diagnosticLogPref.second(enabled)
