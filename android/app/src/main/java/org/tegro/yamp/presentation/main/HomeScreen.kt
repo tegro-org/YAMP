@@ -51,6 +51,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.remember
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -213,7 +217,7 @@ fun HomeScreen(
     // The knob fits the space it is given: ring = 1.72 × knob
     val instrument: @Composable (Dp) -> Unit = { maxRing ->
         val knob = waveKnobSize(preferredKnob, maxRing)
-        WaveInstrument(knobSize = knob, mode = ringMode, isPlaying = playing, wave = wave, progress = progressFraction, onPlayPause = onPlayPause)
+        WaveInstrument(knobSize = knob, mode = ringMode, isPlaying = playing, wave = wave, progress = progressFraction, onPlayPause = onPlayPause, onOpenPlayer = onOpenPlayer)
     }
 
     if (isLandscape) {
@@ -315,11 +319,31 @@ private fun waveKnobSize(preferred: Dp, maxRing: Dp): Dp = minOf(preferred, maxR
 
 private fun waveRingSize(preferredKnob: Dp, maxRing: Dp): Dp = waveKnobSize(preferredKnob, maxRing) * 1.72f
 
-/** Knob + ring. The ring is ~1.7× the knob: room for the longest bars. */
+/** Knob + ring. The ring is ~1.7× the knob: room for the longest bars. A tap on the ring opens the player. */
 @Composable
-private fun WaveInstrument(knobSize: Dp, mode: RingMode, isPlaying: Boolean, wave: Boolean, progress: () -> Float, onPlayPause: () -> Unit) {
+private fun WaveInstrument(
+    knobSize: Dp,
+    mode: RingMode,
+    isPlaying: Boolean,
+    wave: Boolean,
+    progress: () -> Float,
+    onPlayPause: () -> Unit,
+    onOpenPlayer: (() -> Unit)? = null
+) {
     val ringSize = knobSize * 1.72f
-    Box(Modifier.size(ringSize), contentAlignment = Alignment.Center) {
+    val openPlayer = stringResource(R.string.wave_player)
+    Box(
+        Modifier
+            .size(ringSize)
+            .then(
+                if (onOpenPlayer != null) {
+                    Modifier
+                        .clip(CircleShape)
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button, onClickLabel = openPlayer, onClick = onOpenPlayer)
+                } else Modifier
+            ),
+        contentAlignment = Alignment.Center
+    ) {
         SpectrumRing(
             mode = mode,
             progress = progress,
