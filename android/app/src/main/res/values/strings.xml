@@ -193,6 +193,8 @@
     <string name="diag_log_hint">Файл на устройстве: события воспроизведения, ошибки, аудиофокус, паузы и их причины. Без токенов и ссылок на потоки. Около 2 МБ, последние сутки</string>
     <string name="diag_log_share">Отправить журнал</string>
     <string name="diag_log_clear">Очистить журнал</string>
+    <!-- TODO Phase 2 step 1: temporary probe, remove -->
+    <string name="diag_probe_radio">Probe radio stations</string>
     <string name="crash_log_send">Отправить разработчику</string>
     <string name="crash_log_clear">Очистить</string>
     <string name="crash_log_close">Закрыть</string>

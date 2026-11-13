@@ -228,6 +228,7 @@ internal fun LibraryTab(
             onDiagnosticLogChange = settingsVm::setDiagnosticLog,
             onShareDiagnosticLog = settingsVm::shareDiagnosticLog,
             onClearDiagnosticLog = settingsVm::clearDiagnosticLog,
+            onProbeRadioStations = settingsVm::probeRadioStations,
             onCompatibleSoundChange = settingsVm::setCompatibleSound,
             onCrossfadeChange = settingsVm::setCrossfade,
             onSeparateAudioSessionsChange = settingsVm::setSeparateAudioSessions,
