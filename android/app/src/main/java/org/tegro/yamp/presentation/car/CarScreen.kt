@@ -59,6 +59,7 @@ import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.automirrored.rounded.TrendingUp
 import androidx.compose.material.icons.rounded.Waves
+import androidx.compose.material.icons.rounded.Sensors
 import androidx.compose.material.icons.rounded.Layers
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material3.Icon
@@ -331,7 +332,10 @@ fun CarScreen(
             val pillFont = u.sp(18f)
             CarQueuePill(activeQueueName ?: stringResource(R.string.queue_switcher_title), height = pillHeight, fontSize = pillFont, onClick = onQueues)
             if (!waveActive) {
-                // Nothing more
+                // Off My Wave the wave-by-track pill is "Start radio" (D54); tuning has no radio equivalent
+                currentTrack?.takeIf { !it.isRadio }?.let { track ->
+                    WavePill(Icons.Rounded.Sensors, stringResource(R.string.radio_start), active = false, height = pillHeight, fontSize = pillFont, onClick = { onTrackWave(track) })
+                }
             } else if (trackWaveSeed != null && onWave) {
                 WavePill(Icons.Rounded.Waves, stringResource(R.string.wave_back_to_mine), active = false, height = pillHeight, fontSize = pillFont, onClick = onBackToMyWave)
                 WavePill(Icons.Rounded.Tune, stringResource(R.string.wave_tune_short), active = !waveTuning.isDefault, height = pillHeight, fontSize = pillFont,

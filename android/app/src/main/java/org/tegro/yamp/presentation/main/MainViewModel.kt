@@ -227,6 +227,16 @@ class MainViewModel @Inject constructor(
         playRequests.userStarted()
         playbackController.startTrackWave(track)
     }
+    /** The active queue is My Wave: the wave controls are wave-internal there and "Start radio" elsewhere (D54). */
+    val waveActive: StateFlow<Boolean> = activeQueue
+        .map { it?.queue?.kind == org.tegro.yamp.domain.queue.QueueKind.WAVE }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    /** D54, the one place the choice is made: a wave by [track] on My Wave, the radio picker on any other queue. */
+    fun waveOrRadio(track: TrackDetailsDto, openRadioPicker: () -> Unit) {
+        if (waveActive.value) startTrackWave(track) else openRadioPicker()
+    }
+
     fun returnToMyWave() = playbackController.returnToMyWave()
     fun undoTrackWave() = playbackController.undoTrackWave()
 

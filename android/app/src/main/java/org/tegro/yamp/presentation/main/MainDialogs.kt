@@ -64,7 +64,8 @@ internal fun TrackMenuHost(
         onAddTo = { playlistsVm.addTrack(it, track) },
         onCreatePlaylist = { playlistsVm.create(it, thenAdd = track) },
         onRemoveFromPlaylist = { request.playlist?.let { playlistsVm.removeTrack(it, track.idString) } },
-        onTrackWave = { viewModel.startTrackWave(track) },
+        onTrackWave = { viewModel.waveOrRadio(track) { queueSwitcher?.open(QueueSwitcherRequest.StartRadio.of(track)) } },
+        waveActive = viewModel.waveActive.collectAsStateWithLifecycle().value,
         onAddToEnd = { viewModel.addToEnd(listOf(track)) },
         onAddToQueue = { queueSwitcher?.open(QueueSwitcherRequest.AddTo(listOf(track), trackLabel)) },
         onOpenArtist = track.artists.firstNotNullOfOrNull { artist -> artist.idString?.let { id -> id to artist.name.orEmpty() } }

@@ -391,7 +391,11 @@ internal fun CarTab(
         waveTuning = waveTuning,
         trackWaveSeed = waveSeed,
         onWaveTuningChange = viewModel::setWaveTuning,
-        onTrackWave = viewModel::startTrackWave,
+        onTrackWave = { track ->
+            viewModel.waveOrRadio(track) {
+                queueSwitcher?.open(QueueSwitcherRequest.StartRadio.of(track, car = true, side = if (steeringWheelOnLeft) PanelSide.LEFT else PanelSide.RIGHT))
+            }
+        },
         onBackToMyWave = viewModel::returnToMyWave,
         activeQueueName = activeQueue?.queue?.name,
         // The wave's pills only while the wave queue is active (D49); the queue pill is always there

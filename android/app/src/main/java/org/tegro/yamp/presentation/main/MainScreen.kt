@@ -457,6 +457,8 @@ private fun PlayerHost(
     val queue by viewModel.currentPlaylist.collectAsStateWithLifecycle()
     val activeQueue by viewModel.activeQueue.collectAsStateWithLifecycle()
     val isFetchingMoreQueue by viewModel.isFetchingMoreQueue.collectAsStateWithLifecycle()
+    val waveActive by viewModel.waveActive.collectAsStateWithLifecycle()
+    val queueSwitcher = LocalQueueSwitcher.current
     val sleepTimer by viewModel.sleepTimer.collectAsStateWithLifecycle()
     val stationId = track.idString.removePrefix("radio_")
     // The sheet's rows are the queue's entries (a track twice = two rows) while a queue is what plays
@@ -494,7 +496,8 @@ private fun PlayerHost(
             viewModel.stopAndClearPlayer()
         },
         onDislikeClick = { viewModel.dislikeTrack(track) },
-        onTrackWave = { viewModel.startTrackWave(track) },
+        onTrackWave = { viewModel.waveOrRadio(track) { queueSwitcher?.open(org.tegro.yamp.presentation.queues.QueueSwitcherRequest.StartRadio.of(track)) } },
+        waveActive = waveActive,
         onLoadMoreQueue = { viewModel.loadMoreQueue() },
         isFetchingMoreQueue = isFetchingMoreQueue,
         sleepTimer = sleepTimer,

@@ -534,4 +534,13 @@
     <string name="history_filter_radio">Radio</string>
     <string name="settings_history">Keep listening history</string>
     <string name="settings_history_hint">Every track that sounded, by day, in Library → History</string>
+    <string name="radio_start">Start radio</string>
+    <string name="radio_picker_title">Start radio</string>
+    <string name="radio_new">New radio</string>
+    <string name="radio_keep">Keep history</string>
+    <string name="radio_keep_hint">Every played track stays in the radio; off — only the last few</string>
+    <string name="radio_queue_name">Radio: %1$s</string>
+    <string name="radio_started">Radio: %1$s</string>
+    <string name="msg_radio_load_failed">The radio could not be loaded. Check the connection</string>
+    <string name="cd_radio_keep_on">History kept</string>
 </resources>

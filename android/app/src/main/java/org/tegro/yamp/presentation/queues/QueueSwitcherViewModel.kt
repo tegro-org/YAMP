@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.stateIn
 import org.tegro.yamp.data.player.PlaybackController
 import org.tegro.yamp.domain.queue.QueueKind
 import org.tegro.yamp.domain.queue.QueueSummary
+import org.tegro.yamp.domain.queue.RadioTarget
 import javax.inject.Inject
 
 /** One row of the switcher: what the canvas `QueueRow` shows. Strings are composed in the UI (D2). */
@@ -28,7 +29,9 @@ data class QueueRowState(
     /** 1-based place of the current track, null while nothing is current. */
     val position: Int?,
     val total: Int,
-    val isActive: Boolean
+    val isActive: Boolean,
+    /** A radio's Keep (D52); false for every other kind. */
+    val keepHistory: Boolean = false
 ) {
     val editable: Boolean get() = kind == QueueKind.STATIC
 }
@@ -86,6 +89,15 @@ class QueueSwitcherViewModel @Inject constructor(
         playbackController.addToQueue(queueId, tracks)
     }
 
+    /** The radio picker's row ([queueId], re-seeded) or "New radio" (null), with the sheet's Keep switch. */
+    fun startRadioIn(queueId: Long?, keepHistory: Boolean) {
+        val request = mode.value as? QueueSwitcherRequest.StartRadio ?: return
+        val target = if (queueId == null) RadioTarget.New else RadioTarget.Replace(queueId)
+        playbackController.startRadio(request.seed, target, keepHistory, request.track)
+    }
+
+    fun setKeepHistory(queueId: Long, on: Boolean) = playbackController.setKeepHistory(queueId, on)
+
     /** The picker's "New queue": created and filled in one go. */
     fun createAndAdd(name: String) {
         val tracks = (mode.value as? QueueSwitcherRequest.AddTo)?.tracks ?: return
@@ -105,7 +117,8 @@ class QueueSwitcherViewModel @Inject constructor(
             progress = if (current != null && duration > 0L) (queue.positionMs.toFloat() / duration).coerceIn(0f, 1f) else 0f,
             position = current?.let { it.position + 1 },
             total = size,
-            isActive = isActive
+            isActive = isActive,
+            keepHistory = queue.kind == QueueKind.RADIO && queue.keepHistory
         )
     }
 }

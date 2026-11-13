@@ -37,6 +37,8 @@ import org.tegro.yamp.data.queue.ActiveQueue
 import org.tegro.yamp.domain.queue.PlayQueue
 import org.tegro.yamp.domain.queue.QueueEntry
 import org.tegro.yamp.domain.queue.QueueKind
+import org.tegro.yamp.domain.queue.MediaRef
+import org.tegro.yamp.domain.queue.RadioSeed
 import org.tegro.yamp.domain.queue.RepeatMode
 import org.tegro.yamp.domain.queue.TrackRef
 import org.tegro.yamp.presentation.car.CarScreen
@@ -217,6 +219,82 @@ class QueueScreenshotsTest {
             Switcher(car = true, side = PanelSide.RIGHT)
         }
         snapScreen("wide_head_queue_panel_right_wheel")
+    }
+
+    // ---- Phase 2 radios (docs/phase-2-radio.md §5)
+
+    /** Two radios, one with Keep on, among the user's queues. */
+    private val withRadios = queues.take(4) + listOf(
+        QueueRowState(5, "Radio: Time", QueueKind.RADIO, "Echoes", "Pink Floyd", null, 0.55f, 7, 25, isActive = false, keepHistory = true),
+        QueueRowState(6, "Radio: Мельница", QueueKind.RADIO, "Дороги", "Мельница", null, 0.2f, 3, 12, isActive = false)
+    )
+
+    private val radioRequest = QueueSwitcherRequest.StartRadio(
+        RadioSeed(MediaRef(MediaRef.PROVIDER_YANDEX, MediaRef.KIND_TRACK, "4"), "Comfortably Numb"), tracks[3]
+    )
+
+    @Composable
+    private fun RadioPicker(car: Boolean = false, side: PanelSide = PanelSide.RIGHT, keep: Boolean = false) {
+        QueueSwitcherSheet(
+            state = QueueSwitcherUiState(withRadios, activeId = 1, mode = radioRequest),
+            car = car, side = side, onDismiss = {}, onSelect = {}, onLongPress = null, onNew = {}, keepHistory = keep
+        )
+    }
+
+    @Test
+    fun switcherWithRadios() {
+        show { QueueSwitcherSheet(state = QueueSwitcherUiState(withRadios, 1, QueueSwitcherRequest.Switch()), car = false, side = PanelSide.RIGHT, onDismiss = {}, onSelect = {}, onLongPress = {}, onNew = {}) }
+        snapScreen("radio_switcher")
+    }
+
+    @Test
+    fun radioPicker() {
+        show { RadioPicker(keep = true) }
+        snapScreen("radio_picker")
+    }
+
+    @Test
+    @Config(qualifiers = PHONE_ON_SIDE)
+    fun radioPickerPhoneOnItsSide() {
+        show { RadioPicker() }
+        snapScreen("phone_side_radio_picker")
+    }
+
+    @Test
+    @Config(qualifiers = HEAD_UNIT)
+    fun radioPickerHeadUnit() {
+        show {
+            Car()
+            RadioPicker(car = true, side = PanelSide.LEFT)
+        }
+        snapScreen("head_radio_picker")
+    }
+
+    @Test
+    @Config(qualifiers = WIDE_HEAD_UNIT)
+    fun radioPickerWideHeadUnit() {
+        show {
+            Car()
+            RadioPicker(car = true, side = PanelSide.LEFT)
+        }
+        snapScreen("wide_head_radio_picker")
+    }
+
+    @Test
+    @Config(qualifiers = "ru-rRU-$WIDE_HEAD_UNIT")
+    fun radioPickerWideHeadUnitRussian() {
+        show {
+            Car()
+            RadioPicker(car = true, side = PanelSide.LEFT, keep = true)
+        }
+        snapScreen("wide_head_radio_picker_ru")
+    }
+
+    /** A radio's long-press menu: Keep and Delete (D52). */
+    @Test
+    fun radioMenu() {
+        show { QueueMenuSheet(row = withRadios[4], side = PanelSide.RIGHT, onRename = {}, onDuplicate = {}, onClear = {}, onDelete = {}, onDismiss = {}) }
+        snapScreen("radio_menu")
     }
 
     /** The player's queue sheet with the "Queues" pill and the shuffle / repeat toggles lit. */

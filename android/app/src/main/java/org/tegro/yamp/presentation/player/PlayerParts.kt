@@ -1,6 +1,7 @@
 package org.tegro.yamp.presentation.player
 
 import androidx.compose.material.icons.rounded.Waves
+import androidx.compose.material.icons.rounded.Sensors
 import org.tegro.yamp.presentation.hifi.HiFiLinkBadge
 import org.tegro.yamp.utils.cover
 import org.tegro.yamp.utils.CoverSize
@@ -380,7 +381,14 @@ internal fun PlayerCover(
 // --- Title, quality, timeline ------------------------------------------------------------------------
 
 @Composable
-internal fun TitleRow(track: TrackDetailsDto, direction: Int, compact: Boolean, onAddToPlaylist: () -> Unit, onTrackWave: (() -> Unit)? = null) {
+internal fun TitleRow(
+    track: TrackDetailsDto,
+    direction: Int,
+    compact: Boolean,
+    onAddToPlaylist: () -> Unit,
+    onTrackWave: (() -> Unit)? = null,
+    waveActive: Boolean = true
+) {
     val lite = LocalHiFiLite.current
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         AnimatedContent(
@@ -421,8 +429,13 @@ internal fun TitleRow(track: TrackDetailsDto, direction: Int, compact: Boolean, 
             }
             if (onTrackWave != null) {
                 Spacer(Modifier.width(10.dp))
-                GlassCircleButton(onClick = onTrackWave, contentDescription = stringResource(R.string.wave_by_track_cd), size = 44.dp) {
-                    Icon(Icons.Rounded.Waves, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+                // D54: a wave by this track on My Wave, "Start radio" on any other queue
+                GlassCircleButton(
+                    onClick = onTrackWave,
+                    contentDescription = stringResource(if (waveActive) R.string.wave_by_track_cd else R.string.radio_start),
+                    size = 44.dp
+                ) {
+                    Icon(if (waveActive) Icons.Rounded.Waves else Icons.Rounded.Sensors, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
                 }
             }
         }

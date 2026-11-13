@@ -14,6 +14,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import org.tegro.yamp.R
 import org.tegro.yamp.data.dto.TrackDetailsDto
+import org.tegro.yamp.domain.queue.MediaRef
+import org.tegro.yamp.domain.queue.RadioSeed
 import org.tegro.yamp.presentation.hifi.PanelSide
 
 /** Why the switcher opens. The car asks for the big panel on the driver's side. */
@@ -22,6 +24,24 @@ sealed interface QueueSwitcherRequest {
 
     /** "Add to queue…" for [tracks]; [subtitle] names what is being added (a track, an album). */
     data class AddTo(val tracks: List<TrackDetailsDto>, val subtitle: String) : QueueSwitcherRequest
+
+    /**
+     * "Start radio" (D51): the radios to re-seed and "New radio". [track] is the seed track to play first, when
+     * the seed is a track.
+     */
+    data class StartRadio(
+        val seed: RadioSeed,
+        val track: TrackDetailsDto? = null,
+        val car: Boolean = false,
+        val side: PanelSide = PanelSide.RIGHT
+    ) : QueueSwitcherRequest {
+        companion object {
+            fun of(track: TrackDetailsDto, car: Boolean = false, side: PanelSide = PanelSide.RIGHT) = StartRadio(
+                RadioSeed(MediaRef(MediaRef.PROVIDER_YANDEX, MediaRef.KIND_TRACK, track.idString), track.title.orEmpty()),
+                track, car, side
+            )
+        }
+    }
 }
 
 /** Opens the queue switcher from anywhere in the app; MainScreen provides it (the `LocalTrackMenu` precedent). */
@@ -51,8 +71,10 @@ fun QueueSwitcherHost(viewModel: QueueSwitcherViewModel, snackbar: SnackbarHostS
     val scope = rememberCoroutineScope()
     val resources = LocalResources.current
     val adding = request as? QueueSwitcherRequest.AddTo
-    val car = (request as? QueueSwitcherRequest.Switch)?.car == true
-    val side = (request as? QueueSwitcherRequest.Switch)?.side ?: PanelSide.RIGHT
+    val radio = request as? QueueSwitcherRequest.StartRadio
+    val car = (request as? QueueSwitcherRequest.Switch)?.car == true || radio?.car == true
+    val side = (request as? QueueSwitcherRequest.Switch)?.side ?: radio?.side ?: PanelSide.RIGHT
+    var keep by remember(request) { mutableStateOf(false) }
     val addedTo = { name: String -> scope.launch { snackbar.showSnackbar(resources.getString(R.string.queue_added_to, name)) } }
     val defaultName = stringResource(R.string.queue_default_name, state.queues.size + 1)
 
@@ -61,8 +83,12 @@ fun QueueSwitcherHost(viewModel: QueueSwitcherViewModel, snackbar: SnackbarHostS
         car = car,
         side = side,
         onDismiss = viewModel::close,
+        keepHistory = keep,
+        onKeepHistory = { keep = it },
         onSelect = { row ->
-            if (adding != null) {
+            if (radio != null) {
+                viewModel.startRadioIn(row.id, keep)
+            } else if (adding != null) {
                 viewModel.addTo(row.id)
                 addedTo(row.name)
             } else {
@@ -70,10 +96,18 @@ fun QueueSwitcherHost(viewModel: QueueSwitcherViewModel, snackbar: SnackbarHostS
             }
             viewModel.close()
         },
-        onLongPress = if (car) null else ({ row -> dialog = QueueDialog.Menu(row) }),
+        onLongPress = if (car || radio != null) null else ({ row -> dialog = QueueDialog.Menu(row) }),
         onNew = {
-            // In the car nothing is typed (D32): the queue is named on the spot and renamed on the phone
-            if (car) viewModel.create(defaultName) else dialog = QueueDialog.New
+            when {
+                // A radio is named after its seed: nothing to type
+                radio != null -> {
+                    viewModel.startRadioIn(null, keep)
+                    viewModel.close()
+                }
+                // In the car nothing is typed (D32): the queue is named on the spot and renamed on the phone
+                car -> viewModel.create(defaultName)
+                else -> dialog = QueueDialog.New
+            }
         }
     )
 
@@ -98,7 +132,8 @@ fun QueueSwitcherHost(viewModel: QueueSwitcherViewModel, snackbar: SnackbarHostS
         is QueueDialog.Menu -> {
             val copyName = stringResource(R.string.queue_duplicate_name, open.row.name)
             QueueMenuSheet(
-                row = open.row,
+                // The live row, so the Keep switch follows its own taps
+                row = state.queues.firstOrNull { it.id == open.row.id } ?: open.row,
                 side = side,
                 onRename = { dialog = QueueDialog.Rename(open.row) },
                 onDuplicate = {
@@ -110,6 +145,7 @@ fun QueueSwitcherHost(viewModel: QueueSwitcherViewModel, snackbar: SnackbarHostS
                     dialog = null
                 },
                 onDelete = { dialog = QueueDialog.Delete(open.row) },
+                onKeepHistory = { on -> viewModel.setKeepHistory(open.row.id, on) },
                 onDismiss = { dialog = null }
             )
         }

@@ -1,6 +1,7 @@
 package org.tegro.yamp.presentation.main.components
 
 import androidx.compose.material.icons.rounded.Waves
+import androidx.compose.material.icons.rounded.Sensors
 import androidx.compose.material.icons.rounded.Layers
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.ui.platform.LocalContext
@@ -98,6 +99,8 @@ fun TrackContextMenu(
     onOpenArtist: (() -> Unit)? = null,
     onOpenAlbum: (() -> Unit)? = null,
     onTrackWave: (() -> Unit)? = null,
+    /** D54: on My Wave the row is "wave by track", on any other queue "Start radio". */
+    waveActive: Boolean = true,
     onAddToEnd: () -> Unit = {},
     onAddToQueue: () -> Unit = {}
 ) {
@@ -189,7 +192,10 @@ fun TrackContextMenu(
                 }
             } else {
                 if (onTrackWave != null && !track.isRadio) {
-                    ContextMenuItem(Icons.Rounded.Waves, stringResource(R.string.wave_by_track)) {
+                    ContextMenuItem(
+                        if (waveActive) Icons.Rounded.Waves else Icons.Rounded.Sensors,
+                        stringResource(if (waveActive) R.string.wave_by_track else R.string.radio_start)
+                    ) {
                         onTrackWave()
                         onDismiss()
                     }
@@ -286,6 +292,7 @@ internal fun ContextMenuItem(
     text: String,
     iconTint: Color = Color.White.copy(alpha = 0.75f),
     textColor: Color = Color.White,
+    trailing: (@Composable () -> Unit)? = null,
     onClick: () -> Unit
 ) {
     Row(
@@ -304,7 +311,9 @@ internal fun ContextMenuItem(
         Text(
             text = text,
             fontSize = 16.sp,
-            color = textColor
+            color = textColor,
+            modifier = if (trailing != null) Modifier.weight(1f) else Modifier
         )
+        if (trailing != null) trailing()
     }
 }

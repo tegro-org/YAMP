@@ -28,15 +28,25 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.tegro.yamp.R
+import org.tegro.yamp.domain.queue.RadioSeed
+import androidx.compose.material.icons.rounded.Sensors
 import org.tegro.yamp.presentation.hifi.GlassCircleButton
 import org.tegro.yamp.presentation.hifi.HiFi
 
 /**
  * The list-level "Add to end of queue" / "Add to queue…" of an album or playlist header: a ⋮ dropdown next
- * to Play / Shuffle (docs/phase-1-queues.md, open question 7). [title] names the list in the picker.
+ * to Play / Shuffle (docs/phase-1-queues.md, open question 7). [title] names the list in the picker; with a
+ * [radioSeed] (an album or an artist) the menu also offers "Start radio" (docs/phase-2-radio.md).
  */
 @Composable
-fun AddToQueueMenu(expanded: Boolean, onDismiss: () -> Unit, tracks: List<TrackDetailsDto>, title: String, onAddToEnd: (List<TrackDetailsDto>) -> Unit) {
+fun AddToQueueMenu(
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    tracks: List<TrackDetailsDto>,
+    title: String,
+    onAddToEnd: (List<TrackDetailsDto>) -> Unit,
+    radioSeed: RadioSeed? = null
+) {
     val launcher = LocalQueueSwitcher.current
     val appDensity = LocalDensity.current
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
@@ -57,6 +67,16 @@ fun AddToQueueMenu(expanded: Boolean, onDismiss: () -> Unit, tracks: List<TrackD
                     launcher?.open(QueueSwitcherRequest.AddTo(tracks, title))
                 }
             )
+            if (radioSeed != null) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.radio_start)) },
+                    leadingIcon = { Icon(Icons.Rounded.Sensors, contentDescription = null) },
+                    onClick = {
+                        onDismiss()
+                        launcher?.open(QueueSwitcherRequest.StartRadio(radioSeed))
+                    }
+                )
+            }
         }
     }
 }

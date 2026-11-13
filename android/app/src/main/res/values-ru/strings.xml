@@ -54,4 +54,13 @@
     <string name="settings_history_hint">Каждый прозвучавший трек, по дням, в «Моей музыке» → «История»</string>
     <string name="settings_keep_streams">Не закрывать звуковые потоки</string>
     <string name="settings_keep_streams_hint">Эксперимент для магнитолы, которая ставит музыку на паузу при старте трека: отыгравший плеер ждёт на тишине, не закрывая поток</string>
+    <string name="radio_start">Запустить радио</string>
+    <string name="radio_picker_title">Запустить радио</string>
+    <string name="radio_new">Новое радио</string>
+    <string name="radio_keep">Хранить историю</string>
+    <string name="radio_keep_hint">Все прослушанные треки остаются в радио; выкл. — только несколько последних</string>
+    <string name="radio_queue_name">Радио: %1$s</string>
+    <string name="radio_started">Радио: %1$s</string>
+    <string name="msg_radio_load_failed">Не удалось загрузить радио. Проверьте подключение</string>
+    <string name="cd_radio_keep_on">История хранится</string>
 </resources>

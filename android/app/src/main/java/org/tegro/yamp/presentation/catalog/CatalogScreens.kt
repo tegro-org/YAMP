@@ -1,5 +1,7 @@
 package org.tegro.yamp.presentation.catalog
 
+import org.tegro.yamp.domain.queue.MediaRef
+import org.tegro.yamp.domain.queue.RadioSeed
 import org.tegro.yamp.presentation.hifi.HiFiWideHeader
 import androidx.compose.ui.platform.LocalContext
 import coil3.request.ImageRequest
@@ -147,7 +149,7 @@ fun CatalogPageScreen(
                     trailing = {
                         if (tracks.isNotEmpty()) {
                             Spacer(Modifier.width(12.dp))
-                            ListMenuButton(tracks, state.page.title, actions.onAddToEnd)
+                            ListMenuButton(tracks, state.page.title, actions.onAddToEnd, radioSeedOf(state.page))
                         }
                     }
                 )
@@ -163,7 +165,7 @@ fun CatalogPageScreen(
                     }
                     Spacer(Modifier.weight(1f))
                     // The list's queue actions sit where the playlist page keeps its menu
-                    if (tracks.isNotEmpty()) ListMenuButton(tracks, state.page.title, actions.onAddToEnd)
+                    if (tracks.isNotEmpty()) ListMenuButton(tracks, state.page.title, actions.onAddToEnd, radioSeedOf(state.page))
                 }
                 Spacer(Modifier.height(12.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -315,12 +317,18 @@ private fun PlayButton(icon: ImageVector, label: String, primary: Boolean, modif
 
 /** "⋮" in the header: the whole list to the end of the queue, or to a chosen queue. */
 @Composable
-private fun ListMenuButton(tracks: List<TrackDetailsDto>, title: String, onAddToEnd: (List<TrackDetailsDto>) -> Unit) {
+private fun ListMenuButton(tracks: List<TrackDetailsDto>, title: String, onAddToEnd: (List<TrackDetailsDto>) -> Unit, radioSeed: RadioSeed? = null) {
     var open by remember { mutableStateOf(false) }
     Box {
         GlassCircleButton(onClick = { open = true }, contentDescription = stringResource(R.string.cd_playlist_menu)) {
             Icon(Icons.Default.MoreVert, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
         }
-        AddToQueueMenu(expanded = open, onDismiss = { open = false }, tracks = tracks, title = title, onAddToEnd = onAddToEnd)
+        AddToQueueMenu(expanded = open, onDismiss = { open = false }, tracks = tracks, title = title, onAddToEnd = onAddToEnd, radioSeed = radioSeed)
     }
 }
+
+/** An album's or artist's radio (docs/phase-2-radio.md): the page's ref and title. */
+private fun radioSeedOf(page: CatalogPage): RadioSeed = RadioSeed(
+    MediaRef(MediaRef.PROVIDER_YANDEX, if (page is CatalogPage.Artist) "artist" else "album", page.id),
+    page.title
+)

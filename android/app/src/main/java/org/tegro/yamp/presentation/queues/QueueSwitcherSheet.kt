@@ -25,6 +25,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Sensors
 import androidx.compose.material.icons.rounded.Waves
 import androidx.compose.material3.Icon
@@ -56,6 +57,7 @@ import org.tegro.yamp.presentation.hifi.GlassPillButton
 import org.tegro.yamp.presentation.hifi.HiFi
 import org.tegro.yamp.presentation.hifi.HiFiProgressBar
 import org.tegro.yamp.presentation.hifi.HiFiSheetPanel
+import org.tegro.yamp.presentation.hifi.HiFiSwitch
 import org.tegro.yamp.presentation.hifi.PanelSide
 import org.tegro.yamp.presentation.hifi.hifiAnodized
 import org.tegro.yamp.presentation.hifi.hifiPress
@@ -81,22 +83,37 @@ internal fun QueueSwitcherSheet(
     onDismiss: () -> Unit,
     onSelect: (QueueRowState) -> Unit,
     onLongPress: ((QueueRowState) -> Unit)?,
-    onNew: () -> Unit
+    onNew: () -> Unit,
+    keepHistory: Boolean = false,
+    onKeepHistory: (Boolean) -> Unit = {}
 ) {
     val window = org.tegro.yamp.utils.currentWindowSizeDp()
     val carScale = if (car) carScaleOf(window.widthDp.dp, window.heightDp.dp, window.heightDp.dp, isLandscape = true) else 1f
     val adding = state.mode as? QueueSwitcherRequest.AddTo
-    val rows = if (adding != null) state.queues.filter { it.editable }.map { it.copy(isActive = false) } else state.queues
+    val radio = state.mode as? QueueSwitcherRequest.StartRadio
+    val rows = when {
+        adding != null -> state.queues.filter { it.editable }.map { it.copy(isActive = false) }
+        // Only radios are re-seeded; the user's queues are never a target (D51)
+        radio != null -> state.queues.filter { it.kind == QueueKind.RADIO }
+        else -> state.queues
+    }
+    val newLabel = stringResource(if (radio != null) R.string.radio_new else R.string.queue_new)
     HiFiSheetPanel(onDismiss = onDismiss, side = side, sheetHeight = 0.78f, panelWidth = if (car) (720f * carScale).dp else 460.dp) { landscape ->
         val d = RowDims(big = car && landscape, factor = if (car && landscape) carScale else 1f)
         QueueSheetHeader(
-            title = stringResource(if (adding != null) R.string.queue_add_title else R.string.queue_switcher_title),
-            subtitle = adding?.subtitle ?: stringResource(R.string.queue_switcher_hint).takeIf { onLongPress != null && !d.big },
+            title = stringResource(
+                when {
+                    adding != null -> R.string.queue_add_title
+                    radio != null -> R.string.radio_picker_title
+                    else -> R.string.queue_switcher_title
+                }
+            ),
+            subtitle = adding?.subtitle ?: radio?.seed?.title ?: stringResource(R.string.queue_switcher_hint).takeIf { onLongPress != null && !d.big },
             d = d,
             onClose = onDismiss,
             trailing = if (d.big) {
                 {
-                    GlassCircleButton(onClick = onNew, contentDescription = stringResource(R.string.queue_new), size = d.dp(44f, 60f)) {
+                    GlassCircleButton(onClick = onNew, contentDescription = newLabel, size = d.dp(44f, 60f)) {
                         Icon(Icons.Rounded.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(d.dp(20f, 28f)))
                     }
                 }
@@ -107,18 +124,50 @@ internal fun QueueSwitcherSheet(
             contentPadding = PaddingValues(horizontal = d.dp(8f, 14f), vertical = d.dp(4f, 6f)),
             verticalArrangement = Arrangement.spacedBy(d.dp(4f, 6f))
         ) {
+            if (radio != null) {
+                item(key = "keep") { KeepRow(keepHistory, onKeepHistory, d) }
+            }
             items(rows, key = { it.id }) { row ->
                 QueueRow(row, d, onClick = { onSelect(row) }, onLongClick = if (d.big || onLongPress == null) null else ({ onLongPress(row) }))
             }
         }
         if (!d.big) {
             GlassPillButton(
-                text = stringResource(R.string.queue_new),
+                text = newLabel,
                 onClick = onNew,
                 icon = Icons.Rounded.Add,
                 modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 24.dp)
             )
         }
+    }
+}
+
+/** The radio picker's Keep switch (D52): a whole-row target, big in the car (§5). */
+@Composable
+private fun KeepRow(checked: Boolean, onChange: (Boolean) -> Unit, d: RowDims) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(d.dp(64f, 88f))
+            .clip(RoundedCornerShape(d.dp(18f, 24f)))
+            .hifiPress({ onChange(!checked) })
+            .padding(start = d.dp(16f, 20f), end = d.dp(14f, 20f)),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(d.dp(12f, 18f))
+    ) {
+        Icon(Icons.Rounded.History, contentDescription = null, tint = HiFi.TextSecondary, modifier = Modifier.size(d.dp(24f, 32f)))
+        Column(Modifier.weight(1f)) {
+            Text(stringResource(R.string.radio_keep), color = Color.White, fontSize = d.sp(16f, 22f), fontWeight = FontWeight.Bold, maxLines = 1)
+            Text(
+                stringResource(R.string.radio_keep_hint),
+                color = HiFi.TextSecondary,
+                fontSize = d.sp(12f, 16f),
+                lineHeight = d.sp(16f, 20f),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        HiFiSwitch(checked = checked, onCheckedChange = onChange)
     }
 }
 
@@ -197,6 +246,14 @@ private fun QueueRow(row: QueueRowState, d: RowDims, onClick: () -> Unit, onLong
             if (row.isActive) {
                 Icon(Icons.Rounded.GraphicEq, contentDescription = null, tint = Color.White, modifier = Modifier.size(d.dp(24f, 34f)))
             } else {
+                if (row.keepHistory) {
+                    Icon(
+                        Icons.Rounded.History,
+                        contentDescription = stringResource(R.string.cd_radio_keep_on),
+                        tint = HiFi.TextTertiary,
+                        modifier = Modifier.padding(end = d.dp(20f, 28f)).size(d.dp(14f, 18f))
+                    )
+                }
                 Text(
                     text = when {
                         row.kind != QueueKind.STATIC && row.kind != QueueKind.MIX -> stringResource(R.string.queue_endless)

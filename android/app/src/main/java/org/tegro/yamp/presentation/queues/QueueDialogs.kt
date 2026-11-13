@@ -38,6 +38,9 @@ import org.tegro.yamp.presentation.hifi.HiFiDialogAction
 import org.tegro.yamp.presentation.hifi.HiFiDialogActionKind
 import org.tegro.yamp.presentation.hifi.HiFiDialogDefaults
 import org.tegro.yamp.presentation.hifi.HiFiSheetPanel
+import org.tegro.yamp.presentation.hifi.HiFiSwitch
+import org.tegro.yamp.domain.queue.QueueKind
+import androidx.compose.material.icons.rounded.History
 import org.tegro.yamp.presentation.hifi.PanelSide
 import org.tegro.yamp.presentation.main.components.ContextMenuItem
 
@@ -101,7 +104,7 @@ internal fun DeleteQueueDialog(name: String, trackCount: Int, onConfirm: () -> U
 
 /**
  * Long-press on a queue (phone and landscape; never in the car): Rename, Duplicate, Clear, Delete — a wave
- * (not editable, one per account) offers Clear only. The canvas `PhoneQueueMenu`.
+ * (not editable, one per account) offers Clear only, a radio Keep and Delete (D52). The canvas `PhoneQueueMenu`.
  */
 @Composable
 internal fun QueueMenuSheet(
@@ -111,8 +114,10 @@ internal fun QueueMenuSheet(
     onDuplicate: () -> Unit,
     onClear: () -> Unit,
     onDelete: () -> Unit,
+    onKeepHistory: (Boolean) -> Unit = {},
     onDismiss: () -> Unit
 ) {
+    val isRadio = row.kind == QueueKind.RADIO
     HiFiSheetPanel(onDismiss = onDismiss, side = side, sheetHeight = null) {
         Column(Modifier.padding(start = 24.dp, end = 24.dp, top = 8.dp)) {
             Text(row.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -130,8 +135,17 @@ internal fun QueueMenuSheet(
             ContextMenuItem(Icons.Rounded.Edit, stringResource(R.string.queue_rename), onClick = onRename)
             ContextMenuItem(Icons.Rounded.ContentCopy, stringResource(R.string.queue_duplicate), onClick = onDuplicate)
         }
-        ContextMenuItem(Icons.Rounded.PlaylistRemove, stringResource(R.string.queue_clear), onClick = onClear)
-        if (row.editable) {
+        if (isRadio) {
+            ContextMenuItem(
+                Icons.Rounded.History,
+                stringResource(R.string.radio_keep),
+                trailing = { HiFiSwitch(checked = row.keepHistory, onCheckedChange = onKeepHistory) },
+                onClick = { onKeepHistory(!row.keepHistory) }
+            )
+        } else {
+            ContextMenuItem(Icons.Rounded.PlaylistRemove, stringResource(R.string.queue_clear), onClick = onClear)
+        }
+        if (row.editable || isRadio) {
             ContextMenuItem(Icons.Rounded.Delete, stringResource(R.string.queue_delete), iconTint = HiFi.Danger, textColor = HiFi.Danger, onClick = onDelete)
         }
         Spacer(Modifier.height(16.dp))
