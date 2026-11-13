@@ -2,7 +2,7 @@
 
 ## State
 
-- **Released:** `v0.2.0` — Phase 1 queues, Phase 1b History, Home per queue (D49), Phase 2 radio queues, head-unit
+- **Released:** `v0.2.1` (`v0.2.0` tag exists, its release build failed on flaky tests — no release) — Phase 1 queues, Phase 1b History, Home per queue (D49), Phase 2 radio queues, head-unit
   fixes and diagnostics, upstream 1.14.3 crossfade-stall port. `main` = the release commit; feature branches
   `feature/phase-1-queues` and `feature/phase-2-radio` are fully merged (fast-forward).
 - **Phase 2 radio** (`docs/phase-2-radio.md`, as built): many `RADIO` queues; "Start radio" (track menu, player
@@ -25,7 +25,7 @@
 ## Known issues
 
 - **Rotor feedback answers 400 "condition is not met"** for every station incl. My Wave (found by the probe;
-  listed in the v0.2.0 notes). Next: compare the form fields / headers with upstream's current version.
+  listed in the v0.2.1 notes). Next: compare the form fields / headers with upstream's current version.
 - **Head-unit auto-pause:** permanent audio-focus loss 0.1–3 s after a track starts. "Separate audio sessions" off
   cut it to 3 per 1 h 15. Waiting for the unit: "Не закрывать звуковые потоки" (Settings → Playback, off by
   default). Still wanted: `adb shell dumpsys audio | grep -A 25 -i "focus stack"` on the unit right after a loss,
@@ -33,8 +33,6 @@
 - "Далее" tap stutter — retest after the 1.14.3 port.
 - Back-button crash (player screen, twice, no `CRASH` line) — ask for Settings → About → "Журнал сбоев".
 - Head-unit HUD app shows nothing for YAMP — app name needed.
-- `PlaybackControllerTest` is timing-flaky (`aSavedSessionComesBackPausedAtItsPosition` timed out once,
-  `playingATrackStreamsItsLinkAndWarmsUpWhatFollows` failed once on 2026-11-13; both pass on rerun).
 
 ## Next steps (user sets the pace)
 
