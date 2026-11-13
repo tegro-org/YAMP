@@ -12,11 +12,9 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
-import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.Interceptor
@@ -54,6 +52,7 @@ import org.tegro.yamp.data.player.fakes.FakePlayerRepository
 import org.tegro.yamp.data.player.fakes.FakePlayerRepository.Call
 import org.tegro.yamp.data.player.fakes.FakeSettingsRepository
 import org.tegro.yamp.data.player.fakes.FakeTrackUrlResolver
+import org.tegro.yamp.data.player.fakes.TestThreadMain
 import org.tegro.yamp.data.queue.LegacySessionImport
 import org.tegro.yamp.data.queue.QueueManager
 import org.tegro.yamp.data.queue.QueueTrackBridge
@@ -137,8 +136,9 @@ class PlaybackControllerTest {
         .build()
     private val cacheManager = PlaylistCacheManager(context, json)
 
-    // The controller's scope is Dispatchers.Main.immediate; unconfined, so every call runs to its end at once
-    private val dispatcher = UnconfinedTestDispatcher()
+    // The controller's scope is Dispatchers.Main.immediate: here the test thread, so every call runs to its end
+    // at once, and whatever resumes on another thread comes back to it ([TestThreadMain])
+    private val dispatcher = TestThreadMain(UnconfinedTestDispatcher())
     private val dispatchers = object : DispatcherProvider {
         override val main get() = dispatcher
         override val io get() = dispatcher
@@ -148,6 +148,7 @@ class PlaybackControllerTest {
 
     @Before
     fun setUp() {
+        dispatcher.bindToCurrentThread()
         Dispatchers.setMain(dispatcher)
         // Robolectric's default network carries no capabilities: without this the controller believes it is offline
         val connectivity = context.getSystemService(ConnectivityManager::class.java)
@@ -196,7 +197,7 @@ class PlaybackControllerTest {
         return controller
     }
 
-    private fun <T> await(block: suspend () -> T): T = runBlocking { withTimeout(5_000) { block() } }
+    private fun <T> await(block: suspend () -> T): T = dispatcher.await(block = block)
 
     /** The queue operations asked for so far have run: the engine calls and the derived flows are settled. */
     private fun PlaybackController.settle() = await { awaitQueueIdle() }
@@ -618,7 +619,7 @@ class PlaybackControllerTest {
         controller.settle()
         controller.playNext()
         controller.settle()
-        runBlocking { kotlinx.coroutines.delay(200) }
+        await { kotlinx.coroutines.delay(200) }
         assertEquals("an inactive radio does nothing", emptyList<String>(), rotorRequests)
     }
 
