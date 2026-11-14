@@ -55,8 +55,9 @@ function historySections() {
       boards: [
         { id: 'hs-phone', label: 'History · active queue selected', w: P.w, h: P.h, el: <PhoneHistory /> },
         { id: 'hs-all', label: 'History · "All" names the queue on every row', w: P.w, h: P.h, el: <PhoneHistory all /> },
+        { id: 'ac-history', label: 'History · 2 accounts: queue chips with markers', w: P.w, h: P.h, el: <AcPhoneHistory /> },
       ] },
   ];
 }
 
-Object.assign(window, { historySections });
+Object.assign(window, { historySections, HsDay });

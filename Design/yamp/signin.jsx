@@ -762,6 +762,8 @@ function signinSections() {
       subtitle: 'Several sources can be signed in at once (C7, D19); Settings → Sources lists them and their order matters — the first signed-in source serves Library Play / Shuffle and the car “Liked” tile (D30). Jellyfin sign-in: after the https address (certificate trusted by Android, no self-signed) there are two ways — Quick Connect, a code confirmed in a Jellyfin client that is already signed in (D31), or user name and password (DESIGN_GUIDE §8: never prefilled or stored, only the token). Sign-in lives in the normal landscape interface; car mode never needs it (D32).',
       boards: [
         { id: 'si-sources', label: 'Settings → Sources · Yandex signed in, Jellyfin not connected, Radio switch; cards are dragged to reorder — the first one is used where a single button acts alone (D30)', ...P, el: <SiSources /> },
+        { id: 'ac-settings-one', label: 'Settings → Accounts · one Yandex account (no "Group" switch, D58)', ...P, el: <AcSettings /> },
+        { id: 'ac-settings-multi', label: 'Settings → Accounts · two accounts, "Group", no account switcher (D56)', ...P, el: <AcSettings multi /> },
         { id: 'si-empty', label: 'Jellyfin sign-in · empty: the address, then the choice of the way; the phone opens on name and password (Connect is disabled until all three are filled)', ...P, el: <SiSignIn state="empty" /> },
         { id: 'si-filled', label: 'Name and password · filled in, ready to connect', ...P, el: <SiSignIn state="filled" /> },
         { id: 'si-err-http', label: 'Error · http:// typed — inline, with a one-tap fix', ...P, el: <SiSignIn state="http" /> },
@@ -784,6 +786,7 @@ function signinSections() {
         { id: 'si-list-error', label: 'Error · the server did not answer — Retry', ...P, el: <SiListError /> },
         { id: 'si-list-offline', label: 'No connection (a Yandex playlist) · Play downloaded starts what is on the device; the list loads by itself when the network is back (no action when nothing is downloaded)', ...P, el: <SiListOffline /> },
         { id: 'si-queue-unavailable', label: 'Queue after signing out of Yandex · banner + greyed entries that are skipped', ...P, el: <SiQueueUnavailable /> },
+        { id: 'ac-removed-open', label: 'A removed account’s queue opened · entries unavailable, no banner (D62)', ...P, el: <AcRemovedQueueOpen /> },
         { id: 'si-storage', label: 'Settings → Storage · totals by source and for the playback cache, the “Available offline” entry, clearing, where to store', ...P, el: <SiStorage /> },
         { id: 'si-storage-list', label: 'Available offline · filter by source, Play / Shuffle, size per track, remove one, Clear all (asks first)', ...P, el: <SiOfflineList /> },
         { id: 'si-head-error', label: 'Head unit · the server did not answer — Retry inside a folder (76 dp button)', ...H, el: <SiHeadError /> },
@@ -793,4 +796,4 @@ function signinSections() {
   ];
 }
 
-Object.assign(window, { signinSections });
+Object.assign(window, { signinSections, SiSheetPage, SiCard, SiSourceRow, SiSetRow, SiSnackbar, useSiWords });

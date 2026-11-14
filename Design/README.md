@@ -42,6 +42,7 @@ Needs internet access for React, Babel and the fonts (Roboto, Material Symbols R
 | `yamp/reference.jsx` | The app as built — golden screenshots from `android/app/src/test/screenshots/` |
 | `yamp/queues.jsx` | Phase 1: queue switcher, queue actions, "Add to queue…" (phone + head unit) |
 | `yamp/radio.jsx` | Phase 2: "Start radio" picker (Keep switch, re-seed, New radio), radio rows in the switcher (phone + head unit) |
+| `yamp/accounts.jsx` | Phase 2a components and screens (no sections of its own): account marker, section header, account chips, grouped / flat queue lists, removed accounts, Settings → Accounts. Each 2-account variant (`ac-*` phone, `acc-*` head unit) is registered next to its one-account board: sections 1, 4, 5, 8 (`YAMP.html`), 5b, 5c/5d, 9/13, 11a |
 | `yamp/folders.jsx` | Phase 4b: folder browser — phone list, head-unit tiles, pinned/recent on car home |
 | `yamp/split.jsx` | Head unit in split screen: wide pane 1280×720 and slim pane 640×720 |
 | `yamp/signin.jsx` | Phase 4: sources list, Jellyfin sign-in (password and Quick Connect); list states, unavailable sources, Settings → Storage → "Available offline" |

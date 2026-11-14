@@ -18,13 +18,15 @@ function SplitWideQueues() {
 }
 
 // Slim pane: everything in one column, like the app's portrait car layout.
-function NarrowCarBody({ dim }) {
+function NarrowCarBody({ dim, pillLead }) {
   const t = useT();
   return (
     <React.Fragment>
       <div style={{ position: 'absolute', left: 28, right: 28, top: 24, display: 'flex', alignItems: 'center', gap: 12 }}>
         <GlassCircle icon="arrow_back" size={60} />
-        <CarPill icon="stacks" active trailing={<Icon name="expand_more" size={28} color={HF.text2} />}>{t('With family', 'С семьёй')}</CarPill>
+        <CarPill icon="stacks" active trailing={<Icon name="expand_more" size={28} color={HF.text2} />}>
+          {pillLead ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>{pillLead}{t('With family', 'С семьёй')}</span> : t('With family', 'С семьёй')}
+        </CarPill>
         <GlassCircle icon="search" size={60} />
         <div style={{ flex: 1 }} />
         <div style={{ fontSize: 34, fontWeight: 800 }}>10:30</div>
@@ -92,4 +94,4 @@ function SplitNarrowFolders() {
   );
 }
 
-Object.assign(window, { SplitWideCar, SplitWideQueues, SplitNarrowCar, SplitNarrowQueues, SplitNarrowFolders });
+Object.assign(window, { NarrowCarBody, SplitWideCar, SplitWideQueues, SplitNarrowCar, SplitNarrowQueues, SplitNarrowFolders });

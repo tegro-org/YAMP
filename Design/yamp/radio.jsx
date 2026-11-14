@@ -125,14 +125,17 @@ function radioSections() {
       subtitle: 'As many radios as you start (D35′). "Start radio" (track menu, player, album / artist ⋮ — off My Wave, D54) opens the switcher as a picker: tap a radio = re-seed it in place, no confirmation; "New radio" = a new queue; your own queues are never a target (D51). Keep (D52, off by default) = retain history; off drops the played head at the next refill. Hold a radio for Keep / Delete.',
       boards: [
         { id: 'rd-picker', label: 'Start radio · Keep switch, radios to re-seed, New radio', w: P.w, h: P.h, el: <PhoneRadioPicker /> },
+        { id: 'ac-radio-grouped', label: 'Start radio · 2 accounts: radios grouped · New radio with account chips', w: P.w, h: P.h, el: <AcPhoneRadioPicker grouped /> },
+        { id: 'ac-radio-flat', label: 'Start radio · 2 accounts, flat · re-seeding keeps the radio’s account', w: P.w, h: P.h, el: <AcPhoneRadioPicker /> },
         { id: 'rd-switcher', label: 'Queues · radios show ∞, Keep marker on inactive rows', w: P.w, h: P.h, el: <PhoneRadioSwitcher /> },
       ] },
     { id: 'radio-car', title: '5d · Radio — head unit 1920×720 (Phase 2)',
       subtitle: 'The same picker in the side panel: big rows, the Keep switch a big row too, "+" in the header = New radio. The car header pill reads "Start radio" on every queue but My Wave (D54).',
       boards: [
         { id: 'rdc-picker', label: 'Car mode · Start radio panel', w: H.w, h: H.h, el: <CarRadioPicker /> },
+        { id: 'acc-radio', label: 'Car mode · 2 accounts: Start radio grouped · New radio = big account chips', w: H.w, h: H.h, el: <AcCarRadio /> },
       ] },
   ];
 }
 
-Object.assign(window, { radioSections });
+Object.assign(window, { radioSections, RdRow, RdKeepRow });

@@ -584,6 +584,7 @@ function homeSections() {
       subtitle: 'Home is composed from what the signed-in providers can do (C3, C7, D19): a hero, then sections. The hero is My Wave while Yandex is signed in — so Yandex only is today’s screen unchanged, and adding Jellyfin only adds sections below it (D23). Without My Wave the hero is “Continue” (the active queue). Folders, Recently added and Start radio (Instant Mix) come from Jellyfin.',
       boards: [
         { id: 'hm-home-a', label: '(a) Yandex only · Home = My Wave, as today', ...sz(P), el: <Frame kind="phone"><PhoneHome /></Frame> },
+        { id: 'ac-home', label: '(a) Yandex, 2 accounts · Home follows the active queue’s account ("as Anna")', ...sz(P), el: <Frame kind="phone"><PhoneHome caption={<AcHomeCaption />} /></Frame> },
         { id: 'hm-home-b', label: '(b) Jellyfin only · Continue + folders, new albums, radio', ...sz(P), el: <HmPhoneHomeB /> },
         { id: 'hm-home-c', label: '(c) Both · first screen is today’s My Wave, sections peek below', ...sz(P), el: <HmPhoneHomeC /> },
         { id: 'hm-home-c-scroll', label: '(c) Both · scrolled: Jellyfin sections, mini player returns', ...sz(P), el: <HmPhoneHomeCScrolled /> },

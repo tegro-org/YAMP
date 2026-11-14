@@ -37,7 +37,7 @@ is the context the rest of the app follows.
     (Settings), else the first. Re-seeding an existing radio **keeps its account**. "Add to queue…" / "Play next"
     never change a queue's account — the tracks join the queue and play under its account.
   - **Queue order and grouping (D64).** Order stays the manual `sortOrder` (Phase 1 reorder); a new queue goes to
-    the end. No "recently used" sort. A **"Group by account"** switch (Settings → Accounts, shown only with more than
+    the end. No "recently used" sort. A **"Group" (RU «Группировать»)** switch (Settings → Accounts, shown only with more than
     one account; **default on**):
     - **On:** the switcher (phone sheet, landscape and car panels, the radio picker, "Add to queue…") has a section per
       account with a small header (avatar/initial + name); inside, that account's My Wave first, then its queues and
@@ -77,7 +77,7 @@ is the context the rest of the app follows.
 | D61 | **The binding is permanent**: a queue's account is set at creation and never changed (no "change account" action anywhere); re-seeding a radio keeps it | A queue's history and suggestions belong to one taste; moving it would mix them (user, 2026-11-14) |
 | D62 | **Sign-out hides, it doesn't delete**: the account's queues (incl. its My Wave) are kept and shown only in a collapsed "Removed accounts · N" group at the bottom of the phone switcher (Delete only); not in the car or Android Auto; signing back in to the same uid restores them. Cached lists and unshared downloads are removed | Nothing the user built is lost by a sign-out; the everyday list stays clean (user, 2026-11-14) |
 | D63 | **Every Yandex account's My Wave queue exists from sign-in** (and from the migration for already signed-in accounts): created empty at once, filled on first activation; the account's default queue and its entry point in the switcher, car and Android Auto. Re-sign-in of a removed account (same uid) brings back its old WAVE queue with its position (D62), no new one. Today it is created lazily (`PlaybackController.resetForAccount` → `QueueManager.waveQueue`, `QueueManager.kt:224`, only on switch/play) | With no global switch, a queue of the account is the only way into it; My Wave is the natural one (user, 2026-11-14) |
-| D64 | **Queue list: manual order, grouped by account by default.** `sortOrder` stays (new queues last, no "recently used" sort). "Group by account" (Settings → Accounts, only with >1 account, default on): on = a section per account (header avatar + name; its My Wave first, then its queues in manual order; no row markers; reorder within a group); off = one flat list with a marker on every row. Car and Android Auto follow it (AA: a sub-folder per account); the car pill always shows the marker with >1 account. One account: no setting, no headers, no markers | Which account a queue plays under must be visible at a glance without cluttering every row (user, 2026-11-14) |
+| D64 | **Queue list: manual order, grouped by account by default.** `sortOrder` stays (new queues last, no "recently used" sort). "Group" (RU «Группировать») (Settings → Accounts, only with >1 account, default on): on = a section per account (header avatar + name; its My Wave first, then its queues in manual order; no row markers; reorder within a group); off = one flat list with a marker on every row. Car and Android Auto follow it (AA: a sub-folder per account); the car pill always shows the marker with >1 account. One account: no setting, no headers, no markers | Which account a queue plays under must be visible at a glance without cluttering every row (user, 2026-11-14) |
 
 ## Technical design
 
@@ -188,7 +188,7 @@ the group (D22).
   and the radio-picker mode render account sections (grouped) or markers on rows (flat) per D64; reorder is clamped
   to a group when grouped; the collapsed "Removed accounts · N queues" row at the bottom (phone only) expands to
   dimmed rows with Delete as the only action. No account filter control (fallback in §UX).
-- Settings → Accounts: the "Group by account" switch (`SettingsRepository.groupQueuesByAccount`, default on),
+- Settings → Accounts: the "Group" (RU «Группировать») switch (`SettingsRepository.groupQueuesByAccount`, default on),
   visible only with more than one account.
 - `presentation/car/CarScreen.kt`: pill marker (always with >1 account), panel sections or row markers per D64,
   "New radio" chips in the car picker.
@@ -205,27 +205,26 @@ per-account-state steps are the risky part; UI is mostly additive.
 
 ## Canvas (boards under `Design/yamp/`, updated and approved before any UI code)
 
-Every board that shows a queue, a queue list or account management gets the account binding, each in a
-**one-account** (as today) and a **multi-account** variant:
+Every board that shows a queue, a queue list or account management keeps its **one-account** variant as drawn
+(D58) and gets its **two-account** variant(s) right next to it, in the same section. The new components and the
+variant screens live in `Design/yamp/accounts.jsx` (a components-and-screens module like `queues.jsx`, no
+sections of its own); ids `ac-*` (phone) and `acc-*` (head unit, split panes).
 
-| Board (file · section/board id) | What changes |
+| Section (file) | One-account board → two-account variants next to it |
 |---|---|
-| `queues.jsx` · 4 Queues — phone: `q-home`, `q-sheet` | three variants: one account (as today), grouped (account section headers, My Wave first, no row markers), flat (marker on every row); pill shows the marker; the collapsed "Removed accounts · N queues" row at the bottom, and an expanded variant (dimmed rows) |
-| `queues.jsx` · `q-menu`, `q-menu-radio` | unchanged items (no account item, D61); a new variant: hold menu of a signed-out account's queue = Delete only |
-| `queues.jsx` · `q-new` | account chips under the name field (multi-account only) |
-| `queues.jsx` · `q-player`, `q-add` | marker in the player's queue header; "Add to queue…" grouped / flat as the switcher |
-| `queues.jsx` · 5 Queues — head unit: `qc-home`, `qc-panel`, `qc-weak` | pill with marker; panel grouped (section headers) and flat (row markers) variants; signed-out accounts' queues absent |
-| `radio.jsx` · 5c / 5d Radio — phone and head unit | picker grouped / flat as the switcher; "New radio" with account chips; re-seed shows the kept account |
-| `split.jsx` · 8 Split screen: `sw-queues`, `sn-queues` | grouped and flat variants in wide and slim panes |
-| `home.jsx` · 11a / 11b / 11c Home, Library, car tiles | hero, likes and car tiles follow the active queue's account; a small "as A" caption with >1 account |
-| `history.jsx` · 5b History | queue chips with markers |
-| `signin.jsx` · 9 Sources / Settings accounts | Accounts list without the switcher: Add, Remove, Default, the "Group by account" switch (multi-account only); one-account and multi-account |
-| `signin.jsx` · 13 List states, unavailable sources | a signed-out account's queue opened from the collapsed group: entries unavailable (dimmed), no banner |
-| `foundations.jsx` · Components | new components: account marker (avatar/initial disc; dimmed variant for signed-out accounts), account section header, account chips |
-| Android Auto | no board today; the queue list's subtitle (account name) is described in text only |
+| 1 Foundations (`YAMP.html`) | `f-components` → `ac-components`: account marker (dimmed = removed account), section header, account chips |
+| 4 Queues — phone (`YAMP.html`, `queues.jsx`) | `q-sheet` → `ac-sheet-grouped` (headers, My Wave first, no row markers, "Removed accounts" collapsed), `ac-sheet-flat` (marker on every row), `ac-sheet-removed` (expanded, dimmed); `q-menu-radio` → `ac-menu-removed` (Delete only); `q-new` → `ac-new` (account chips); `q-player` → `ac-player` (marker in the header); `q-add` → `ac-add-grouped`, `ac-add-flat` |
+| 5 Queues — head unit (`YAMP.html`) | `qc-home` → `acc-home` (pill with the marker); `qc-panel` → `acc-panel-grouped`, `acc-panel-flat` |
+| 5b History (`history.jsx`) | `hs-all` → `ac-history` (queue chips with markers) |
+| 5c / 5d Radio (`radio.jsx`) | `rd-picker` → `ac-radio-grouped`, `ac-radio-flat` (New radio with account chips; re-seed keeps the account); `rdc-picker` → `acc-radio` (big chips) |
+| 8 Split screen (`YAMP.html`) | `sw-queues` → `acc-sw-grouped`, `acc-sw-flat`; `sn-queues` → `acc-sn-grouped`, `acc-sn-flat` |
+| 9 Sources / Settings (`signin.jsx`) | `si-sources` → `ac-settings-one`, `ac-settings-multi` (Accounts without the switcher: Add, ⋮ Default / Remove, the "Group" switch only with two) |
+| 11a Home (`home.jsx`) | `hm-home-a` → `ac-home` ("as Anna" caption: Home follows the active queue's account) |
+| 13 List states (`signin.jsx`) | `si-queue-unavailable` → `ac-removed-open` (a removed account's queue: entries unavailable, no banner) |
+| Android Auto | no board; described in section 5's subtitle (sub-folder per account when grouped, account name in the subtitle when flat; removed accounts never shown) |
 
-`search.jsx`, `mix.jsx`, `folders.jsx`: no queue list of their own — unchanged (`mix.jsx`'s MIX queues get the
-marker in Phase 6).
+The setting is labelled **"Group" / «Группировать»** (Settings → Accounts, D64). `search.jsx`, `mix.jsx`,
+`folders.jsx`: no queue list of their own — unchanged (`mix.jsx`'s MIX queues get the marker in Phase 6).
 
 ## Order of work and verification
 
@@ -272,7 +271,7 @@ Each step keeps `testDebugUnitTest verifyRoborazziDebug lintDebug` + detekt gree
   PlaylistCacheManager}.kt`, `data/queue/{QueueManager,QueueEntities,RoomQueueStore,RotorStationSource}.kt`,
   `domain/queue/PlayQueue.kt`, `data/player/{PlaybackController,WaveQueue,MediaLibraryTree,BluetoothAutoplay}.kt`,
   `data/history/*` (account column), `presentation/account/*` (switcher and startup picker removed),
-  `presentation/main/{MainDialogs,MainTabs,MainViewModel,HomeScreen}.kt`, Settings sheet/model and `SettingsRepository` ("Group by account"),
+  `presentation/main/{MainDialogs,MainTabs,MainViewModel,HomeScreen}.kt`, Settings sheet/model and `SettingsRepository` ("Group" (RU «Группировать»)),
   `presentation/queues/*`, `presentation/car/CarScreen.kt`, `presentation/history/*`, strings EN/RU, goldens.
 - Canvas: `Design/yamp/{queues,radio,split,home,history,signin,foundations}.jsx`, `Design/YAMP.html` (variants
   registered).

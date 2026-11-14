@@ -62,14 +62,16 @@ function SpectrumRing({ size = 330, knob = 216, icon = 'pause' }) {
 }
 
 // Home (My Wave) as built, plus the queue button top-right.
-function PhoneHome({ dim }) {
+// `caption` (Phase 2a, accounts.jsx): a line under the title naming the active queue's account.
+function PhoneHome({ dim, caption }) {
   const t = useT(); const queues = useQueues();
   return (
     <React.Fragment>
       <div style={{ position: 'absolute', left: 20, right: 20, top: 22, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
         <div>
           <LargeTitle>{t('My Wave', 'Моя волна')}</LargeTitle>
-          <GlassPill icon="tune" height={36} style={{ marginTop: 12, display: 'inline-flex' }}>{t('Tune the wave', 'Настроить волну')}</GlassPill>
+          {caption}
+          <GlassPill icon="tune" height={36} style={{ marginTop: caption ? 8 : 12, display: 'inline-flex' }}>{t('Tune the wave', 'Настроить волну')}</GlassPill>
         </div>
         <GlassCircle icon="stacks" badge={queues.length} />
       </div>
@@ -299,7 +301,8 @@ function CarTileRow({ count = 5, active = 'folders', style }) {
 
 // Car mode. `w` = pane width (1920 full screen, 1280 wide split pane). `far` replaces the far column.
 // `weak` = the connection is weak or lost: the radio pill gives way to "play downloaded".
-function CarHome({ dim, w = 1920, far, weak, activeTile }) {
+// `pillLead` (Phase 2a, accounts.jsx): the account marker inside the active-queue pill (> 1 account).
+function CarHome({ dim, w = 1920, far, weak, activeTile, pillLead }) {
   const t = useT();
   const wide = w >= 1900, panel = wide ? 760 : 700;
   return (
@@ -308,7 +311,9 @@ function CarHome({ dim, w = 1920, far, weak, activeTile }) {
       <div style={{ position: 'absolute', left: 48, top: 30, width: panel }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <GlassCircle icon="arrow_back" size={60} />
-          <CarPill icon="stacks" active trailing={<Icon name="expand_more" size={28} color={HF.text2} />}>{t('With family', 'С семьёй')}</CarPill>
+          <CarPill icon="stacks" active trailing={<Icon name="expand_more" size={28} color={HF.text2} />}>
+            {pillLead ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>{pillLead}{t('With family', 'С семьёй')}</span> : t('With family', 'С семьёй')}
+          </CarPill>
           {weak
             ? <CarPill icon="wifi_off" trailing={<Icon name="play_arrow" size={28} />}>{t('Weak signal · downloaded', 'Слабая связь · скачанное')}</CarPill>
             : <CarPill icon="sensors">{t('Radio from track', 'Радио по треку')}</CarPill>}
