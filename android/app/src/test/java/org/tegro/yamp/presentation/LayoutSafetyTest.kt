@@ -205,8 +205,8 @@ class LayoutSafetyTest {
     @Test
     fun testApplicationIdMatchesUserRequirement() {
         val buildGradle = File("build.gradle.kts").readText()
-        assertTrue("build.gradle.kts must set applicationId = org.tegro.yamp",
-            buildGradle.contains("applicationId = \"org.tegro.yamp\""))
+        assertTrue("build.gradle.kts must set applicationId = org.tegro.music.yamp",
+            buildGradle.contains("applicationId = \"org.tegro.music.yamp\""))
     }
 
     @Test

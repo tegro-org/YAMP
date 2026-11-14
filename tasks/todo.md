@@ -70,8 +70,10 @@
 
 - [ ] **Crash on the Android Back button** (once; after a restart Back works). Need the trace: Settings → About →
       crash reports, or `adb logcat -d | grep -A 30 "FATAL EXCEPTION"`.
-- [ ] **Head-unit HUD / driver-screen app** shows nothing for YAMP (worked for YandexMusicLite and YML). Likely
-      keyed by package name (`org.tegro.yamp`) or missing notification-listener access; app name/APK to check.
+- [ ] **Head-unit HUD / driver-screen app** shows nothing for YAMP (worked for YandexMusicLite and YML). Cause
+      (2026-11-14, decompiled): "Заставка Home" accepts only players whose package name contains `music` / `audio` /
+      `media` / `player` / `radio` / `podcast` or is on a fixed list; MSpeed takes any active media session. Fix:
+      `applicationId` → `org.tegro.music.yamp` (D55, branch `feature/package-rename`) — verify on the unit.
 
 ## Upstream 1.13–1.14.1 ports (`kb/upstream-tracking.md`, triaged 2026-11-11)
 

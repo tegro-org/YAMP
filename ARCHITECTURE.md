@@ -199,7 +199,8 @@ di/                     Hilt modules
 
 ## Decided
 
-- **Q1** Package and `applicationId` → **`org.tegro.yamp`**, renamed once in Phase 0. Upstream ports then map
+- **Q1** Package and `applicationId` → **`org.tegro.yamp`**, renamed once in Phase 0; the `applicationId` became
+  **`org.tegro.music.yamp`** in D55 (the Kotlin package stays). Upstream ports then map
   `com/korenskoy/yandexmusic/` → `org/tegro/yamp/` (note in `kb/upstream-tracking.md`).
 - **Q3** Proper navigation graph inside `main` (H2).
 - **Q5** Full localization, English default + Russian, more later (section K).

@@ -101,6 +101,6 @@ class BaselineProfileGenerator {
     }
 
     private companion object {
-        const val PACKAGE = "org.tegro.yamp"
+        const val PACKAGE = "org.tegro.music.yamp"
     }
 }

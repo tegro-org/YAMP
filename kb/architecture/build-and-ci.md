@@ -13,7 +13,8 @@ goldens render identically on this Linux PC and can serve as the baseline for YA
 
 - AGP 9.5.0, Kotlin 2.4.21 (AGP built-in Kotlin, no `kotlin-android` plugin), KSP 2.3.13, Gradle 9.8.2.
 - Modules `:app`, `:baselineprofile`. `org.gradle.configuration-cache=true`, `-Xmx2048m`.
-- `:app`: namespace and applicationId **`org.tegro.yamp`** (Phase 0; upstream was `com.korenskoy.yandexmusic` /
+- `:app`: namespace **`org.tegro.yamp`**, applicationId **`org.tegro.music.yamp`** (D55, 2026-11-14; Phase 0 had
+  `org.tegro.yamp`; upstream was `com.korenskoy.yandexmusic` /
   `YandexMusicLite.KorenskoyR`), compileSdk 37, minSdk 26, targetSdk 36, Java 11. **Version from git (D37):**
   `versionName` = tag `vX.Y.Z` → `X.Y.Z`, otherwise `X.Y.Z-dev.N+sha` (`0.0.0-dev…` before the first tag,
   `0.0.0-local` without git); `versionCode` = commit count. ABIs: all four. No flavors.
@@ -25,8 +26,8 @@ goldens render identically on this Linux PC and can serve as the baseline for YA
 - R8 on release (strips `Log.v/d/i`, keeps DTO/updater/model/player packages). Compose stability config marks
   `data.dto.*` and `domain.model.*` stable. Room schemas exported to `app/schemas/`.
 - Baseline profile module (device needed, release key needed); generated profiles committed (still upstream's,
-  rewritten to the new package — regenerate when a device is at hand); package `org.tegro.yamp` in
-  `BaselineProfileGenerator.kt`.
+  rewritten to the new package — regenerate when a device is at hand); target package `org.tegro.music.yamp`
+  in `BaselineProfileGenerator.kt`.
 - Lint: `warningsAsErrors`, `abortOnError`, `lint.xml` ignores version-age checks. No detekt/ktlint.
 
 ## Dependencies (main)

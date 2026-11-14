@@ -5,7 +5,7 @@
 Android music player for Yandex Music and a self-hosted Jellyfin server, for the phone and the car head
 unit: multiple persistent queues, radio and mixes, fast folder browsing.
 
-**Status:** early — the app is the imported upstream player under YAMP's own identity (`org.tegro.yamp`);
+**Status:** early — the app is the imported upstream player under YAMP's own identity (`org.tegro.music.yamp`);
 the multi-source features are being designed and built, see `HANDOFF.md`, `docs/multi-source-player.md` and
 the design canvas in `Design/`.
 

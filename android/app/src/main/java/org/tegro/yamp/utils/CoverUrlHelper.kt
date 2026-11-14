@@ -7,6 +7,11 @@ import coil3.request.ImageRequest
 import org.tegro.yamp.BuildConfig
 import org.tegro.yamp.data.dto.TrackDetailsDto
 
+private const val RESOURCE_SCHEME = "android.resource://"
+
+/** Application ids YAMP shipped under before the current one (D16, D55). */
+private val LEGACY_APP_IDS = setOf("org.tegro.yamp")
+
 /**
  * The three sizes a cover is ever loaded in. One cover used to be fetched in six sizes (100…1000 px),
  * each a separate download; with three, every screen that shows a cover at a similar size shares one
@@ -41,8 +46,14 @@ enum class CoverSize(val px: Int) {
  */
 fun String?.toCoverUrl(size: CoverSize): String? {
     if (this == null) return null
-    if (startsWith("android.resource://")) {
-        return if (contains("org.tegro.yamp")) replace("org.tegro.yamp", BuildConfig.APPLICATION_ID) else this
+    if (startsWith(RESOURCE_SCHEME)) {
+        // A bundled image saved under an earlier application id points at our own resources: re-home it
+        val authority = removePrefix(RESOURCE_SCHEME).substringBefore('/')
+        return if (authority in LEGACY_APP_IDS) {
+            RESOURCE_SCHEME + BuildConfig.APPLICATION_ID + removePrefix(RESOURCE_SCHEME + authority)
+        } else {
+            this
+        }
     }
     if (!contains("%%")) return this
     return (if (startsWith("http")) this else "https://$this").replace("%%", size.spec)

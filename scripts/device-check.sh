@@ -6,7 +6,7 @@
 #   scripts/device-check.sh              # all cases
 #   scripts/device-check.sh kill-playing # one case
 set -e
-PKG=org.tegro.yamp
+PKG=org.tegro.music.yamp
 ACT=$PKG/.MainActivity
 
 say() { printf '\n==> %s\n' "$1"; }

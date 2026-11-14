@@ -140,6 +140,12 @@ class InteractionLogicTest {
             "avatars.yandex.net/get/1/%%".toCoverUrl(CoverSize.Small))
         assertEquals("a bundled logo stays as it is", "android.resource://x/1",
             "android.resource://x/1".toCoverUrl(CoverSize.Large))
+        assertEquals("a logo saved under the old application id is re-homed",
+            "android.resource://${org.tegro.yamp.BuildConfig.APPLICATION_ID}/2131",
+            "android.resource://org.tegro.yamp/2131".toCoverUrl(CoverSize.Large))
+        assertEquals("the current id is left alone",
+            "android.resource://${org.tegro.yamp.BuildConfig.APPLICATION_ID}/7",
+            "android.resource://${org.tegro.yamp.BuildConfig.APPLICATION_ID}/7".toCoverUrl(CoverSize.Large))
         assertTrue("one memory key per size", CoverSize.Small.memoryKey("u") != CoverSize.Large.memoryKey("u"))
     }
 }

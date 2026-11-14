@@ -77,7 +77,8 @@ Each phase is shippable on its own and is reviewed/tested before the next starts
 
 ### Phase 0 — Fork identity (no feature work)
 
-- Package and `applicationId` → **`org.tegro.yamp`** (D16), renamed once: touches every file; upstream ports
+- Package and `applicationId` → **`org.tegro.yamp`** (D16; the `applicationId` is `org.tegro.music.yamp` since D55),
+  renamed once: touches every file; upstream ports
   then map `com/korenskoy/yandexmusic/` → `org/tegro/yamp/` (note in `kb/upstream-tracking.md`).
 - App name "YAMP"; updater points at `tegro-org/YAMP` releases.
 - **Own release keystore** — none exists yet. Created once, kept outside the repo and backed up; CI gets it

@@ -80,7 +80,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "org.tegro.yamp"
+        applicationId = "org.tegro.music.yamp"
         minSdk = 26
         targetSdk = 36
         versionCode = appVersionCode
