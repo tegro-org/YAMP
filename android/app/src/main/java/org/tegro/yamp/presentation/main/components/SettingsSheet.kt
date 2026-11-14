@@ -60,6 +60,7 @@ import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.DirectionsCar
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Equalizer
+import androidx.compose.material.icons.rounded.RecordVoiceOver
 import androidx.compose.material.icons.rounded.SpeakerGroup
 import androidx.compose.material.icons.rounded.Explicit
 import androidx.compose.material.icons.rounded.History
@@ -490,9 +491,11 @@ private fun ColumnScope.PlaybackPage(state: SettingsUiState, actions: SettingsAc
         if (state.equalizerAvailable) {
             SettingsRow(icon = Icons.Rounded.Equalizer, title = stringResource(R.string.settings_equalizer), subtitle = stringResource(R.string.settings_equalizer_hint), onClick = actions.onOpenEqualizer)
         }
+        SwitchRow(Icons.Rounded.RecordVoiceOver, stringResource(R.string.settings_duck_announcements), stringResource(R.string.settings_duck_announcements_hint), state.duckForAnnouncements, actions.onDuckForAnnouncementsChange)
         SwitchRow(Icons.Rounded.SpeakerGroup, stringResource(R.string.settings_audio_sessions), stringResource(R.string.settings_audio_sessions_hint), state.separateAudioSessions, actions.onSeparateAudioSessionsChange)
         SwitchRow(Icons.Rounded.Equalizer, stringResource(R.string.settings_eq_announce), stringResource(R.string.settings_eq_announce_hint), state.announceEqualizer, actions.onAnnounceEqualizerChange)
         SwitchRow(Icons.Rounded.SpeakerGroup, stringResource(R.string.settings_keep_streams), stringResource(R.string.settings_keep_streams_hint), state.keepAudioStreams, actions.onKeepAudioStreamsChange)
+        SwitchRow(Icons.Rounded.SpeakerGroup, stringResource(R.string.settings_both_players), stringResource(R.string.settings_both_players_hint), state.keepBothPlayersRunning, actions.onKeepBothPlayersRunningChange)
     }
     SettingsGroup(stringResource(R.string.settings_g_start)) {
         SegmentedRow(Icons.Rounded.PowerSettingsNew, stringResource(R.string.settings_start_music)) {

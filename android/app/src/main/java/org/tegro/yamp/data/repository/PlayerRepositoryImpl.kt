@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -56,16 +57,18 @@ class PlayerRepositoryImpl(
      * dropped standby) is paused on a one-second silent clip: ExoPlayer then keeps its AudioTrack for the next
      * track of the same format, and a head unit that takes the sound whenever a new stream appears sees none.
      */
-    class ParkingPolicy(val keep: Flow<Boolean>, val silenceUri: String)
+    class ParkingPolicy(val keep: Flow<Boolean>, val silenceUri: String, val bothRunning: Flow<Boolean> = flowOf(false))
 
-    @Volatile
-    private var keepStreams = false
+    private val idler = SilentIdler(parking?.silenceUri)
 
     private fun isParked(player: ExoPlayer): Boolean = player.currentMediaItem?.mediaId == PARKED_ID
 
     private fun note(kind: org.tegro.yamp.data.player.PlaybackJournal.Kind, title: CharSequence? = null, detail: String? = null, valueMs: Long = 0L) {
         journal?.record(kind, title?.toString(), detail, valueMs)
     }
+
+    /** Underrun and start-timing lines for the journal (see [org.tegro.yamp.data.player.EngineDiagnostics]). */
+    private val diagnostics = org.tegro.yamp.data.player.EngineDiagnostics(journal) { if (it === outgoingPlayer) "outgoing" else if (it === activePlayer) "active" else "standby" }
 
     /** When the active player ran dry mid-track (buffering with sound expected), to measure the stall. */
     private var stalledSince: Long? = null
@@ -190,7 +193,9 @@ class PlayerRepositoryImpl(
         setupPlayerListener(playerA, 0)
         setupPlayerListener(playerB, 1)
 
-        parking?.let { policy -> scope.launch { policy.keep.collect { keepStreams = it } } }
+        parking?.let { policy -> scope.launch { policy.keep.collect { idler.keepStreams = it } } }
+        // "Keep both players running" (see [SilentIdler]); switched off, an idling standby is stopped at its next use
+        parking?.let { policy -> scope.launch { policy.bothRunning.collect { on -> idler.enabled = on; if (on && activePlayer.isPlaying) idler.setRunning(standbyPlayer, true, outgoingPlayer) } } }
         audioSessions?.let { policy ->
             scope.launch {
                 policy.separate.collect { separate ->
@@ -209,7 +214,7 @@ class PlayerRepositoryImpl(
                 // The track that plays now, or the one a crossfade waits for: never the previous one, loaded to
                 // its end long ago — the cache would take the line from the new track at its start (upstream 1.14.3)
                 if (currentP.isPlaying || awaitingIncoming) bufferedAhead = aheadOf(currentP)
-                if (currentP.isPlaying) {
+                if (currentP.isPlaying && !isParked(currentP)) {
                     journal?.addPlayed(PROGRESS_INTERVAL_MS)
                     updateProgress(currentP)
                     checkTransitionTriggers(currentP)
@@ -276,10 +281,18 @@ class PlayerRepositoryImpl(
     }
 
     private fun setupPlayerListener(player: ExoPlayer, playerIdx: Int) {
+        diagnostics.attach(player, playerIdx)
         player.addListener(object : Player.Listener {
             override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) {
                 // A new track brings its own normalization
                 applyVolume(player)
+                if (player === idler.handover && mediaItem != null && mediaItem.mediaId != PARKED_ID) {
+                    // The queued track plays now: the silence before it goes; a crossfade's hold keeps it still
+                    idler.handedOver(player)
+                    if (awaitingIncoming && player === activePlayer) player.playWhenReady = false
+                    diagnostics.arrived(player)
+                    refreshPlaybackState()
+                }
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -318,6 +331,11 @@ class PlayerRepositoryImpl(
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 Log.e(TAG, "ExoPlayer error on player[$playerIdx]: ${error.errorCodeName}", error)
+                outgoingPlayer?.takeIf { pickAt > 0L && awaitingIncoming && player === activePlayer }?.let {
+                    crossfadeJob?.cancel()
+                    revertPick(it, player, error.errorCodeName)
+                    return
+                }
                 note(org.tegro.yamp.data.player.PlaybackJournal.Kind.ERROR, player.mediaMetadata.title, "player ${error.errorCodeName}" + (if (player === outgoingPlayer) " (outgoing)" else if (playerIdx != activePlayerIndex) " (standby)" else ""))
                 player.currentMediaItem?.mediaId?.let { preloadManager.evictUrl(it) }
                 when {
@@ -358,7 +376,7 @@ class PlayerRepositoryImpl(
 
     private fun refreshPlaybackState() {
         val p = activePlayer
-        val wantsToPlay = awaitingSkipTarget || (p.playWhenReady || awaitingIncoming) &&
+        val wantsToPlay = awaitingSkipTarget || idler.handover === p || (p.playWhenReady || awaitingIncoming) &&
             p.playerError == null &&
             p.mediaItemCount > 0 && !isParked(p) &&
             p.playbackState != Player.STATE_ENDED
@@ -368,10 +386,10 @@ class PlayerRepositoryImpl(
         // previous track still sounds, the next one loading is not a stall either (upstream 1.14.3).
         val outgoing = outgoingPlayer
         val tailSounds = awaitingIncoming && outgoing != null && outgoing.isPlaying
-        _isBuffering.value = awaitingSkipTarget || wantsToPlay && !tailSounds && p.playbackState == Player.STATE_BUFFERING
+        _isBuffering.value = awaitingSkipTarget || idler.handover === p && !tailSounds || wantsToPlay && !tailSounds && p.playbackState == Player.STATE_BUFFERING
         _soundingTrackId.value = when {
             outgoing != null && outgoing.isPlaying && (awaitingIncoming || !p.isPlaying) -> outgoing.currentMediaItem?.mediaId
-            p.isPlaying -> p.currentMediaItem?.mediaId
+            p.isPlaying && !isParked(p) -> p.currentMediaItem?.mediaId
             else -> null
         }
     }
@@ -411,13 +429,15 @@ class PlayerRepositoryImpl(
             if (outgoingPlayer != null || _currentTrackId.value == trackId) return@launch
 
             val standby = standbyPlayer
+            val item = buildMediaItem(trackId, playUri, title, artist, coverUrl)
+            setVolume(standby, 0f)
+            preloadedTrackId = trackId
+            if (idler.preload(standby, item)) return@launch // behind its silence, held when it arrives
             releaseForReuse(standby)
             applyPendingAudioSession(standby)
-            setVolume(standby, 0f)
             standby.playWhenReady = false
-            standby.setMediaItem(buildMediaItem(trackId, playUri, title, artist, coverUrl), 0L)
+            standby.setMediaItem(item, 0L)
             standby.prepare()
-            preloadedTrackId = trackId
             Log.d(TAG, "Preloaded warm standby player with trackId = $trackId")
         }
     }
@@ -438,9 +458,11 @@ class PlayerRepositoryImpl(
         artist: String?,
         coverUrl: String?,
         crossfade: Boolean,
-        startPositionMs: Long
+        startPositionMs: Long,
+        pickAtMs: Long
     ) {
         playJob?.cancel()
+        diagnostics.requested()
         playJob = scope.launch {
             val playUri = resolvePlayUri(trackId, url)
             if (playUri == null) {
@@ -449,13 +471,19 @@ class PlayerRepositoryImpl(
                 _playbackErrorEvent.tryEmit(PlaybackFailure(trackId, startPositionMs, "EMPTY_URL"))
                 return@launch
             }
-            startTransition(buildMediaItem(trackId, playUri, title, artist, coverUrl), crossfade, startPositionMs)
+            startTransition(buildMediaItem(trackId, playUri, title, artist, coverUrl), crossfade, startPositionMs, pickAtMs)
         }
     }
 
+    override fun isWarm(trackId: String): Boolean = standbyPlayer.let {
+        preloadedTrackId == trackId && it.currentMediaItem?.mediaId == trackId && it.playbackState == Player.STATE_READY && it.playerError == null
+    }
+
     /** Switches the audible track on the main thread. */
-    private suspend fun startTransition(item: MediaItem, crossfade: Boolean, startPositionMs: Long) {
+    private suspend fun startTransition(item: MediaItem, crossfade: Boolean, startPositionMs: Long, pickAtMs: Long = 0L) {
         val trackId = item.mediaId
+        // A pick still loading: the latest one wins, the track that plays on stays as it is
+        outgoingPlayer?.takeIf { pickAt > 0L && awaitingIncoming }?.let { revertPick(it, activePlayer, reason = null) }
         skipTargetArrived()
         // A crossfade that is still running (rapid skipping): fade its outgoing side out quickly instead of
         // cutting it, and keep the current track's volume to fade from.
@@ -468,9 +496,12 @@ class PlayerRepositoryImpl(
         _currentTrackId.value = trackId
         _progress.value = startPositionMs
         stalledSince = null
-        note(org.tegro.yamp.data.player.PlaybackJournal.Kind.START, item.mediaMetadata.title, if (crossfade) "crossfade" else "cut", startPositionMs)
-
         val current = activePlayer
+        val isCurrentAudible = current.isPlaying && current.playerError == null && !isParked(current)
+        pickAt = if (isCurrentAudible) pickAtMs else 0L
+        // A pick writes its START once it is ready, with the wait
+        if (pickAt == 0L) note(org.tegro.yamp.data.player.PlaybackJournal.Kind.START, item.mediaMetadata.title, if (crossfade) "crossfade" else "cut", startPositionMs)
+
         val incoming = standbyPlayer
         val reusePreloaded = preloadedTrackId == trackId &&
             incoming.currentMediaItem?.mediaId == trackId &&
@@ -478,16 +509,21 @@ class PlayerRepositoryImpl(
             incoming.playbackState != Player.STATE_IDLE
         preloadedTrackId = null
 
+        // An idling standby (both players running) takes a track from the start behind its silence; a start
+        // mid-track would need a seek, which drops the AudioTrack anyway, so it is loaded as usual
+        val behindSilence = !reusePreloaded && startPositionMs == 0L && (idler.isIdling(incoming) || idler.isQueued(incoming, trackId))
         if (reusePreloaded) {
             if (startPositionMs > 0L) incoming.seekTo(startPositionMs)
+        } else if (behindSilence) {
+            idler.queueBehind(incoming, item)
         } else {
             releaseForReuse(incoming)
             applyPendingAudioSession(incoming)
             incoming.setMediaItem(item, startPositionMs)
             incoming.prepare()
         }
+        diagnostics.started(incoming, item.mediaMetadata.title, ready = reusePreloaded && incoming.playbackState == Player.STATE_READY)
 
-        val isCurrentAudible = current.isPlaying && current.playerError == null
         activePlayerIndex = 1 - activePlayerIndex
         _activePlayerState.value = incoming
 
@@ -497,7 +533,7 @@ class PlayerRepositoryImpl(
             outgoingPlayer = current
             setVolume(incoming, 1f)
             incoming.playWhenReady = true
-        } else if (crossfade && isCurrentAudible && crossfadeDurationMs > 0L) {
+        } else if (pickAt > 0L || crossfadesFrom(isCurrentAudible, crossfade)) {
             wakeLockHelper.acquireTransitionLock(30_000L)
             outgoingPlayer = current
             setVolume(incoming, 0f)
@@ -505,13 +541,14 @@ class PlayerRepositoryImpl(
             // Nothing of the new track is in hand yet: the cache waits until it has its own buffer
             awaitingIncoming = true
             bufferedAhead = 0L
-            incoming.playWhenReady = false
+            // Behind silence it keeps playing (at volume 0) until the track arrives, which then holds it
+            if (!behindSilence) incoming.playWhenReady = false
             crossfadeJob = scope.launch { runCrossfade(current, incoming) }
         } else {
-            clearPlayer(current)
             setVolume(current, 1f)
             setVolume(incoming, 1f)
             incoming.playWhenReady = true
+            clearPlayer(current) // after the new one plays: with both players running, the old one idles
         }
         refreshPlaybackState()
     }
@@ -524,10 +561,16 @@ class PlayerRepositoryImpl(
      */
     private suspend fun runCrossfade(outgoing: ExoPlayer, incoming: ExoPlayer) {
         val waitStart = SystemClock.elapsedRealtime()
+        // Queued behind silence: the silence plays out first (at most its length)
+        while (idler.handover === incoming && SystemClock.elapsedRealtime() - waitStart < INCOMING_READY_TIMEOUT_MS) delay(WAIT_STEP_MS)
         while (incoming.playbackState != Player.STATE_READY) {
             if (incoming.playerError != null) {
                 awaitingIncoming = false
                 return // reported by the listener
+            }
+            if (SystemClock.elapsedRealtime() - waitStart > INCOMING_READY_TIMEOUT_MS && pickAt > 0L) {
+                revertPick(outgoing, incoming, "READY_TIMEOUT")
+                return
             }
             if (SystemClock.elapsedRealtime() - waitStart > INCOMING_READY_TIMEOUT_MS) {
                 awaitingIncoming = false
@@ -541,7 +584,7 @@ class PlayerRepositoryImpl(
             delay(WAIT_STEP_MS)
         }
         // A little more in hand while the previous track still has its tail to play
-        fun shortOfSound() = incoming.isLoading && incoming.totalBufferedDuration < CROSSFADE_HEADROOM_MS
+        fun shortOfSound() = pickAt == 0L && incoming.isLoading && incoming.totalBufferedDuration < CROSSFADE_HEADROOM_MS
         while (outgoing.isPlaying && shortOfSound() && SystemClock.elapsedRealtime() - waitStart < INCOMING_READY_TIMEOUT_MS) {
             delay(WAIT_STEP_MS)
         }
@@ -550,6 +593,23 @@ class PlayerRepositoryImpl(
         awaitingIncoming = false
         incoming.playWhenReady = true
         refreshPlaybackState()
+        if (pickAt > 0L) {
+            // The pick is ready: the current track fades out quickly under it, as for Next
+            note(org.tegro.yamp.data.player.PlaybackJournal.Kind.START, incoming.mediaMetadata.title, "pick, tap→ready ${SystemClock.elapsedRealtime() - pickAt} ms")
+            pickAt = 0L
+            setVolume(incoming, 1f)
+            fade(outgoing, from = logicalVolume[indexOf(outgoing)], to = 0f, durationMs = SKIP_FADE_MS)
+        } else {
+            crossfadeTail(outgoing, incoming, late, waitStart)
+        }
+        outgoingPlayer = null
+        clearPlayer(outgoing)
+        setVolume(outgoing, 1f)
+        setVolume(incoming, 1f)
+        wakeLockHelper.releaseTransitionLock()
+    }
+
+    private suspend fun crossfadeTail(outgoing: ExoPlayer, incoming: ExoPlayer, late: Boolean, waitStart: Long) {
         note(if (late) org.tegro.yamp.data.player.PlaybackJournal.Kind.CROSSFADE_LATE else org.tegro.yamp.data.player.PlaybackJournal.Kind.CROSSFADE, incoming.mediaMetadata.title, valueMs = SystemClock.elapsedRealtime() - waitStart)
 
         if (late) {
@@ -557,12 +617,31 @@ class PlayerRepositoryImpl(
         } else {
             equalPowerFade(outgoing, incoming, crossfadeDurationMs)
         }
+    }
 
+    private fun crossfadesFrom(audible: Boolean, crossfade: Boolean) = audible && crossfade && crossfadeDurationMs > 0L
+
+    /** When the user picked the track now loading in a hold (elapsedRealtime), or 0: see [PlayerRepository.playTrack]. */
+    private var pickAt = 0L
+
+    /**
+     * The pick loading on [incoming] is given up — a failure ([reason]) or a newer start (null): [outgoing], which
+     * never stopped, is the current track again, and a failure is reported so the screen goes back to it too.
+     */
+    private fun revertPick(outgoing: ExoPlayer, incoming: ExoPlayer, reason: String?) {
+        val failedId = incoming.currentMediaItem?.mediaId
+        if (reason != null) note(org.tegro.yamp.data.player.PlaybackJournal.Kind.ERROR, incoming.mediaMetadata.title, "pick failed: $reason, the current track plays on")
+        pickAt = 0L
+        awaitingIncoming = false
         outgoingPlayer = null
-        clearPlayer(outgoing)
-        setVolume(outgoing, 1f)
+        activePlayerIndex = indexOf(outgoing)
+        _activePlayerState.value = outgoing
+        _currentTrackId.value = outgoing.currentMediaItem?.mediaId
+        clearPlayer(incoming)
         setVolume(incoming, 1f)
         wakeLockHelper.releaseTransitionLock()
+        if (reason != null && failedId != null) _playbackErrorEvent.tryEmit(PlaybackFailure(failedId, 0L, PlaybackFailure.PICK_FAILED))
+        refreshPlaybackState()
     }
 
     /** [outgoing] down and [incoming] up over [durationMs], a step every [CROSSFADE_STEP_MS]: smooth to the ear. */
@@ -635,6 +714,7 @@ class PlayerRepositoryImpl(
     override fun fadeOutForSkip() {
         val player = activePlayer
         if (skipFading === player) return // skipped again while the fade runs: nothing new to do
+        diagnostics.skipRequested()
         fadeJob?.cancel()
         expectSkipTarget()
         note(org.tegro.yamp.data.player.PlaybackJournal.Kind.SKIP, player.mediaMetadata.title, when {
@@ -746,7 +826,9 @@ class PlayerRepositoryImpl(
         skipTargetArrived()
         cancelSkipFade()
         finishCrossfadeNow(restoreActiveVolume = true)
+        idler.handover = null
         activePlayer.pause()
+        idler.setRunning(standbyPlayer, false, outgoingPlayer)
         refreshPlaybackState()
     }
 
@@ -767,6 +849,7 @@ class PlayerRepositoryImpl(
                 delay(FADE_STEP_MS)
             }
             player.pause()
+            idler.setRunning(standbyPlayer, false, outgoingPlayer)
             setVolume(player, 1f)
             refreshPlaybackState()
         }
@@ -787,6 +870,7 @@ class PlayerRepositoryImpl(
         }
         setVolume(player, 1f)
         player.play()
+        idler.setRunning(standbyPlayer, true, outgoingPlayer)
         refreshPlaybackState()
         return true
     }
@@ -797,7 +881,7 @@ class PlayerRepositoryImpl(
         cancelSkipFade()
         finishCrossfadeNow(restoreActiveVolume = true)
         for (p in listOf(playerA, playerB)) {
-            clearPlayer(p)
+            clearPlayer(p, idle = false)
             setVolume(p, 1f)
         }
         preloadedTrackId = null
@@ -847,15 +931,17 @@ class PlayerRepositoryImpl(
 
     private fun indexOf(player: ExoPlayer) = if (player === playerA) 0 else 1
 
-    /** Stops and empties [player]; a pending audio-session change is applied while it holds nothing. */
-    private fun clearPlayer(player: ExoPlayer) {
-        val silence = parking?.silenceUri
-        if (keepStreams && silence != null) {
-            // Parked, not stopped: the AudioTrack lives on for the next track of the same format
-            player.playWhenReady = false
-            player.setMediaItem(MediaItem.Builder().setMediaId(PARKED_ID).setUri(silence).build(), 0L)
-            player.prepare()
-        } else {
+    /**
+     * Stops and empties [player]; a pending audio-session change is applied while it holds nothing.
+     * With both players running and the other one playing, it idles on silence instead ([SilentIdler]) — that
+     * setting wins over "keep audio streams", which only parks a player paused; [idle] false (a full stop)
+     * never idles.
+     */
+    private fun clearPlayer(player: ExoPlayer, idle: Boolean = true) {
+        if (idler.handover === player) idler.handover = null
+        val idleNow = idle && idler.enabled && (if (player === playerA) playerB else playerA).let { it.playWhenReady && it.mediaItemCount > 0 }
+        // Looping the silence until a track is queued behind it, or parked on it, or stopped
+        if (!(idleNow && idler.idle(player)) && !idler.park(player)) {
             player.stop()
             player.clearMediaItems()
         }
@@ -864,7 +950,8 @@ class PlayerRepositoryImpl(
 
     /** Before a player gets a new item: a stopped player is stopped again (harmless); a parked one is left as is. */
     private fun releaseForReuse(player: ExoPlayer) {
-        if (!(keepStreams && isParked(player))) player.stop()
+        idler.forget(player)
+        if (!(idler.keepStreams && isParked(player))) player.stop()
     }
 
     private fun setVolume(player: ExoPlayer, volume: Float) {

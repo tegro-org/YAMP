@@ -388,6 +388,10 @@
     <string name="settings_eq_announce_hint">Switch off if the music pauses by itself a second after it starts: some head units take the sound when their equalizer attaches</string>
     <string name="settings_keep_streams">Keep audio streams open</string>
     <string name="settings_keep_streams_hint">Experiment for a head unit that pauses the music when a track starts: a finished player waits on silence instead of closing its stream</string>
+    <string name="settings_duck_announcements">Keep playing under announcements</string>
+    <string name="settings_duck_announcements_hint">A navigator or a radar detector speaking makes the music quieter instead of pausing it. A phone call still pauses</string>
+    <string name="settings_both_players">Keep both players running</string>
+    <string name="settings_both_players_hint">Experiment against stutter on skips: the idle player plays silence, so no audio stream opens or closes. Wins over "Keep audio streams open"</string>
     <string name="settings_start_music">Музыка при запуске</string>
     <string name="settings_start_music_off">Не включать</string>
     <string name="settings_start_music_continue">Продолжить</string>

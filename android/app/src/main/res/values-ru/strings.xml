@@ -54,6 +54,10 @@
     <string name="settings_history_hint">Каждый прозвучавший трек, по дням, в «Моей музыке» → «История»</string>
     <string name="settings_keep_streams">Не закрывать звуковые потоки</string>
     <string name="settings_keep_streams_hint">Эксперимент для магнитолы, которая ставит музыку на паузу при старте трека: отыгравший плеер ждёт на тишине, не закрывая поток</string>
+    <string name="settings_duck_announcements">Не останавливать при подсказках</string>
+    <string name="settings_duck_announcements_hint">Когда говорит навигатор или радар-детектор, музыка становится тише, а не встаёт на паузу. Телефонный звонок по-прежнему ставит паузу</string>
+    <string name="settings_both_players">Оба плеера всегда играют</string>
+    <string name="settings_both_players_hint">Эксперимент против заиканий при переключении: свободный плеер играет тишину, звуковые потоки не открываются и не закрываются. Главнее, чем «Не закрывать звуковые потоки»</string>
     <string name="radio_start">Запустить радио</string>
     <string name="radio_picker_title">Запустить радио</string>
     <string name="radio_new">Новое радио</string>

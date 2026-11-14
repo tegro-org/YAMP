@@ -102,6 +102,22 @@ interface SettingsRepository {
     val keepAudioStreams: Flow<Boolean>
     suspend fun setKeepAudioStreams(enabled: Boolean)
 
+    /**
+     * Keep playing, quieter, while another app speaks (a navigator, a radar detector) even when it asks for the
+     * sound to itself (a transient focus loss); a phone call still pauses. Default on (2026-11-14): other players
+     * keep playing under such prompts.
+     */
+    val duckForAnnouncements: Flow<Boolean>
+    suspend fun setDuckForAnnouncements(enabled: Boolean)
+
+    /**
+     * Experimental (2026-11-14): the player that is not needed loops a silent clip instead of stopping, so both
+     * audio streams stay open all the time; the next track is queued behind the silence. Wins over
+     * [keepAudioStreams] when both are on.
+     */
+    val keepBothPlayersRunning: Flow<Boolean>
+    suspend fun setKeepBothPlayersRunning(enabled: Boolean)
+
     /** The diagnostic log file (Settings → About). Default: on in debug builds, off in release. */
     val diagnosticLog: Flow<Boolean>
     suspend fun setDiagnosticLog(enabled: Boolean)

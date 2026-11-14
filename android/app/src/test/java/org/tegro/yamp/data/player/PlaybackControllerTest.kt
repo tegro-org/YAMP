@@ -28,6 +28,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.tegro.yamp.domain.repository.PlaybackFailure
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -298,12 +299,14 @@ class PlaybackControllerTest {
     fun nextFadesTheOldTrackOutAndPreviousGoesBackOnlyWithinTheFirstThreeSeconds() {
         val controller = controller()
         controller.playing("1", playlist("1", "2", "3"))
+        engine.warm += "2"
 
         controller.playNext()
         controller.settle()
 
-        assertEquals("fadeOutForSkip", engine.names.first())
+        assertEquals("the next track is ready: the old one fades out now", "fadeOutForSkip", engine.names.first())
         assertEquals(listOf("2"), engine.played.map { it.trackId })
+        assertFalse(engine.played.single().pick)
 
         engine.progress.value = PlaybackQueue.RESTART_ON_PREV_THRESHOLD_MS - 1
         engine.calls.clear()
@@ -318,6 +321,64 @@ class PlaybackControllerTest {
         controller.settle()
         assertEquals(listOf(Call("seekTo", positionMs = 0L)), engine.calls)
         assertEquals("1", controller.currentTrack.value?.idString)
+    }
+
+    @Test
+    fun nextToATrackStillToLoadKeepsTheOldOnePlayingUntilItIsReady() {
+        val controller = controller()
+        controller.playing("1", playlist("1", "2", "3"))
+
+        controller.playNext()
+        controller.settle()
+
+        assertFalse("no fade into silence while the next one loads", "fadeOutForSkip" in engine.names)
+        assertEquals(listOf(Call("playTrack", "2", resolver.url("2"), 0L, pick = true)), engine.played)
+    }
+
+    @Test
+    fun aTrackPickedWhileOneSoundsLoadsFirstAndLeavesTheCurrentOneAlone() {
+        val controller = controller()
+        val list = playlist("1", "2", "3")
+        controller.playing("1", list)
+
+        // The car's next-track artwork, a queue row, a list: the user picks a track while one plays
+        controller.playTrack("3", list, PlaylistSource.LIBRARY)
+        controller.settle()
+
+        assertFalse("the current track is not touched before the pick is ready", "fadeOutForSkip" in engine.names)
+        assertEquals(listOf(Call("playTrack", "3", resolver.url("3"), 0L, pick = true)), engine.played)
+    }
+
+    @Test
+    fun aPickThatFailsGoesBackToTheTrackThatPlaysOn() {
+        val controller = controller()
+        val list = playlist("1", "2", "3")
+        controller.playing("1", list)
+        controller.playTrack("3", list, PlaylistSource.LIBRARY)
+        controller.settle()
+        engine.calls.clear()
+
+        // The engine gave the pick up and plays "1" on
+        engine.currentTrackId.value = "1"
+        check(engine.playbackErrorEvent.tryEmit(PlaybackFailure("3", 0L, PlaybackFailure.PICK_FAILED)))
+        controller.settle()
+
+        assertEquals("1", controller.currentTrack.value?.idString)
+        assertTrue("no retry, no skip", engine.played.isEmpty())
+    }
+
+    @Test
+    fun aTrackPickedWhilePausedIsAnOrdinaryStart() {
+        val controller = controller()
+        val list = playlist("1", "2", "3")
+        controller.playing("1", list)
+        engine.isPlaying.value = false
+
+        controller.playTrack("2", list, PlaylistSource.LIBRARY)
+        controller.settle()
+
+        assertFalse("fadeOutForSkip" in engine.names)
+        assertEquals(listOf(Call("playTrack", "2", resolver.url("2"), 0L, pick = false)), engine.played)
     }
 
     @Test

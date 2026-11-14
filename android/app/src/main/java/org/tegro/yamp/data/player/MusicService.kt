@@ -70,12 +70,24 @@ class MusicService : MediaLibraryService() {
     private var hasAudioFocus = false
     private var wasPlayingBeforeTransientLoss = false
 
+    /** "Keep playing under announcements" (Settings → Playback). */
+    @Volatile
+    private var duckForAnnouncements = true
+
+    /**
+     * Ducked for a transient loss instead of pausing. A call that starts while another app holds the focus is not
+     * announced to us again, so meanwhile the audio mode is watched: a call turns the duck into a pause.
+     */
+    private var transientDuckJob: kotlinx.coroutines.Job? = null
+
     /** Item picked in a car/browser; started by the play command that follows the selection. */
     private var pendingStart: (() -> Unit)? = null
 
     private val audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
         when (focusChange) {
             AudioManager.AUDIOFOCUS_LOSS -> {
+                transientDuckJob?.cancel()
+                transientDuckJob = null
                 hasAudioFocus = false
                 wasPlayingBeforeTransientLoss = false
                 playerRepository.setDucked(false)
@@ -83,16 +95,30 @@ class MusicService : MediaLibraryService() {
                 playbackController.pause(reason = "audio focus lost")
             }
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
-                // Phone call, voice assistant: pause and resume afterwards
-                wasPlayingBeforeTransientLoss = playerRepository.isPlaying.value
-                journal.record(PlaybackJournal.Kind.FOCUS, detail = "lost for a while" + (if (wasPlayingBeforeTransientLoss) ", resumes after" else ""))
-                playerRepository.pause()
+                val mode = audioManager?.mode ?: AudioManager.MODE_NORMAL
+                when (AudioFocusPolicy.onTransientLoss(duckForAnnouncements, mode)) {
+                    AudioFocusPolicy.TransientLoss.DUCK -> {
+                        // A navigator or a radar detector asking for the sound to itself: keep playing quieter
+                        journal.record(PlaybackJournal.Kind.FOCUS, detail = "lost for a while, ducking (announcements)")
+                        playerRepository.setDucked(true)
+                        watchForCallWhileDucked()
+                    }
+                    AudioFocusPolicy.TransientLoss.PAUSE -> {
+                        // Phone call, voice assistant: pause and resume afterwards
+                        wasPlayingBeforeTransientLoss = playerRepository.isPlaying.value
+                        val why = if (AudioFocusPolicy.isCall(mode)) ", call active" else ""
+                        journal.record(PlaybackJournal.Kind.FOCUS, detail = "lost for a while$why" + (if (wasPlayingBeforeTransientLoss) ", resumes after" else ""))
+                        playerRepository.pause()
+                    }
+                }
             }
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
                 // Navigation prompt, notification sound: keep playing quieter, like Apple Music
                 playerRepository.setDucked(true)
             }
             AudioManager.AUDIOFOCUS_GAIN -> {
+                transientDuckJob?.cancel()
+                transientDuckJob = null
                 hasAudioFocus = true
                 playerRepository.setDucked(false)
                 journal.record(PlaybackJournal.Kind.FOCUS, detail = "regained" + (if (wasPlayingBeforeTransientLoss) ", resuming" else ""))
@@ -106,12 +132,29 @@ class MusicService : MediaLibraryService() {
         }
     }
 
+    private fun watchForCallWhileDucked() {
+        transientDuckJob?.cancel()
+        transientDuckJob = serviceScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(CALL_CHECK_INTERVAL_MS)
+                val mode = audioManager?.mode ?: return@launch
+                if (AudioFocusPolicy.isCall(mode)) {
+                    wasPlayingBeforeTransientLoss = playerRepository.isPlaying.value
+                    journal.record(PlaybackJournal.Kind.FOCUS, detail = "call during an announcement, pausing" + (if (wasPlayingBeforeTransientLoss) ", resumes after" else ""))
+                    playerRepository.pause()
+                    return@launch
+                }
+            }
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         AppPresence.playerServiceRunning = true
         audioManager = getSystemService(AUDIO_SERVICE) as? AudioManager
         diagnosticLog.event("SERVICE", "created")
         serviceScope.launch { settings.announceEqualizer.collect { equalizer.announcing = it } }
+        serviceScope.launch { settings.duckForAnnouncements.collect { duckForAnnouncements = it } }
         // Equalizer apps hear about the sessions when the sound starts and after a real pause, never per track
         equalizer.keepAnnounced(serviceScope, playerRepository.isPlaying)
 
@@ -497,6 +540,9 @@ class MusicService : MediaLibraryService() {
 
     companion object {
         const val PLAYBACK_CHANNEL_ID = "yandex_music_lite_playback_channel"
+
+        /** How often the audio mode is checked for a call while ducked under another app's announcement. */
+        private const val CALL_CHECK_INTERVAL_MS = 500L
 
         /** Android Auto and the Automotive OS media center: allowed to browse and pick what to play. */
         private val CAR_HOSTS = setOf("com.google.android.projection.gearhead", "com.android.car.media")

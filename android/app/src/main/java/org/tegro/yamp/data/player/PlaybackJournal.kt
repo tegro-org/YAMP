@@ -39,7 +39,11 @@ class PlaybackJournal(
         /** Audio focus: lost, regained, denied, ducked. */
         FOCUS,
         /** Playback paused; [Event.detail] is who asked. */
-        PAUSE
+        PAUSE,
+        /** The sound card ran out of samples (a click or stutter, not the network); [Event.detail] has the numbers. */
+        UNDERRUN,
+        /** How long a start took, from the user's skip or the request to the track sounding; [Event.detail]. */
+        TIMING
     }
 
     data class Event(val atMs: Long, val kind: Kind, val title: String? = null, val detail: String? = null, val valueMs: Long = 0L)

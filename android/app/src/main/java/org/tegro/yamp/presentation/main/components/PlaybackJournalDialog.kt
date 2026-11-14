@@ -80,7 +80,7 @@ fun PlaybackJournalDialog(
 private const val SHOWN = 40
 
 private fun eventColor(kind: PlaybackJournal.Kind): Color = when (kind) {
-    PlaybackJournal.Kind.STALL, PlaybackJournal.Kind.CROSSFADE_LATE, PlaybackJournal.Kind.HOLD_TIMEOUT -> HiFi.Warning
+    PlaybackJournal.Kind.STALL, PlaybackJournal.Kind.CROSSFADE_LATE, PlaybackJournal.Kind.HOLD_TIMEOUT, PlaybackJournal.Kind.UNDERRUN -> HiFi.Warning
     PlaybackJournal.Kind.ERROR, PlaybackJournal.Kind.PAUSE -> HiFi.Danger
     else -> Color.White.copy(alpha = 0.82f)
 }
@@ -109,6 +109,8 @@ internal fun eventText(e: PlaybackJournal.Event): String {
         PlaybackJournal.Kind.ERROR -> "error: ${detail.orEmpty()}"
         PlaybackJournal.Kind.FOCUS -> "audio focus ${detail.orEmpty()}"
         PlaybackJournal.Kind.PAUSE -> "PAUSE: ${detail.orEmpty()}"
+        PlaybackJournal.Kind.UNDERRUN -> "underrun: ${detail.orEmpty()}"
+        PlaybackJournal.Kind.TIMING -> "timing: ${detail.orEmpty()}"
     }
     return listOfNotNull(body, title).joinToString(" ")
 }

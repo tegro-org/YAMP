@@ -182,6 +182,14 @@ class SettingsRepositoryImpl @Inject constructor(
     override val keepAudioStreams = keepStreamsPref.first
     override suspend fun setKeepAudioStreams(enabled: Boolean) = keepStreamsPref.second(enabled)
 
+    private val duckAnnouncementsPref = bool("duck_for_announcements", true)
+    override val duckForAnnouncements = duckAnnouncementsPref.first
+    override suspend fun setDuckForAnnouncements(enabled: Boolean) = duckAnnouncementsPref.second(enabled)
+
+    private val bothPlayersPref = bool("keep_both_players_running", false)
+    override val keepBothPlayersRunning = bothPlayersPref.first
+    override suspend fun setKeepBothPlayersRunning(enabled: Boolean) = bothPlayersPref.second(enabled)
+
     private val diagnosticLogPref = bool("diagnostic_log", org.tegro.yamp.BuildConfig.DEBUG)
     override val diagnosticLog = diagnosticLogPref.first
     override suspend fun setDiagnosticLog(enabled: Boolean) = diagnosticLogPref.second(enabled)

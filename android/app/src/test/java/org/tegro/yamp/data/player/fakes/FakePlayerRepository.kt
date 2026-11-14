@@ -15,7 +15,10 @@ import org.tegro.yamp.domain.repository.PlayerRepository
  * is the moment audio renders, [fail] a player error on the loaded track.
  */
 class FakePlayerRepository(private val context: Context) : PlayerRepository {
-    data class Call(val name: String, val trackId: String? = null, val url: String? = null, val positionMs: Long? = null)
+    data class Call(val name: String, val trackId: String? = null, val url: String? = null, val positionMs: Long? = null, val pick: Boolean = false)
+
+    /** Tracks the standby holds ready ([isWarm]). */
+    val warm = mutableSetOf<String>()
 
     /** One entry per engine call, in order. Copy-on-write: the controller's queue operations finish on IO threads. */
     val calls = java.util.concurrent.CopyOnWriteArrayList<Call>()
@@ -59,15 +62,18 @@ class FakePlayerRepository(private val context: Context) : PlayerRepository {
         artist: String?,
         coverUrl: String?,
         crossfade: Boolean,
-        startPositionMs: Long
+        startPositionMs: Long,
+        pickAtMs: Long
     ) {
-        calls += Call("playTrack", trackId, url, startPositionMs)
+        calls += Call("playTrack", trackId, url, startPositionMs, pick = pickAtMs > 0L)
         currentTrackId.value = trackId
         soundingTrackId.value = null
         progress.value = startPositionMs
         isBuffering.value = true
         isPlaying.value = true
     }
+
+    override fun isWarm(trackId: String): Boolean = trackId in warm
 
     override fun prepareNextTrack(trackId: String, url: String, title: String?, artist: String?, coverUrl: String?) {
         calls += Call("prepareNextTrack", trackId, url)

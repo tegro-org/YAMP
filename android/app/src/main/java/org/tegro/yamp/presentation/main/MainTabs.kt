@@ -233,6 +233,8 @@ internal fun LibraryTab(
             onSeparateAudioSessionsChange = settingsVm::setSeparateAudioSessions,
             onAnnounceEqualizerChange = settingsVm::setAnnounceEqualizer,
             onKeepAudioStreamsChange = settingsVm::setKeepAudioStreams,
+            onDuckForAnnouncementsChange = settingsVm::setDuckForAnnouncements,
+            onKeepBothPlayersRunningChange = settingsVm::setKeepBothPlayersRunning,
             onNormalizeVolumeChange = settingsVm::setNormalizeVolume,
             onOpenEqualizer = settingsVm::openEqualizer,
             onStartMusicChange = settingsVm::setStartMusic,

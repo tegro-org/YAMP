@@ -422,10 +422,10 @@ class PlaybackController @Inject constructor(
         if (playlist.none { it.idString == trackId }) return
         // A context chosen on purpose: there is nothing to go back to any more
         if (source != null) returnPoint = null
-        playOp {
+        pickOp {
             val queue = active
             if (queue != null && queue.tracks.map { it.idString } == playlist.map { it.idString }) {
-                val entry = queue.entries.firstOrNull { it.ref.id == trackId } ?: return@playOp
+                val entry = queue.entries.firstOrNull { it.ref.id == trackId } ?: return@pickOp
                 startEntry(entry.entryId, crossfade, startPositionMs)
             } else {
                 playFromNow(playlist, source?.name ?: queue?.queue?.origin, trackId, crossfade, startPositionMs)
@@ -437,13 +437,17 @@ class PlaybackController @Inject constructor(
     fun playFrom(tracks: List<TrackDetailsDto>, source: PlaylistSource, startId: String?) {
         if (tracks.isEmpty()) return
         returnPoint = null
-        playOp { playFromNow(tracks, source.name, startId, crossfade = true, startPositionMs = 0L) }
+        pickOp {
+            playFromNow(tracks, source.name, startId, crossfade = true, startPositionMs = 0L)
+        }
     }
 
     /** Moves the cursor to [entryId] of the active queue and plays it: the queue sheet's row, duplicates included. */
     fun playEntry(entryId: Long) {
         returnPoint = null
-        playOp { startEntry(entryId, crossfade = true, startPositionMs = 0L) }
+        pickOp {
+            startEntry(entryId, crossfade = true, startPositionMs = 0L)
+        }
     }
 
     /**
@@ -452,14 +456,14 @@ class PlaybackController @Inject constructor(
      */
     fun playNowKeepQueue(track: TrackDetailsDto) {
         returnPoint = null
-        playOp {
+        pickOp {
             val queue = active
             if (queue == null) {
                 playFromNow(listOf(track), PlaylistSource.LIBRARY.name, track.idString, crossfade = true, startPositionMs = 0L)
-                return@playOp
+                return@pickOp
             }
             queueManager.insertAfterCursor(listOf(track))
-            val entry = active?.entries?.getOrNull(queue.cursorIndex + 1) ?: return@playOp
+            val entry = active?.entries?.getOrNull(queue.cursorIndex + 1) ?: return@pickOp
             startEntry(entry.entryId, crossfade = true, startPositionMs = 0L)
         }
     }
@@ -471,7 +475,9 @@ class PlaybackController @Inject constructor(
             return
         }
         returnPoint = null
-        playOp { playWaveFromNow(trackId) }
+        pickOp {
+            playWaveFromNow(trackId)
+        }
     }
 
     /** Returns once the saved session (track, queue, position) is back, so "continue" has something to continue. */
@@ -490,7 +496,9 @@ class PlaybackController @Inject constructor(
 
     fun playMyVibe() {
         returnPoint = null
-        playOp { playMyVibeNow() }
+        pickOp {
+            playMyVibeNow()
+        }
     }
 
     fun playAllLikedTracks(shuffle: Boolean = false) {
@@ -508,13 +516,13 @@ class PlaybackController @Inject constructor(
     /** A station goes on air beside the active queue, which stays as it is; anything played from a queue ends it. */
     fun playRadioStation(station: RadioStation) {
         returnPoint = null
-        playOp {
+        pickOp {
             val radioTrack = radioTrackFor(station)
             liveStation.value = radioTrack
             restoredPositionMs.value = 0L
             waitingForConnection = false
             scope.launch { cacheDao.putValue(ValueEntity(CacheDatabase.SHARED, LIVE_STATION, station.id)) }
-            resolveAndPlay(radioTrack, crossfade = true, startPositionMs = 0L)
+            resolveAndPlay(radioTrack, crossfade = true, startPositionMs = 0L, pickAt = takePick())
         }
     }
 
@@ -660,7 +668,16 @@ class PlaybackController @Inject constructor(
         }
     }
 
-    fun playNext(isAuto: Boolean = false) = queueOp { playNextNow(isAuto) }
+    fun playNext(isAuto: Boolean = false) {
+        val tapAt = android.os.SystemClock.elapsedRealtime()
+        queueOp {
+            try {
+                playNextNow(isAuto, tapAt)
+            } finally {
+                userPickAt = 0L // not taken: nothing started
+            }
+        }
+    }
 
     fun playPrev() = queueOp { playPrevNow() }
 
@@ -1055,6 +1072,43 @@ class PlaybackController @Inject constructor(
         job.start()
     }
 
+    /**
+     * When the user picked the track the running operation starts (elapsedRealtime), or 0. A pick does not touch
+     * the sounding track until the picked one is ready; then the old one fades out quickly and the pick starts at
+     * once — no crossfade (2026-11-14: the automatic crossfade held the old track at full volume for seconds with
+     * both players decoding, heard as a stutter on a slow head unit). Taken by the first start ([takePick]).
+     */
+    private var userPickAt = 0L
+
+    /** The user's pick for the start about to happen, once; with nothing sounding there is nothing to keep. */
+    private fun takePick(): Long = userPickAt.also { userPickAt = 0L }.takeIf { playerRepository.isPlaying.value } ?: 0L
+
+    /** A start the user asked for by picking a track: see [userPickAt]. */
+    private fun pickOp(block: suspend () -> Unit) {
+        val tapAt = android.os.SystemClock.elapsedRealtime()
+        playOp {
+            userPickAt = tapAt
+            pickFromEntryId = active?.cursorEntry?.entryId
+            try {
+                block()
+            } finally {
+                userPickAt = 0L
+            }
+        }
+    }
+
+    /** The entry that played before a pick, to go back to if the pick never gets ready. */
+    private var pickFromEntryId: Long? = null
+
+    /** A pick failed in the engine, which plays the previous track on: the screen and the queue go back to it. */
+    private suspend fun revertFailedPick() {
+        val back = pickFromEntryId?.takeIf { id -> active?.entries?.any { it.entryId == id } == true }
+        pickFromEntryId = null
+        if (back != null) queueManager.moveCursor(back, progress.value)
+        _isStarting.value = false
+        showMessage(context.getString(R.string.msg_playback_failed))
+    }
+
     /** A request to start something: a later one, or a pause, supersedes it before it runs. */
     private fun playOp(block: suspend () -> Unit) {
         val request = ++startRequestId
@@ -1103,6 +1157,7 @@ class PlaybackController @Inject constructor(
     /** Moves the cursor to [entryId] and starts its track: the one place a queue entry is played from. */
     private suspend fun startEntry(entryId: Long, crossfade: Boolean, startPositionMs: Long) {
         val request = ++startRequestId
+        val pickAt = takePick()
         waitingForConnection = false
         queueManager.moveCursor(entryId, startPositionMs)
         if (request != startRequestId) return // paused or superseded while the cursor was being written
@@ -1129,11 +1184,11 @@ class PlaybackController @Inject constructor(
             sendRadioFeedback("trackStarted", trackId)
         }
 
-        resolveAndPlay(track, crossfade, startPositionMs)
+        resolveAndPlay(track, crossfade, startPositionMs, pickAt)
         queue.tracks.getOrNull(index + 1)?.let { prepareStandbyWhenSettled(it) }
     }
 
-    private suspend fun playNextNow(isAuto: Boolean) {
+    private suspend fun playNextNow(isAuto: Boolean, tapAt: Long = 0L) {
         val station = liveStation.value
         if (station != null) {
             if (!isAuto) playerRepository.fadeOutForSkip()
@@ -1151,10 +1206,14 @@ class PlaybackController @Inject constructor(
             }
             return
         }
-        // A manual skip must not leave the old track playing while the next stream is resolved (D36): it
-        // fades out now and the play glyph shows loading until the next one sounds. Automatic transitions
-        // keep the user's crossfade.
-        if (!isAuto) playerRepository.fadeOutForSkip()
+        // A manual skip to a warmed-up next track fades the old one out now and the next sounds at once (D36).
+        // A next track still to load is a pick: the old one plays on until it is ready (2026-11-14), never
+        // silence while it loads. Automatic transitions keep the user's crossfade.
+        val pickAt = if (isAuto) 0L else (nextAdvance(queue, manual = true) as? Advance.To)
+            ?.takeIf { playerRepository.isWarm(queue.tracks[it.index].idString) }
+            ?.let { playerRepository.fadeOutForSkip(); 0L } ?: tapAt
+        if (pickAt > 0L) pickFromEntryId = queue.cursorEntry?.entryId
+        userPickAt = pickAt
         if (returnFromOfflineMixNow()) return
 
         val currentId = current.idString
@@ -1179,11 +1238,13 @@ class PlaybackController @Inject constructor(
                         if (request != startRequestId) return@queueOp
                         val updated = active ?: return@queueOp
                         val following = nextAdvance(updated, manual = !isAuto) as? Advance.To
+                        userPickAt = pickAt
                         when {
                             following != null -> startEntry(updated.entries[following.index].entryId, crossfade = true, startPositionMs = 0L)
                             updated.entries.isNotEmpty() -> startEntry(updated.entries.first().entryId, crossfade = true, startPositionMs = 0L)
                             else -> playAllLikedTracks()
                         }
+                        userPickAt = 0L
                     }
                 }
                 if (queue.queue.kind == QueueKind.RADIO) fetchRadio(afterFetch) else wave.fetchMore(afterFetch)
@@ -1302,7 +1363,7 @@ class PlaybackController @Inject constructor(
 
     // endregion
 
-    private fun resolveAndPlay(track: TrackDetailsDto, crossfade: Boolean, startPositionMs: Long) {
+    private fun resolveAndPlay(track: TrackDetailsDto, crossfade: Boolean, startPositionMs: Long, pickAt: Long = 0L) {
         currentPlayJob?.cancel()
         val trackId = track.idString
         val title = track.title
@@ -1317,7 +1378,7 @@ class PlaybackController @Inject constructor(
                 _isStarting.value = false
                 return
             }
-            playerRepository.playTrack(trackId, station.streamUrl, title, artist, coverUrl, crossfade, 0L)
+            playerRepository.playTrack(trackId, station.streamUrl, title, artist, coverUrl, crossfade, 0L, pickAt)
             return
         }
 
@@ -1326,7 +1387,7 @@ class PlaybackController @Inject constructor(
             publishQuality(trackId)
             streamingTrackId = null
             playingCopyId = null
-            playerRepository.playTrack(trackId, "", title, artist, coverUrl, crossfade, startPositionMs)
+            playerRepository.playTrack(trackId, "", title, artist, coverUrl, crossfade, startPositionMs, pickAt)
             return
         }
         when (RoadPlan.originFor(currentLink(), link.mayTryStream(), reserve.has(trackId))) {
@@ -1336,7 +1397,7 @@ class PlaybackController @Inject constructor(
                 return
             }
             TrackOrigin.COPY -> {
-                playCopy(track, crossfade, startPositionMs)
+                playCopy(track, crossfade, startPositionMs, pickAt)
                 return
             }
             TrackOrigin.STREAM -> Unit
@@ -1345,7 +1406,7 @@ class PlaybackController @Inject constructor(
         // Instant start when the URL is already resolved
         val fastUrl = preloadManager.getResolvedUrl(trackId)
         if (fastUrl != null) {
-            playStreamOrEqualCopy(track, fastUrl, crossfade, startPositionMs)
+            playStreamOrEqualCopy(track, fastUrl, crossfade, startPositionMs, pickAt)
             return
         }
 
@@ -1356,12 +1417,14 @@ class PlaybackController @Inject constructor(
                     preloadManager.getOrFetchUrl(trackId)
                 }
             if (url != null) {
-                playStreamOrEqualCopy(track, url, crossfade, startPositionMs)
+                playStreamOrEqualCopy(track, url, crossfade, startPositionMs, pickAt)
             } else {
                 Log.e(TAG, "Failed to resolve mp3 URL for track $trackId")
                 reportTrouble()
                 if (currentTrackNow()?.idString != trackId) return@launch
-                onPlaybackFailure(PlaybackFailure(trackId, startPositionMs, "URL_RESOLVE"))
+                // A pick whose link never came: the engine was not touched, the previous track plays on
+                val reason = if (pickAt > 0L && playerRepository.isPlaying.value) PlaybackFailure.PICK_FAILED else "URL_RESOLVE"
+                onPlaybackFailure(PlaybackFailure(trackId, startPositionMs, reason))
             }
         }
     }
@@ -1392,20 +1455,20 @@ class PlaybackController @Inject constructor(
     }
 
     /** The stream, unless the reserve holds as good a copy: then it starts at once and costs no traffic. */
-    private fun playStreamOrEqualCopy(track: TrackDetailsDto, url: String, crossfade: Boolean, startPositionMs: Long) {
+    private fun playStreamOrEqualCopy(track: TrackDetailsDto, url: String, crossfade: Boolean, startPositionMs: Long, pickAt: Long) {
         val trackId = track.idString
         val copy = reserve.qualityOf(trackId)
         if (copy != null && RoadPlan.copyIsEnough(preloadManager.qualityOf(trackId), copy)) {
-            playCopy(track, crossfade, startPositionMs)
+            playCopy(track, crossfade, startPositionMs, pickAt)
             return
         }
         publishQuality(trackId)
         streamingTrackId = trackId
         playingCopyId = null
-        playerRepository.playTrack(trackId, url, track.title, track.artists.firstOrNull()?.name, coverUrlFor(track), crossfade, startPositionMs)
+        playerRepository.playTrack(trackId, url, track.title, track.artists.firstOrNull()?.name, coverUrlFor(track), crossfade, startPositionMs, pickAt)
     }
 
-    private fun playCopy(track: TrackDetailsDto, crossfade: Boolean, startPositionMs: Long) {
+    private fun playCopy(track: TrackDetailsDto, crossfade: Boolean, startPositionMs: Long, pickAt: Long = 0L) {
         val trackId = track.idString
         val file = reserve.fileOf(trackId)
         if (file == null) {
@@ -1419,7 +1482,7 @@ class PlaybackController @Inject constructor(
         _streamQuality.value = reserve.qualityOf(trackId)?.let { context.getString(R.string.quality_stream, it.codec.uppercase(), it.bitrateKbps) }
         streamingTrackId = null
         playingCopyId = trackId
-        playerRepository.playTrack(trackId, file.toUri().toString(), track.title, track.artists.firstOrNull()?.name, coverUrlFor(track), crossfade, startPositionMs)
+        playerRepository.playTrack(trackId, file.toUri().toString(), track.title, track.artists.firstOrNull()?.name, coverUrlFor(track), crossfade, startPositionMs, pickAt)
     }
 
     /** The music has stood still long enough to matter: go on from the copy if there is one, and find out why. */
@@ -1494,6 +1557,11 @@ class PlaybackController @Inject constructor(
     private fun onPlaybackFailure(failure: PlaybackFailure) {
         val current = currentTrackNow() ?: return
         if (failure.trackId != current.idString) return // stale event from a track we already left
+        if (failure.reason == PlaybackFailure.PICK_FAILED) {
+            journal.record(PlaybackJournal.Kind.ERROR, current.title, "pick failed, back to the previous track")
+            queueOp { revertFailedPick() }
+            return
+        }
 
         preloadManager.evictUrl(failure.trackId)
         // A copy that does not play is no use to anyone

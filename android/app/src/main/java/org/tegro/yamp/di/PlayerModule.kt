@@ -95,7 +95,8 @@ object PlayerModule {
         )
         val parking = org.tegro.yamp.data.repository.PlayerRepositoryImpl.ParkingPolicy(
             keep = settings.keepAudioStreams,
-            silenceUri = "android.resource://${context.packageName}/${org.tegro.yamp.R.raw.silence}"
+            silenceUri = "android.resource://${context.packageName}/${org.tegro.yamp.R.raw.silence}",
+            bothRunning = settings.keepBothPlayersRunning
         )
         return org.tegro.yamp.data.repository.PlayerRepositoryImpl(
             playerA, playerB, downloadManager, preloadManager, wakeLockHelper, sessions, journal, parking

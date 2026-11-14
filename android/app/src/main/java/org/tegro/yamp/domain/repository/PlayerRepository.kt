@@ -4,7 +4,12 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
 /** Playback failure of the active track; [positionMs] lets the controller retry from the same place. */
-data class PlaybackFailure(val trackId: String, val positionMs: Long, val reason: String)
+data class PlaybackFailure(val trackId: String, val positionMs: Long, val reason: String) {
+    companion object {
+        /** A track the user picked never got ready; the engine went back to the one that plays on. */
+        const val PICK_FAILED = "PICK_FAILED"
+    }
+}
 
 interface PlayerRepository {
     val currentTrackId: StateFlow<String?>
@@ -31,8 +36,17 @@ interface PlayerRepository {
         artist: String?,
         coverUrl: String?,
         crossfade: Boolean = true,
-        startPositionMs: Long = 0L
+        startPositionMs: Long = 0L,
+        /**
+         * When the user picked this track (elapsedRealtime), or 0. A pick loads first while the current track
+         * plays on untouched; once ready, the current one fades out quickly and the pick starts at once. A pick
+         * that fails leaves the current track playing and reports [PlaybackFailure.PICK_FAILED].
+         */
+        pickAtMs: Long = 0L
     )
+
+    /** The standby holds [trackId] ready to sound at once (a skip to it needs no load). */
+    fun isWarm(trackId: String): Boolean
     fun prepareNextTrack(trackId: String, url: String, title: String?, artist: String?, coverUrl: String?)
     /** Volume multipliers by track id (1 = unchanged), for normalization; a track not listed plays as is. */
     fun setTrackGains(gains: Map<String, Float>)

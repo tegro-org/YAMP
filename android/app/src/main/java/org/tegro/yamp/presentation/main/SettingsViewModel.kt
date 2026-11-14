@@ -43,7 +43,8 @@ class SettingsViewModel @Inject constructor(
 
     private data class Sound(
         val compatible: Boolean, val crossfade: Int, val normalize: Boolean, val separateSessions: Boolean, val startMusic: StartMusic,
-        val bluetooth: Boolean, val explicit: Boolean, val announce: Boolean = true, val history: Boolean = true, val keepStreams: Boolean = false
+        val bluetooth: Boolean, val explicit: Boolean, val announce: Boolean = true, val history: Boolean = true, val keepStreams: Boolean = false,
+        val duck: Boolean = true, val bothPlayers: Boolean = false
     )
     private data class Look(val startPage: StartPage, val expand: Boolean, val swipe: Boolean, val left: Boolean, val clock: Boolean)
     private data class Scale(val auto: Boolean, val manual: Float, val animations: AnimationMode)
@@ -55,6 +56,9 @@ class SettingsViewModel @Inject constructor(
             Sound(false, 0, false, false, s, b, e, a, h)
         }
     ) { sound, rest -> sound.copy(startMusic = rest.startMusic, bluetooth = rest.bluetooth, explicit = rest.explicit, announce = rest.announce, history = rest.history) }
+        .combine(combine(settings.duckForAnnouncements, settings.keepBothPlayersRunning, ::Pair)) { sound, (duck, both) ->
+            sound.copy(duck = duck, bothPlayers = both)
+        }
 
     private val look: Flow<Look> = combine(
         settings.startPage, settings.expandPlayerOnPlay, settings.swipeToCloseMiniPlayer, settings.steeringWheelOnLeft, settings.carClock, ::Look
@@ -78,6 +82,8 @@ class SettingsViewModel @Inject constructor(
             separateAudioSessions = s.separateSessions,
             announceEqualizer = s.announce,
             keepAudioStreams = s.keepStreams,
+            duckForAnnouncements = s.duck,
+            keepBothPlayersRunning = s.bothPlayers,
             equalizerAvailable = equalizer.isAvailable(),
             startMusic = s.startMusic,
             bluetoothAutoplay = s.bluetooth,
@@ -117,6 +123,8 @@ class SettingsViewModel @Inject constructor(
     fun setSeparateAudioSessions(enabled: Boolean) = save { setSeparateAudioSessions(enabled) }
     fun setAnnounceEqualizer(enabled: Boolean) = save { setAnnounceEqualizer(enabled) }
     fun setKeepAudioStreams(enabled: Boolean) = save { setKeepAudioStreams(enabled) }
+    fun setDuckForAnnouncements(enabled: Boolean) = save { setDuckForAnnouncements(enabled) }
+    fun setKeepBothPlayersRunning(enabled: Boolean) = save { setKeepBothPlayersRunning(enabled) }
     fun openEqualizer() = equalizer.open()
     fun clearJournal() = journal.clear()
     fun setDiagnosticLog(enabled: Boolean) = save { setDiagnosticLog(enabled) }
