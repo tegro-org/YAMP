@@ -1,6 +1,7 @@
 package org.tegro.yamp.presentation.update
 
 import kotlinx.coroutines.flow.first
+import org.tegro.yamp.BuildConfig
 import org.tegro.yamp.R
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -40,10 +41,13 @@ class UpdateViewModel @Inject constructor(
     private var downloadedApkFile: java.io.File? = null
 
     init {
-        // Silent check on launch, after a delay for network readiness
-        viewModelScope.launch {
-            delay(5000L)
-            checkForUpdates(silent = true)
+        // Silent check on launch, after a delay for network readiness. Not in debug builds: a release APK
+        // cannot be installed over a debug one (different signing key), so the offer would only get in the way.
+        if (!BuildConfig.DEBUG) {
+            viewModelScope.launch {
+                delay(5000L)
+                checkForUpdates(silent = true)
+            }
         }
         // Leftover update files from an earlier session
         viewModelScope.launch(Dispatchers.IO) { updateManager.cleanupUpdateFiles() }
