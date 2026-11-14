@@ -147,6 +147,8 @@
 - [x] Remove the probe (`RadioStationProbe.kt` + the About button + the `batch-id`/`timestamp` feedback params) —
       kept on branch `debug/radio-probe`; released as `v0.2.1` (2026-11-13)
 - [ ] Separate: rotor feedback 400 on every station — compare the form fields / headers with upstream's current version
+- [ ] Report plays to Yandex (play-audio / history) under the queue's account — upstream never does; this is what lets
+      each account's taste follow what's listened to in YAMP. Do together with the feedback-400 fix.
 
 ## Phase 2a — Accounts: every account live, queues bound to an account (design doc first: `docs/phase-2a-accounts.md`)
 
@@ -157,12 +159,12 @@ Model and UX (agreed in discussion 2026-11-14):
 - [ ] **No global account switch.** All signed-in accounts are live at once (search, browse); the active queue *is*
       the current account — Home (D49), Library, Search, likes follow it.
 - [ ] **Every queue is bound to an account at creation** (normal and radio): its Yandex tracks stream under that
-      account, likes go to it, plays land in its history; a radio's recommendations and feedback come from it.
+      account; likes and (once fixed) feedback/plays go to it; a radio's recommendations come from it.
       WAVE stays one per account (no choice). Default = the active queue's account (first start: the first account).
 - [ ] **Choose the account** in "New queue" and in "Start radio" → "New radio"; re-seeding a radio keeps its
-      account. Change it later from the queue's ⋮ menu (radio: next refills come from the new account) — to confirm.
-- [ ] **All queues always shown**, each with an account marker (initial / avatar / colour); optional account
-      filter chips in the switcher if the list grows. No hiding by account. Car / Android Auto the same.
+      account. **The binding is permanent** — no "change account" anywhere (D61).
+- [ ] **Queues of every signed-in account always shown**, each with an account marker (initial / avatar); no filter
+      control. Car / Android Auto the same.
 - [ ] **One account → no extra controls** anywhere (no selector, no marker).
 - [ ] Revise D22 (queues stay visible to all; each has an owner account) and D7 history note in `kb/decisions.md`.
 
@@ -173,9 +175,10 @@ Technical (from the 2026-11-14 code check):
 - [ ] Key accounts by Yandex uid, not the folder name (`UserAccount.kt:27-30`: login → display name → uid; can
       collide, and changes when a provisional `temp_` account gets its details). Migrate `owner` / `account` columns.
 - [ ] `queues.account` for every queue (today only WAVE), migration: existing queues → the current default account.
-- [ ] Sign-out: the account's WAVE queue removed; its downloads pruned; its bound queues stay with Yandex entries
-      unavailable (D22) or are offered to move to another account — to decide. History stays app-wide (D46),
-      possibly with an account column.
+- [ ] Sign-out (D62): the account's queues (its WAVE queue too) are kept but hidden — a collapsed "Signed-out
+      accounts · N queues" row at the bottom of the phone switcher (Delete only), absent in the car / Android Auto;
+      signing back in to the same uid restores them. Its cached lists and unshared downloads are removed. History
+      stays app-wide (D46), with a nullable account column.
 - [ ] Startup account picker and the account switcher of upstream retire (Settings keeps add / remove / default).
 
 Later (multi-source queues, with Phase 3+): a queue holds entries from several accounts/providers; the selector

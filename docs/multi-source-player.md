@@ -175,17 +175,19 @@ accounts, so a queue must play, refill and report under its own account.
   Home (D49), Library, Search and likes follow it. Upstream's account switcher and startup picker retire; Settings
   keeps add / remove / default.
 - **Every queue is bound to an account at creation** (normal and radio): its Yandex tracks stream under that account,
-  likes go to it, plays land in its history; a radio's recommendations and feedback come from it. My Wave stays one
+  likes and (once fixed) feedback/plays go to it; a radio's recommendations come from it. My Wave stays one
   per account. Default = the active queue's account. Chosen in "New queue" and "Start radio" → "New radio";
-  re-seeding keeps the radio's account.
-- **All queues always shown** (D22 holds: nothing hides on a switch), each with an account marker; optional account
-  filter chips in the switcher. With one account none of these controls appear.
+  re-seeding keeps the radio's account; the binding is permanent (no change of account later).
+- **Queues of every signed-in account always shown** (D22 holds: nothing hides on a switch), each with an account
+  marker; no filter control. With one account none of these controls appear.
 - **Technical:** per-request account instead of one global token — `ProviderAccount` and per-provider clients of
   Phase 3 (C5, C6) are introduced here for Yandex, so Phase 3 builds on them; accounts keyed by Yandex uid (not the
-  login-based folder name); `queues.account` for every queue; sign-out removes the account's My Wave queue and
-  downloads.
+  login-based folder name); `queues.account` for every queue; sign-out removes the account's cached lists and
+  unshared downloads.
 - **Later (Phase 3+):** a queue holding entries of several accounts/providers — the selector becomes multi-select.
-- Open: changing a queue's account later from its ⋮ menu; what sign-out does to the account's bound queues.
+- **Sign-out** keeps the account's queues (its My Wave too) but hides them in a collapsed "Removed accounts" group
+  at the bottom of the phone switcher (not in the car or Android Auto); signing back in to the same account restores
+  them. Design: [phase-2a-accounts.md](phase-2a-accounts.md).
 
 ### Phase 3 — Provider abstraction
 
