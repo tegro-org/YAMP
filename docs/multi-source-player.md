@@ -164,6 +164,28 @@ Implemented 2026-11-13; design and as-built notes in [phase-2-radio.md](phase-2-
   is unchanged in Phase 2 (D53).
 - Rotor feedback (started/finished/skip) is sent for a radio's station as for My Wave.
 
+### Phase 2a — Accounts: every account live, queues bound to an account
+
+Planned 2026-11-14 (plan in `tasks/todo.md`; design doc `docs/phase-2a-accounts.md` before code). Why: two radios
+on one Yandex account converge — the account's listening history steers both; separate tastes need separate
+accounts, so a queue must play, refill and report under its own account.
+
+- **No global account switch.** All signed-in accounts are live at once; the active queue *is* the current account —
+  Home (D49), Library, Search and likes follow it. Upstream's account switcher and startup picker retire; Settings
+  keeps add / remove / default.
+- **Every queue is bound to an account at creation** (normal and radio): its Yandex tracks stream under that account,
+  likes go to it, plays land in its history; a radio's recommendations and feedback come from it. My Wave stays one
+  per account. Default = the active queue's account. Chosen in "New queue" and "Start radio" → "New radio";
+  re-seeding keeps the radio's account.
+- **All queues always shown** (D22 holds: nothing hides on a switch), each with an account marker; optional account
+  filter chips in the switcher. With one account none of these controls appear.
+- **Technical:** per-request account instead of one global token — `ProviderAccount` and per-provider clients of
+  Phase 3 (C5, C6) are introduced here for Yandex, so Phase 3 builds on them; accounts keyed by Yandex uid (not the
+  login-based folder name); `queues.account` for every queue; sign-out removes the account's My Wave queue and
+  downloads.
+- **Later (Phase 3+):** a queue holding entries of several accounts/providers — the selector becomes multi-select.
+- Open: changing a queue's account later from its ⋮ menu; what sign-out does to the account's bound queues.
+
 ### Phase 3 — Provider abstraction
 
 - **Module `:core:domain`** (pure Kotlin, D17): neutral `Track`, `Album`, `Artist`, `Playlist`, `Folder`,

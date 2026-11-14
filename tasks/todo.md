@@ -142,5 +142,70 @@
       (D35′, D51–D54; D35/D40 annotated), `kb/architecture/as-is-playback.md`, `docs/multi-source-player.md` Phase 2
       paragraph, canvas board `Design/yamp/radio.jsx` (+ the Phase 1 radio menu board updated) (2026-11-13)
 - [ ] 4c. Device checklist on the unit (phone quick test passed 2026-11-13); HANDOFF at release
-- [ ] Remove the probe (`RadioStationProbe.kt` + the About button + the `batch-id`/`timestamp` feedback params)
+- [x] Remove the probe (`RadioStationProbe.kt` + the About button + the `batch-id`/`timestamp` feedback params) —
+      kept on branch `debug/radio-probe`; released as `v0.2.1` (2026-11-13)
 - [ ] Separate: rotor feedback 400 on every station — compare the form fields / headers with upstream's current version
+
+## Phase 2a — Accounts: every account live, queues bound to an account (design doc first: `docs/phase-2a-accounts.md`)
+
+Why (user, 2026-11-14 ride): two radios on one Yandex account converge — the account's history steers both. Separate
+tastes need separate accounts, so a queue must play, refill and report under its own account.
+
+Model and UX (agreed in discussion 2026-11-14):
+- [ ] **No global account switch.** All signed-in accounts are live at once (search, browse); the active queue *is*
+      the current account — Home (D49), Library, Search, likes follow it.
+- [ ] **Every queue is bound to an account at creation** (normal and radio): its Yandex tracks stream under that
+      account, likes go to it, plays land in its history; a radio's recommendations and feedback come from it.
+      WAVE stays one per account (no choice). Default = the active queue's account (first start: the first account).
+- [ ] **Choose the account** in "New queue" and in "Start radio" → "New radio"; re-seeding a radio keeps its
+      account. Change it later from the queue's ⋮ menu (radio: next refills come from the new account) — to confirm.
+- [ ] **All queues always shown**, each with an account marker (initial / avatar / colour); optional account
+      filter chips in the switcher if the list grows. No hiding by account. Car / Android Auto the same.
+- [ ] **One account → no extra controls** anywhere (no selector, no marker).
+- [ ] Revise D22 (queues stay visible to all; each has an owner account) and D7 history note in `kb/decisions.md`.
+
+Technical (from the 2026-11-14 code check):
+- [ ] Per-request account instead of the global token swapped on switch: the Yandex client resolves the token by
+      the queue's / caller's account (streaming, likes, rotor, search) — `ProviderAccount` and per-provider clients
+      from Phase 3 (C5, C6) introduced here for Yandex, so Phase 3 builds on them.
+- [ ] Key accounts by Yandex uid, not the folder name (`UserAccount.kt:27-30`: login → display name → uid; can
+      collide, and changes when a provisional `temp_` account gets its details). Migrate `owner` / `account` columns.
+- [ ] `queues.account` for every queue (today only WAVE), migration: existing queues → the current default account.
+- [ ] Sign-out: the account's WAVE queue removed; its downloads pruned; its bound queues stay with Yandex entries
+      unavailable (D22) or are offered to move to another account — to decide. History stays app-wide (D46),
+      possibly with an account column.
+- [ ] Startup account picker and the account switcher of upstream retire (Settings keeps add / remove / default).
+
+Later (multi-source queues, with Phase 3+): a queue holds entries from several accounts/providers; the selector
+becomes multi-select, the marker shows "mixed".
+
+## Car skip stutter and announcements (branch `fix/car-skip-and-focus`, 2026-11-14)
+
+From the 2026-11-14 ride: a tap on the next track's artwork stuttered and held the old track ~2 s; a navigator's
+prompt paused the music (other players keep playing).
+- [x] A track picked while one sounds loads first (user's decision): the current one plays on untouched until the
+      pick is READY, then fades out in 0.5 s and the pick starts at once — no crossfade; latest tap wins; a failed
+      load leaves the current track playing, goes back to it and shows the error (`PICK_FAILED`). Callers:
+      `playTrack`, `playFrom`, `playEntry`, `playNowKeepQueue`, `playWaveFrom`, `playMyVibe`, `playRadioStation`
+      (`pickOp`); Next: a warm standby fades as before, a cold one loads first. START line: `pick, tap→ready N ms`.
+      4 controller tests. `PlayerRepositoryImpl` added to the detekt baseline as `LargeClass` (like
+      `PlaybackController`) — split the engine's transition logic later
+- [x] "Keep playing under announcements" (default on): a transient focus loss ducks instead of pausing unless a call
+      is on (`AudioFocusPolicy`, 3 tests); a call that starts while ducked pauses (audio mode watched)
+- [x] Journal: `UNDERRUN` (per player, rate-limited) and `TIMING` (skip → request → link → ready → sounding)
+      lines (`EngineDiagnostics`)
+- [x] "Keep both players running" (experimental, default off; wins over "keep audio streams"): the idle player loops
+      the silent clip; the next track is queued behind it (warm-up held paused on arrival) — `SilentIdler`
+- [ ] Ride with the APK: compare switch 4 on/off; read UNDERRUN / TIMING lines from the log
+- [ ] Later: split `PlayerRepositoryImpl`'s transition logic out of the class (now in the detekt baseline)
+
+## Next-track buffering and its state (planned; canvas first)
+
+User, 2026-11-14 — the original app silently disables Next when the next track can't load, and sometimes stays stuck
+until the app is killed, even after the network is back.
+- [ ] Preload the next track early (a few seconds after the current one starts), not only 60 s / 15 s before its end
+- [ ] Next is never disabled; it shows the next track's state: ready / loading (spinner ring) / failed (greyed);
+      a tap retries at once (load first, then switch)
+- [ ] Failed next-track loads retry by themselves when the link comes back (`LINK NONE → GOOD`)
+- [ ] Progress bar shows the buffered part (like YouTube Music)
+- [ ] Design on the canvas first: phone player, car screen, the next-track artwork in the car
