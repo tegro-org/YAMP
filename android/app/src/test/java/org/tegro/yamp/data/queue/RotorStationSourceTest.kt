@@ -66,7 +66,7 @@ class RotorStationSourceTest {
     fun twoRequestsAreMergedWithoutDuplicatesAndContinueFromTheLastQueuedTrack() = runBlocking {
         answers["3"] = listOf("4", "5")
         answers[null] = listOf("5", "6")
-        val source = RotorStationSource("track:1", api, heardLately = { false })
+        val source = RotorStationSource("track:1", { api }, heardLately = { false })
         val batch = source.fetchTracks(refs("1", "2", "3"))
         assertEquals(listOf("4", "5", "6"), batch.map { it.idString })
         assertEquals(2, requests.size)
@@ -78,18 +78,18 @@ class RotorStationSourceTest {
     fun whatIsQueuedOrHeardLatelyOrExplicitIsLeftOut() = runBlocking {
         answers["2"] = listOf("2", "3", "4")
         answers[null] = listOf("5")
-        val source = RotorStationSource("album:9", api, heardLately = { it == "3" }, keep = { it.idString != "4" })
+        val source = RotorStationSource("album:9", { api }, heardLately = { it == "3" }, keep = { it.idString != "4" })
         assertEquals(listOf("5"), source.fetchTracks(refs("1", "2")).map { it.idString })
         answers["2"] = listOf("7", "8")
         answers[null] = listOf("7")
-        val allHeard = RotorStationSource("album:9", api, heardLately = { true })
+        val allHeard = RotorStationSource("album:9", { api }, heardLately = { true })
         assertEquals("all heard lately: still the ones not queued", listOf("7", "8"), allHeard.fetchTracks(refs("1", "2")).map { it.idString })
     }
 
     @Test
     fun oneRequestFailingLeavesTheOther() = runBlocking {
         answers[null] = listOf("4")
-        val source = RotorStationSource("track:1", api, heardLately = { false })
+        val source = RotorStationSource("track:1", { api }, heardLately = { false })
         assertEquals(listOf("4"), source.fetchTracks(refs("1")).map { it.idString })
         answers.clear()
         assertEquals("both failing: an empty batch, no exception", emptyList<TrackRef>(), source.fetchBatch(setOf(TrackRef.yandex("9"))))
@@ -97,7 +97,7 @@ class RotorStationSourceTest {
 
     @Test
     fun feedbackGoesToTheStationWithItsFrom() = runBlocking {
-        val source = RotorStationSource("track:42", api, heardLately = { false })
+        val source = RotorStationSource("track:42", { api }, heardLately = { false })
         runCatching { source.feedback(TrackRef.yandex("7"), "trackFinished", playedMs = 90_500L) }
         val request = requests.single()
         assertEquals("/rotor/station/track:42/feedback", request.url.encodedPath)

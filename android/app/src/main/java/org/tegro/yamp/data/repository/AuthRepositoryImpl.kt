@@ -26,6 +26,41 @@ class AuthRepositoryImpl @Inject constructor(
 
     private val sharedPreferences: SharedPreferences = createSecurePreferences(context)
 
+    private val removedAccounts = org.tegro.yamp.data.account.RemovedAccounts(context)
+    override val removedAccountNames: StateFlow<Map<String, String>> get() = removedAccounts.names
+    override fun rememberRemovedAccount(key: String, name: String) = removedAccounts.remember(key, name)
+    override fun forgetRemovedAccount(key: String) = removedAccounts.forget(key)
+
+    // Debug: test sign-out without losing credentials — the hidden records live in the same secure store as the
+    // accounts, never in plain preferences
+    private val _hiddenAccounts = MutableStateFlow(readHiddenAccounts())
+    override val hiddenAccounts: StateFlow<List<UserAccount>> = _hiddenAccounts.asStateFlow()
+
+    @Synchronized
+    override fun stashHiddenAccount(account: UserAccount) {
+        writeHiddenAccounts(_hiddenAccounts.value.filterNot { it.uid == account.uid } + account)
+    }
+
+    @Synchronized
+    override fun takeHiddenAccount(uid: String): UserAccount? {
+        val account = _hiddenAccounts.value.firstOrNull { it.uid == uid } ?: return null
+        writeHiddenAccounts(_hiddenAccounts.value.filterNot { it.uid == uid })
+        return account
+    }
+
+    private fun readHiddenAccounts(): List<UserAccount> =
+        sharedPreferences.getString(KEY_HIDDEN_ACCOUNTS_JSON, null)
+            ?.let { raw -> runCatching { json.decodeFromString<List<UserAccount>>(raw) }.getOrNull() }
+            .orEmpty()
+
+    private fun writeHiddenAccounts(accounts: List<UserAccount>) {
+        sharedPreferences.edit {
+            if (accounts.isEmpty()) remove(KEY_HIDDEN_ACCOUNTS_JSON)
+            else putString(KEY_HIDDEN_ACCOUNTS_JSON, json.encodeToString(accounts))
+        }
+        _hiddenAccounts.value = accounts
+    }
+
     private fun createSecurePreferences(context: Context): SharedPreferences {
         val secure = try {
             KeystoreStringPreferences(context, SECURE_PREFS_FILE, KEYSTORE_ALIAS)
@@ -83,6 +118,19 @@ class AuthRepositoryImpl @Inject constructor(
     }
 
     private val _allAccounts = MutableStateFlow<List<UserAccount>>(emptyList())
+
+    /** The accounts in the order they were added (the stored order); [allAccounts] shows the default one first. */
+    private var stored: List<UserAccount> = emptyList()
+
+    /**
+     * A stable order (D64: account groups never move by recency): the default account first, then the order the
+     * accounts were added.
+     */
+    private fun publish(accounts: List<UserAccount>) {
+        stored = accounts.toList()
+        val default = _defaultAccountUid.value
+        _allAccounts.value = stored.filter { it.uid == default } + stored.filter { it.uid != default }
+    }
     override val allAccounts: StateFlow<List<UserAccount>> = _allAccounts.asStateFlow()
 
     private val _activeAccount = MutableStateFlow<UserAccount?>(null)
@@ -136,7 +184,7 @@ class AuthRepositoryImpl @Inject constructor(
             ?: (loadedAccounts.firstOrNull { it.uid == activeUid } ?: loadedAccounts.maxByOrNull { it.lastActiveTimestamp })
 
         _defaultAccountUid.value = defaultAccount?.uid
-        _allAccounts.value = loadedAccounts.sortedByDescending { it.lastActiveTimestamp }
+        publish(loadedAccounts)
         _activeAccount.value = active
         _isAuthorized.value = active != null && active.token.isNotEmpty()
     }
@@ -160,7 +208,7 @@ class AuthRepositoryImpl @Inject constructor(
         sharedPreferences.edit { putString(KEY_LEGACY_TOKEN, token) }
 
         // Check if an existing account already has this token
-        val currentAccounts = _allAccounts.value.toMutableList()
+        val currentAccounts = stored.toMutableList()
         val existingIndex = currentAccounts.indexOfFirst { it.token == token }
 
         val active: UserAccount
@@ -185,7 +233,7 @@ class AuthRepositoryImpl @Inject constructor(
         sharedPreferences.edit { putString(KEY_ACTIVE_UID, active.uid) }
         persistAccounts(currentAccounts)
 
-        _allAccounts.value = currentAccounts.sortedByDescending { it.lastActiveTimestamp }
+        publish(currentAccounts)
         _activeAccount.value = active
         _isAuthorized.value = true
     }
@@ -201,7 +249,7 @@ class AuthRepositoryImpl @Inject constructor(
     @Synchronized
     override fun saveOrUpdateAccount(account: UserAccount) {
         if (account.token.isBlank()) return
-        val currentAccounts = _allAccounts.value.toMutableList()
+        val currentAccounts = stored.toMutableList()
 
         // Remove any provisional account that carried the same token; the choice of a default account goes with it
         val replaced = currentAccounts.filter { it.token == account.token && it.uid != account.uid && !it.hasRealUid }
@@ -236,14 +284,14 @@ class AuthRepositoryImpl @Inject constructor(
         }
         persistAccounts(currentAccounts)
 
-        _allAccounts.value = currentAccounts.sortedByDescending { it.lastActiveTimestamp }
+        publish(currentAccounts)
         _activeAccount.value = updated
         _isAuthorized.value = true
     }
 
     @Synchronized
     override fun switchAccount(uid: String): Boolean {
-        val currentAccounts = _allAccounts.value.toMutableList()
+        val currentAccounts = stored.toMutableList()
         val targetIndex = currentAccounts.indexOfFirst { it.uid == uid }
         if (targetIndex < 0) return false
 
@@ -256,7 +304,7 @@ class AuthRepositoryImpl @Inject constructor(
         }
         persistAccounts(currentAccounts)
 
-        _allAccounts.value = currentAccounts.sortedByDescending { it.lastActiveTimestamp }
+        publish(currentAccounts)
         _activeAccount.value = target
         _isAuthorized.value = target.token.isNotEmpty()
         return true
@@ -264,7 +312,7 @@ class AuthRepositoryImpl @Inject constructor(
 
     @Synchronized
     override fun removeAccount(uid: String): UserAccount? {
-        val currentAccounts = _allAccounts.value.toMutableList()
+        val currentAccounts = stored.toMutableList()
         val index = currentAccounts.indexOfFirst { it.uid == uid }
         if (index < 0) return null
 
@@ -289,7 +337,7 @@ class AuthRepositoryImpl @Inject constructor(
         }
 
         persistAccounts(currentAccounts)
-        _allAccounts.value = currentAccounts.sortedByDescending { it.lastActiveTimestamp }
+        publish(currentAccounts)
         _activeAccount.value = newActive
         _isAuthorized.value = newActive != null && newActive.token.isNotEmpty()
         return removed
@@ -305,7 +353,7 @@ class AuthRepositoryImpl @Inject constructor(
         }
 
         _defaultAccountUid.value = null
-        _allAccounts.value = emptyList()
+        publish(emptyList())
         _activeAccount.value = null
         _isAuthorized.value = false
     }
@@ -324,6 +372,7 @@ class AuthRepositoryImpl @Inject constructor(
             }
         }
         _defaultAccountUid.value = uid
+        publish(stored)
     }
 
     override fun clearToken() {
@@ -340,6 +389,7 @@ class AuthRepositoryImpl @Inject constructor(
         private const val KEY_ACCOUNTS_JSON = "accounts_list_json"
         private const val KEY_ACTIVE_UID = "active_account_uid"
         private const val KEY_DEFAULT_ACCOUNT_UID = "default_account_uid"
+        private const val KEY_HIDDEN_ACCOUNTS_JSON = "debug_hidden_accounts_json"
         private val MIGRATED_KEYS = listOf(KEY_ACCOUNTS_JSON, KEY_LEGACY_TOKEN, KEY_ACTIVE_UID, KEY_DEFAULT_ACCOUNT_UID)
 
         private const val SECURE_PREFS_FILE = "auth_secure"

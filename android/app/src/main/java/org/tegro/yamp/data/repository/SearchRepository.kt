@@ -3,6 +3,7 @@ package org.tegro.yamp.data.repository
 import org.tegro.yamp.data.dto.AlbumDto
 import org.tegro.yamp.data.dto.ArtistDto
 import org.tegro.yamp.data.dto.TrackDetailsDto
+import org.tegro.yamp.data.network.YandexClients
 import org.tegro.yamp.data.network.YandexMusicApi
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -10,8 +11,11 @@ import javax.inject.Singleton
 /** Track search, shared by the search screen and voice search in Android Auto. */
 @Singleton
 class SearchRepository @Inject constructor(
-    private val api: YandexMusicApi
+    private val clients: YandexClients
 ) {
+    /** The account context's API; calls name their own account from Phase 2a step 4 on. */
+    private val api: YandexMusicApi get() = clients.current()
+
     /** Throws on a network error. Lazy lists key items by id, so duplicates from the API are dropped. */
     suspend fun searchTracks(text: String): List<TrackDetailsDto> = search(text).tracks
 

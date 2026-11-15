@@ -51,7 +51,8 @@ internal class RecentlyPlayed(private val limit: Int) {
  * take them while the wave plays.
  */
 internal class WaveQueue(
-    private val api: YandexMusicApi,
+    /** Whose API: read per call, so the account in force at that moment is used. */
+    private val apiOf: () -> YandexMusicApi,
     private val cacheManager: PlaylistCacheManager,
     private val preloadManager: TrackUrlResolver,
     private val scope: CoroutineScope,
@@ -62,6 +63,8 @@ internal class WaveQueue(
     private val keep: (TrackDetailsDto) -> Boolean = { true },
     private val onFresh: (List<TrackDetailsDto>) -> Unit
 ) {
+    private val api: YandexMusicApi get() = apiOf()
+
     private val _tracks = MutableStateFlow<List<TrackDetailsDto>>(emptyList())
     val tracks: StateFlow<List<TrackDetailsDto>> = _tracks.asStateFlow()
 

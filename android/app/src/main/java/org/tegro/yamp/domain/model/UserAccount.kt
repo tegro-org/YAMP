@@ -21,10 +21,11 @@ data class UserAccount(
         get() = uid.isNotBlank() && uid != "me" && !uid.startsWith("temp_")
 
     /**
-     * Sanitized user folder name suitable for directory paths in Android filesystem:
-     * e.g. "roman_korenskoy" or "user123".
+     * The key per-account data was stored under before Phase 2a (login → display name → uid, sanitized). It can
+     * collide and changes when a provisional account gets its uid, so data is keyed by `accountId()` now
+     * (`yandex:<uid>`, D59); this stays only for `AccountKeyMigration` to find the old rows.
      */
-    val folderName: String
+    val legacyFolderName: String
         get() {
             val baseName = login.ifBlank { displayName }.ifBlank { uid }
             val sanitized = baseName.replace(Regex("[^a-zA-Z0-9а-яА-Я_-]"), "_").trim('_')

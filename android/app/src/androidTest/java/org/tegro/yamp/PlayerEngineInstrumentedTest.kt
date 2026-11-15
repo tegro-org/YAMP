@@ -55,7 +55,12 @@ class PlayerEngineInstrumentedTest {
         val okHttp = OkHttpClient()
         val api = retrofit2.Retrofit.Builder().baseUrl("https://localhost/").build().create(YandexMusicApi::class.java)
         val downloads = TrackDownloadManager(context, okHttp)
-        val preload = TrackPreloadManager(api, downloads, okHttp, NoAuth(), org.tegro.yamp.data.player.SoundMode(kotlinx.coroutines.flow.flowOf(false), {}, { true }))
+        val auth = NoAuth()
+        val preload = TrackPreloadManager(
+            OneApiClients(api, okHttp), downloads, auth,
+            org.tegro.yamp.data.player.SoundMode(kotlinx.coroutines.flow.flowOf(false), {}, { true }),
+            org.tegro.yamp.data.account.AccountContext(auth)
+        )
         onMain {
             playerA = newPlayer()
             playerB = newPlayer()

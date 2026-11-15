@@ -7,7 +7,8 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /** A persistent queue (docs/phase-1-queues.md §2). Behaviour in `kind`, display in `origin`. */
-@Entity(tableName = "queues")
+/** Phase 2a (v5): `account` is indexed — the switcher groups and filters by it (D64, D62). */
+@Entity(tableName = "queues", indices = [Index("account")])
 data class QueueEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0L,
     val name: String,

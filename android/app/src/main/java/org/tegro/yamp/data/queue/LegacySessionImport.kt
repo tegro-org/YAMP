@@ -23,7 +23,9 @@ class LegacySessionImport @Inject constructor(
     private val stateStore: PlaybackStateStore,
     private val cacheManager: PlaylistCacheManager,
     private val store: QueueStore,
-    private val tracks: QueueTrackBridgeApi
+    private val tracks: QueueTrackBridgeApi,
+    /** Phase 2a: the snapshot names its account by the old folder name; the queue gets the account key. */
+    private val keys: org.tegro.yamp.data.cache.CacheKeyMigration = org.tegro.yamp.data.cache.CacheKeyMigration.None
 ) {
     /** Returns the active queue id after the import, or null when there was nothing to import. */
     suspend fun run(mainName: String, waveName: String): Long? {
@@ -40,14 +42,15 @@ class LegacySessionImport @Inject constructor(
         val isWave = snapshot.source == "VIBE"
         val isRadio = snapshot.source == "RADIO" || snapshot.currentTrackId.startsWith("radio_")
         if (isRadio) return null
+        val account = keys.keyForLegacyFolder(snapshot.userFolder)
         val list: List<TrackDetailsDto> = if (isWave) {
-            val cached = cacheManager.loadWaveQueue(snapshot.userFolder)
+            val cached = cacheManager.loadWaveQueue(account)
             (snapshot.queue + cached).distinctBy { it.idString }
         } else snapshot.queue
         if (list.isEmpty()) return null
 
         val queue = store.create(
-            if (isWave) PlayQueue(0L, waveName, QueueKind.WAVE, account = snapshot.userFolder, seed = snapshot.waveSeed?.idString, sortOrder = -1)
+            if (isWave) PlayQueue(0L, waveName, QueueKind.WAVE, account = account, seed = snapshot.waveSeed?.idString, sortOrder = -1)
             else PlayQueue(0L, mainName, QueueKind.STATIC, origin = snapshot.source.lowercase().replaceFirstChar { it.uppercase() })
         )
         tracks.remember(list)

@@ -111,7 +111,7 @@ class UserPlaylistsInstrumentedTest {
             // Earlier tests in this process may have loaded the same account already: re-enter it so the
             // seeded cache is read (the same path as switching accounts in the app)
             val model = vm!!
-            instrumentation.runOnMainSync { model.switchAccount(model.activeAccount.value!!.uid) }
+            instrumentation.runOnMainSync { model.enterAccount(model.activeAccount.value!!.uid) }
             assertTrue("main screen", hasDesc("Музыка", 15_000))
             device.findObject(By.desc("Музыка")).click()
 
@@ -158,7 +158,7 @@ class UserPlaylistsInstrumentedTest {
         try {
             scenario.onActivity { vm = ViewModelProvider(it)[AccountViewModel::class.java] }
             val model = vm!!
-            instrumentation.runOnMainSync { model.switchAccount(model.activeAccount.value!!.uid) }
+            instrumentation.runOnMainSync { model.enterAccount(model.activeAccount.value!!.uid) }
             assertTrue("main screen", hasDesc("Музыка", 15_000))
             device.findObject(By.desc("Музыка")).click()
 

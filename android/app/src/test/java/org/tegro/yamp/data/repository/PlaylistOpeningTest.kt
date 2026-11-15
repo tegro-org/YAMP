@@ -6,6 +6,8 @@ import org.tegro.yamp.data.cache.PlaylistCacheManager
 import org.tegro.yamp.data.dto.TrackDetailsDto
 import org.tegro.yamp.data.dto.UserPlaylistDto
 import org.tegro.yamp.data.network.YandexMusicApi
+import org.tegro.yamp.data.player.fakes.FixedYandexClients
+import org.tegro.yamp.domain.account.accountId
 import org.tegro.yamp.domain.model.UserAccount
 import org.tegro.yamp.domain.repository.AuthRepository
 import org.tegro.yamp.presentation.main.failureReason
@@ -73,7 +75,7 @@ class PlaylistOpeningTest {
     private val cache = PlaylistCacheManager(ApplicationProvider.getApplicationContext(), json)
 
     private fun repositoryFor(auth: AuthRepository) =
-        UserPlaylistsRepository(api, auth, LibraryRepository(api, auth, cache), cache)
+        UserPlaylistsRepository(FixedYandexClients(api), auth, LibraryRepository(FixedYandexClients(api), auth, cache), cache)
 
     private val cachedPlaylist = UserPlaylistDto(kind = JsonPrimitive(1003), title = "Избранное", trackCount = 1, revision = 8)
 
@@ -118,7 +120,7 @@ class PlaylistOpeningTest {
     fun aFailedServerShowsTheCopySavedLast() = runBlocking {
         val auth = FakeAuth(UserAccount(uid = REAL_UID, login = "saved_copy", token = "token"))
         val saved = listOf(TrackDetailsDto(id = JsonPrimitive("777"), title = "Старая версия"))
-        cache.savePlaylistTracks(auth.getActiveAccount()!!.folderName, "1003", 5, saved)
+        cache.savePlaylistTracks(auth.getActiveAccount()!!.accountId().value, "1003", 5, saved)
         serverDown = true
 
         val tracks = repositoryFor(auth).tracks(cachedPlaylist)

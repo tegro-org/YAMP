@@ -4,7 +4,7 @@
   <CurrentIssues>
     <ID>ComplexCondition:DownloadInfoParser.kt$DownloadInfoParser$host.isNotEmpty() &amp;&amp; path.isNotEmpty() &amp;&amp; ts.isNotEmpty() &amp;&amp; s.isNotEmpty()</ID>
     <ID>ComplexCondition:LibraryRepository.kt$LibraryRepository$directId is kotlinx.serialization.json.JsonPrimitive &amp;&amp; directId.content.length &gt; 2 &amp;&amp; directId.content.all { it.isDigit() || it == ':' || it == '-' } &amp;&amp; (el.containsKey("albumId") || el.containsKey("timestamp"))</ID>
-    <ID>ComplexCondition:LibraryRepository.kt$LibraryRepository$metaCurrent &amp;&amp; revision != null &amp;&amp; revision == cacheManager.loadLikesRevision(folder) &amp;&amp; ids.toSet() == _likedIds.value &amp;&amp; _likedTracks.value.size == ids.size</ID>
+    <ID>ComplexCondition:LibraryRepository.kt$LibraryRepository$metaCurrent &amp;&amp; revision != null &amp;&amp; revision == cacheManager.loadLikesRevision(folder) &amp;&amp; ids.toSet() == held.ids &amp;&amp; held.tracks.size == ids.size</ID>
     <ID>ComplexCondition:Loudness.kt$Loudness$integratedLufs == null || integratedLufs.isNaN() || integratedLufs &gt; 0.0 || integratedLufs &lt; -70.0</ID>
     <ID>ComplexCondition:PlaybackController.kt$PlaybackController$isBuffering.value &amp;&amp; track != null &amp;&amp; track.idString == trackId &amp;&amp; !track.isRadio</ID>
     <ID>ComplexCondition:PlayerRepositoryImpl.kt$PlayerRepositoryImpl$activePlayer === player &amp;&amp; outgoingPlayer !== player &amp;&amp; player.isPlaying &amp;&amp; SystemClock.elapsedRealtime() - silentSince &lt; SKIP_SILENCE_MAX_MS</ID>
@@ -14,8 +14,8 @@
     <ID>NestedBlockDepth:AuthScreen.kt$internal fun extractTokenFromUrl(url: String): String?</ID>
     <ID>NestedBlockDepth:DownloadInfoParser.kt$DownloadInfoParser$fun parseXml(xml: String): DownloadInfoXml?</ID>
     <ID>NestedBlockDepth:ReserveKeeper.kt$ReserveKeeper$private suspend fun fill(limitBytes: Long)</ID>
-    <ID>NestedBlockDepth:TrackPreloadManager.kt$TrackPreloadManager$private suspend fun tryResolveHq(trackId: String): ResolvedStream?</ID>
-    <ID>NestedBlockDepth:TrackPreloadManager.kt$TrackPreloadManager$private suspend fun tryResolveLossless(trackId: String): ResolvedStream?</ID>
+    <ID>NestedBlockDepth:TrackPreloadManager.kt$TrackPreloadManager$private suspend fun tryResolveHq(api: YandexMusicApi, trackId: String): ResolvedStream?</ID>
+    <ID>NestedBlockDepth:TrackPreloadManager.kt$TrackPreloadManager$private suspend fun tryResolveLossless(api: YandexMusicApi, trackId: String): ResolvedStream?</ID>
     <ID>SwallowedException:AuthScreen.kt$e: java.net.URISyntaxException</ID>
     <ID>SwallowedException:GitHubUpdateManager.kt$GitHubUpdateManager.Companion$e: java.net.URISyntaxException</ID>
     <ID>SwallowedException:KeystoreStringPreferences.kt$KeystoreStringPreferences$e: java.security.InvalidKeyException</ID>
@@ -23,7 +23,7 @@
     <ID>SwallowedException:PlayerModule.kt$PlayerModule$e: Exception</ID>
     <ID>SwallowedException:PlaylistsViewModel.kt$PlaylistsViewModel$e: UserPlaylistsRepository.PlaylistChangedException</ID>
     <ID>SwallowedException:TrackPreloadManager.kt$TrackPreloadManager$e: Exception</ID>
-    <ID>ThrowsCount:LibraryRepository.kt$LibraryRepository$private suspend fun doSyncLikes(): Boolean</ID>
+    <ID>ThrowsCount:LibraryRepository.kt$LibraryRepository$private suspend fun doSyncLikes(folder: String): Boolean</ID>
     <ID>TooGenericExceptionCaught:AccountSessionManager.kt$AccountSessionManager$e: Exception</ID>
     <ID>TooGenericExceptionCaught:AuthRepositoryImpl.kt$AuthRepositoryImpl$e: Exception</ID>
     <ID>TooGenericExceptionCaught:AuthScreen.kt$e: Exception</ID>

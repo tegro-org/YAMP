@@ -1,6 +1,10 @@
 package org.tegro.yamp.data.player
 
 import kotlinx.coroutines.withContext
+import org.tegro.yamp.data.account.AccountContext
+import org.tegro.yamp.data.account.SignOutPlan
+import org.tegro.yamp.domain.account.AccountId
+import org.tegro.yamp.domain.account.accountId
 import org.tegro.yamp.domain.model.WaveTuning
 import kotlinx.coroutines.flow.distinctUntilChanged
 import org.tegro.yamp.utils.prefetchCovers
@@ -23,6 +27,7 @@ import org.tegro.yamp.data.dto.ArtistDto
 import org.tegro.yamp.data.dto.TrackDetailsDto
 import org.tegro.yamp.data.network.TrackDownloadManager
 import org.tegro.yamp.data.network.TrackUrlResolver
+import org.tegro.yamp.data.network.YandexClients
 import org.tegro.yamp.data.network.YandexMusicApi
 import org.tegro.yamp.data.queue.ActiveQueue
 import org.tegro.yamp.data.queue.LegacySessionImport
@@ -57,7 +62,11 @@ import java.io.IOException
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -85,7 +94,7 @@ import javax.inject.Singleton
 @Singleton
 class PlaybackController @Inject constructor(
     @param:ApplicationContext private val context: Context,
-    private val api: YandexMusicApi,
+    private val clients: YandexClients,
     private val authRepository: AuthRepository,
     private val playerRepository: PlayerRepository,
     private val downloadManager: TrackDownloadManager,
@@ -100,8 +109,12 @@ class PlaybackController @Inject constructor(
     private val reserve: RoadReserve,
     private val journal: PlaybackJournal,
     private val diagnosticLog: org.tegro.yamp.data.diagnostics.DiagnosticLog,
-    private val history: org.tegro.yamp.data.history.ListeningHistory
+    private val history: org.tegro.yamp.data.history.ListeningHistory,
+    private val accountContext: AccountContext
 ) {
+    /** The account context's API (the active queue's account, D56): My Wave and its tuning. */
+    private val api: YandexMusicApi get() = clients.api(contextAccount)
+
     private val scope = CoroutineScope(
         SupervisorJob() + Dispatchers.Main.immediate + CoroutineExceptionHandler { _, e ->
             Log.e(TAG, "Unhandled playback coroutine error", e)
@@ -219,7 +232,7 @@ class PlaybackController @Inject constructor(
      * the account's WAVE queue, which is the wave the user plays; the wave's own list stays for the preview.
      */
     private val wave = WaveQueue(
-        api = api,
+        apiOf = { api },
         cacheManager = cacheManager,
         preloadManager = preloadManager,
         scope = scope,
@@ -277,7 +290,7 @@ class PlaybackController @Inject constructor(
         ) { playing, state, track, signedIn ->
             playing && signedIn && state == LinkState.GOOD && track?.isRadio != true
         },
-        resolve = preloadManager::resolveOrdinaryStream,
+        resolve = { trackId -> preloadManager.resolveOrdinaryStream(trackId, playbackAccount) },
         // The reserve fills only while the playing track has sound in hand: the two downloads must not compete
         streamNeedsTheLine = {
             isBuffering.value || playerRepository.inTransition || progress.value < TRACK_SETTLE_MS ||
@@ -304,14 +317,29 @@ class PlaybackController @Inject constructor(
     /** Completes once the saved session (if any) has been loaded from the queue store. */
     private val sessionRestored = kotlinx.coroutines.CompletableDeferred<Unit>()
 
+    /** The account the user is in: the active queue's (D56), else the active account. */
+    private val contextAccount: AccountId? get() = accountContext.current()
+
     private val activeUserFolder: String
-        get() = authRepository.getActiveAccount()?.folderName ?: "default"
+        get() = contextAccount?.value ?: "default"
+
+    /**
+     * The account the playing track's link is resolved under (docs/phase-2a-accounts.md §4): the playing queue's
+     * — the active one — while its account is signed in.
+     */
+    private val playbackAccount: AccountId?
+        get() = contextAccount
+
+    /** The account a queue made now is bound to (D57): the one the user is in. */
+    private val accountForNew: String? get() = contextAccount?.value
 
     private val mainName: String get() = context.getString(R.string.queue_main_name)
     private val waveName: String get() = context.getString(R.string.queue_my_wave_name)
 
     init {
         playerRepository.trackEndedEvent.onEach { onTrackEnded() }.launchIn(scope)
+        // A queue of another account became active: the user is now in that account (D56)
+        queueManager.active.map { it?.queue?.account }.distinctUntilChanged().onEach { followQueueAccount(it) }.launchIn(scope)
         playerRepository.prepareNextTrackEvent.onEach { prepareNextTrackInQueue() }.launchIn(scope)
         playerRepository.skipNextEvent.onEach { playNext() }.launchIn(scope)
         playerRepository.skipPrevEvent.onEach { playPrev() }.launchIn(scope)
@@ -532,10 +560,12 @@ class PlaybackController @Inject constructor(
      * Makes [id] the active queue: shown paused at its saved track and position; keeps playing if the player
      * was, or starts it when [play] asks (a queue picked in Android Auto).
      */
-    fun switchQueue(id: Long, play: Boolean = false) = playOp {
+    fun switchQueue(id: Long, play: Boolean = false) = playOp { switchQueueNow(id, play) }
+
+    private suspend fun switchQueueNow(id: Long, play: Boolean) {
         if (active?.queue?.id == id) {
             if (play && !isPlaying.value) this.play()
-            return@playOp
+            return
         }
         val wasPlaying = isPlaying.value || play
         val position = progress.value.takeIf { liveStation.value == null }
@@ -544,10 +574,10 @@ class PlaybackController @Inject constructor(
         queueManager.switchTo(id, position)
         playerRepository.stop()
         leaveStation()
-        val target = active ?: return@playOp
+        val target = active ?: return
         restoredPositionMs.value = target.queue.positionMs
         followWaveStation(target)
-        val entry = target.cursorEntry ?: target.entries.firstOrNull() ?: return@playOp
+        val entry = target.cursorEntry ?: target.entries.firstOrNull() ?: return
         if (wasPlaying) startEntry(entry.entryId, crossfade = false, startPositionMs = if (entry == target.cursorEntry) target.queue.positionMs else 0L)
     }
 
@@ -561,7 +591,7 @@ class PlaybackController @Inject constructor(
 
     /** "Add to end of queue": the active one, created when there is none. */
     fun addToEnd(tracks: List<TrackDetailsDto>) = queueOp {
-        val queueId = active?.queue?.id ?: queueManager.create(mainName).id.also { queueManager.switchTo(it, null) }
+        val queueId = active?.queue?.id ?: queueManager.create(mainName, account = accountForNew).id.also { queueManager.switchTo(it, null) }
         queueManager.appendTo(queueId, tracks)
     }
 
@@ -572,11 +602,12 @@ class PlaybackController @Inject constructor(
     }
 
     /** The switcher's edits, each one a queue operation in call order; nothing to wait for. */
-    fun createQueue(name: String) = queueOp { queueManager.create(name) }
+    /** [account]: the one chosen in "New queue" (D57); null = the active queue's account. */
+    fun createQueue(name: String, account: String? = null) = queueOp { queueManager.create(name, account = account ?: accountForNew) }
 
     /** A new queue that at once gets [tracks] ("New queue" in the "Add to queue…" picker). */
-    fun createQueueWith(name: String, tracks: List<TrackDetailsDto>) = queueOp {
-        queueManager.appendTo(queueManager.create(name).id, tracks)
+    fun createQueueWith(name: String, tracks: List<TrackDetailsDto>, account: String? = null) = queueOp {
+        queueManager.appendTo(queueManager.create(name, account = account ?: accountForNew).id, tracks)
     }
 
     fun renameQueue(queueId: Long, name: String) = queueOp { queueManager.rename(queueId, name) }
@@ -767,27 +798,114 @@ class PlaybackController @Inject constructor(
         queueOp { queueManager.savePosition(0L) }
     }
 
-    /** Account switch/logout: drop the session and load the other user's wave and history. */
-    fun resetForAccount(userFolder: String?) {
-        stopAndClear()
-        // The reserve was saved under this account's subscription
-        scope.launch { reserve.clear() }
+    private val _accountEntered = MutableSharedFlow<AccountId>(extraBufferCapacity = 4)
+
+    /** The account whose wave state and lists are loaded; null until the first active queue is seen. */
+    private var followedAccount: String? = null
+
+    /** The user moved into another signed-in account (a queue of it became active): its lists are to be shown. */
+    val accountEntered: SharedFlow<AccountId> = _accountEntered.asSharedFlow()
+
+    /**
+     * Takes the user into [account] (D56): its My Wave queue becomes active, paused — unless a queue of it already
+     * is. The account switcher and a fresh sign-in land here; there is no switch of an account on its own.
+     */
+    fun enterAccount(account: AccountId, onlyWhenNoQueue: Boolean = false) = playOp {
+        if (onlyWhenNoQueue && active != null) return@playOp
+        val waveId = queueManager.waveQueue(account.value, waveName).id
+        if (active?.queue?.account == account.value) followQueueAccount(account.value) else switchQueueNow(waveId, play = false)
+    }
+
+    /** The account's My Wave queue exists from sign-in on (D63); an existing one (same uid) is kept. */
+    fun ensureWaveQueue(account: AccountId) = queueOp { queueManager.waveQueue(account.value, waveName) }
+
+    /**
+     * The active queue's account is the one the user is in: the active account follows it, so the screens show
+     * that account's likes and playlists, and the wave state is that account's. Playback is not touched.
+     */
+    private fun followQueueAccount(account: String?) {
+        val target = accountContext.signedIn(account) ?: return
+        val user = authRepository.getAllAccounts().firstOrNull { it.accountId() == target } ?: return
+        val previous = followedAccount
+        followedAccount = target.value
+        val activeUid = authRepository.getActiveAccount()?.uid
+        // The restored session already is in the active account; the same account again changes nothing
+        if (previous == null && activeUid == user.uid || previous == target.value) return
+        if (activeUid != user.uid) authRepository.switchAccount(user.uid)
         recentPlayedTrackIds.clear()
         wave.switchTo(WaveQueue.MY_WAVE)
         _waveSeed.value = null
         _waveTuning.value = WaveTuning()
         libraryTracks = emptyList()
-        if (userFolder == null) return
         queueOp {
-            // Queues are app-wide (D22): only another account's My Wave gives way to this account's
-            val queue = active
-            if (queue?.queue?.kind == QueueKind.WAVE && queue.queue.account != userFolder) {
-                queueManager.switchTo(queueManager.waveQueue(userFolder, waveName).id, null)
-                restoredPositionMs.value = active?.queue?.positionMs ?: 0L
-            }
-            loadUserState(userFolder, restoreSession = false)
+            loadUserState(target.value, restoreSession = false)
+            active?.let { followWaveStation(it) }
         }
+        _accountEntered.tryEmit(target)
     }
+
+    /**
+     * Sign-out of [account] (D62): its queues stay as they are — entries, track and position — hidden until the same
+     * account signs in again; nothing of them plays. When the active queue is one of them, the engine stops and the
+     * first queue of [fallback] (its My Wave first, as the grouped switcher lists it) becomes active, paused; with no
+     * account left, none. A queue of another account playing meanwhile is not touched.
+     */
+    fun leaveAccount(account: AccountId, fallback: AccountId?) = playOp {
+        if (active?.queue?.account != account.value) return@playOp
+        val position = progress.value.takeIf { liveStation.value == null }
+        startRequestId++
+        currentPlayJob?.cancel()
+        _isStarting.value = false
+        playerRepository.stop()
+        waitingForConnection = false
+        returnPoint = null
+        leaveStation()
+        // The reserve was saved under the leaving account's subscription
+        reserve.clear()
+        // A later sign-in to this account loads its state again, even as the first account entered
+        followedAccount = null
+        recentPlayedTrackIds.clear()
+        wave.switchTo(WaveQueue.MY_WAVE)
+        _waveSeed.value = null
+        _waveTuning.value = WaveTuning()
+        libraryTracks = emptyList()
+        enterFallback(fallback, position)
+    }
+
+    /**
+     * Makes the first queue of [fallback] (its My Wave first, as the grouped switcher lists it) active, paused; with
+     * no account, none. [position] is saved on the queue being left.
+     */
+    private suspend fun enterFallback(fallback: AccountId?, position: Long?) {
+        if (fallback == null) {
+            queueManager.leave(position)
+            restoredPositionMs.value = 0L
+            return
+        }
+        val target = queueManager.queues.value
+            .filter { it.queue.account == fallback.value }
+            .sortedWith(compareBy<QueueSummary>({ it.queue.kind != QueueKind.WAVE }, { it.queue.sortOrder }))
+            .firstOrNull()?.queue?.id
+            ?: queueManager.waveQueue(fallback.value, waveName).id
+        queueManager.switchTo(target, position)
+        val now = active ?: return
+        restoredPositionMs.value = now.queue.positionMs
+        followWaveStation(now)
+    }
+
+    /**
+     * The restored active queue belongs to an account that is no longer signed in (D62: its queues wait hidden):
+     * the same fallback as a sign-out, so a removed account's queue never comes back as the playing one.
+     */
+    private suspend fun leaveStrandedQueue() {
+        val account = active?.queue?.account ?: return
+        if (accountContext.signedIn(account) != null) return
+        val fallback = SignOutPlan.fallback(authRepository.getAllAccounts(), authRepository.getDefaultAccountUid())
+        enterFallback(fallback, position = null)
+    }
+
+    /** A queue as stored, without making it active: a removed account's queue looked at (D62). */
+    suspend fun peekQueue(queueId: Long): ActiveQueue? = queueManager.peek(queueId)
 
     fun clearWaveAndHistory() {
         wave.clear()
@@ -959,22 +1077,23 @@ class PlaybackController @Inject constructor(
      * "Start radio" (D51): [seed]'s radio in a new queue or an existing radio re-seeded, then played — the seed
      * track first (on, if it already sounds), for an album or artist seed the first fetched track.
      */
-    fun startRadio(seed: RadioSeed, target: RadioTarget, keepHistory: Boolean, track: TrackDetailsDto? = null) {
+    /** [account]: a new radio's account from the picker's selector (D57); null = the active queue's account. */
+    fun startRadio(seed: RadioSeed, target: RadioTarget, keepHistory: Boolean, track: TrackDetailsDto? = null, account: String? = null) {
         if (isOffline()) {
             showMessage(context.getString(R.string.msg_offline_no_downloads))
             return
         }
         returnPoint = null
-        playOp { startRadioNow(seed, target, keepHistory, track?.takeIf { seed.ref.kind == MediaRef.KIND_TRACK && !it.isRadio }) }
+        playOp { startRadioNow(seed, target, keepHistory, track?.takeIf { seed.ref.kind == MediaRef.KIND_TRACK && !it.isRadio }, account) }
     }
 
-    private suspend fun startRadioNow(seed: RadioSeed, target: RadioTarget, keepHistory: Boolean, track: TrackDetailsDto?) {
+    private suspend fun startRadioNow(seed: RadioSeed, target: RadioTarget, keepHistory: Boolean, track: TrackDetailsDto?, account: String? = null) {
         val left = active
         val current = currentTrackNow()
         val playsOn = liveStation.value == null && track != null && current?.idString == track.idString
         dropRadioSource()
         val name = context.getString(R.string.radio_queue_name, seed.title)
-        val radioQueue = queueManager.startRadio(target, seed.ref.value, name, keepHistory, listOfNotNull(track))
+        val radioQueue = queueManager.startRadio(target, seed.ref.value, name, keepHistory, listOfNotNull(track), account = account ?: accountForNew)
         if (left?.queue?.id != radioQueue.id) {
             queueManager.switchTo(radioQueue.id, progress.value.takeIf { left != null && liveStation.value == null })
         }
@@ -1146,10 +1265,10 @@ class PlaybackController @Inject constructor(
             val target = queueManager.queues.value
                 .filter { it.queue.kind == QueueKind.STATIC }
                 .maxByOrNull { it.queue.updatedAt }?.queue?.id
-                ?: queueManager.create(mainName).id
+                ?: queueManager.create(mainName, account = accountForNew).id
             queueManager.switchTo(target, progress.value.takeIf { liveStation.value == null })
         }
-        val queue = queueManager.replaceActive(tracks, origin, startId?.let { TrackRef.yandex(it) }, nameIfNew = mainName)
+        val queue = queueManager.replaceActive(tracks, origin, startId?.let { TrackRef.yandex(it) }, nameIfNew = mainName, accountIfNew = accountForNew)
         val entry = queue.cursorEntry ?: return
         startEntry(entry.entryId, crossfade, startPositionMs)
     }
@@ -1172,7 +1291,7 @@ class PlaybackController @Inject constructor(
         reserve.markPlayed(trackId)
 
         val upcoming = queue.tracks.drop(index + 1).take(3).map { it.idString }
-        if (upcoming.isNotEmpty()) preloadManager.preloadTracks(upcoming)
+        if (upcoming.isNotEmpty()) preloadManager.preloadTracks(upcoming, playbackAccount)
 
         if (queue.queue.kind == QueueKind.WAVE) {
             // Continuous queue auto-refill: fewer than 20 tracks left in My Wave
@@ -1404,17 +1523,18 @@ class PlaybackController @Inject constructor(
         }
 
         // Instant start when the URL is already resolved
-        val fastUrl = preloadManager.getResolvedUrl(trackId)
+        val account = playbackAccount
+        val fastUrl = preloadManager.getResolvedUrl(trackId, account)
         if (fastUrl != null) {
             playStreamOrEqualCopy(track, fastUrl, crossfade, startPositionMs, pickAt)
             return
         }
 
         currentPlayJob = scope.launch {
-            val url = preloadManager.getOrFetchUrl(trackId)
+            val url = preloadManager.getOrFetchUrl(trackId, account)
                 ?: run {
                     delay(URL_RETRY_DELAY_MS)
-                    preloadManager.getOrFetchUrl(trackId)
+                    preloadManager.getOrFetchUrl(trackId, account)
                 }
             if (url != null) {
                 playStreamOrEqualCopy(track, url, crossfade, startPositionMs, pickAt)
@@ -1563,7 +1683,7 @@ class PlaybackController @Inject constructor(
             return
         }
 
-        preloadManager.evictUrl(failure.trackId)
+        preloadManager.evictUrl(failure.trackId, playbackAccount)
         // A copy that does not play is no use to anyone
         val copyFailed = playingCopyId == failure.trackId
         if (copyFailed) {
@@ -1677,7 +1797,7 @@ class PlaybackController @Inject constructor(
         val point = returnPoint ?: leaving
         val mixId = offlineMixQueueId?.takeIf { id -> queueManager.queues.value.any { it.queue.id == id } }
             ?: queueManager.queues.value.firstOrNull { it.queue.origin == OFFLINE_MIX_ORIGIN }?.queue?.id
-            ?: queueManager.create(context.getString(R.string.queue_offline_mix_name)).id
+            ?: queueManager.create(context.getString(R.string.queue_offline_mix_name), account = accountForNew).id
         offlineMixQueueId = mixId
         if (active?.queue?.id != mixId) queueManager.switchTo(mixId, progress.value.takeIf { active != null && liveStation.value == null })
         playFromNow(mix, OFFLINE_MIX_ORIGIN, mix.first().idString, crossfade = true, startPositionMs = 0L)
@@ -1744,7 +1864,7 @@ class PlaybackController @Inject constructor(
                 preloadManager.hasPlayableCopy(nextId) -> ""
                 RoadPlan.originFor(currentLink(), link.mayTryStream(), reserve.has(nextId)) == TrackOrigin.COPY -> copyUri(nextId) ?: return@launch
                 currentLink() == LinkState.NONE -> return@launch
-                else -> preloadManager.getOrFetchUrl(nextId)?.let { stream ->
+                else -> preloadManager.getOrFetchUrl(nextId, playbackAccount)?.let { stream ->
                     val copy = reserve.qualityOf(nextId)
                     if (copy != null && RoadPlan.copyIsEnough(preloadManager.qualityOf(nextId), copy)) copyUri(nextId) ?: stream else stream
                 } ?: return@launch
@@ -1823,9 +1943,11 @@ class PlaybackController @Inject constructor(
         val station = RotorStations.stationOf(seed)
         radio?.takeIf { radioQueueId == queue.queue.id && it.station == station }?.let { return it }
         dropRadioSource()
+        // The radio's own account (D57): its batches and feedback, whatever account was in force before
+        val account = accountContext.signedIn(queue.queue.account) ?: contextAccount
         return RotorStationSource(
             station = station,
-            api = api,
+            apiOf = { clients.api(account) },
             heardLately = { it in recentPlayedTrackIds },
             keep = { !(skipExplicit.value && it.isExplicit) }
         ).also {
@@ -1956,6 +2078,7 @@ class PlaybackController @Inject constructor(
         if (!restoreSession) return
         legacyImport.run(mainName = mainName, waveName = waveName)
         queueManager.load()
+        leaveStrandedQueue()
         val queue = active
         if (queue != null) {
             // A wave by a track goes on from where it was, with its own upcoming tracks

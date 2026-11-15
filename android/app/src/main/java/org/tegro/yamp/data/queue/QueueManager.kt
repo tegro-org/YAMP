@@ -77,10 +77,16 @@ class QueueManager @Inject constructor(
 
     // ---- queues
 
+    /**
+     * A new queue, bound to [account] for good (D57, D61); without one, to the active queue's account — the
+     * account the user is in.
+     */
     suspend fun create(name: String, kind: QueueKind = QueueKind.STATIC, account: String? = null, seed: String? = null): PlayQueue = mutation {
         val order = (store.queues().maxOfOrNull { it.sortOrder } ?: -1) + 1
-        store.create(PlayQueue(id = 0L, name = name, kind = kind, account = account, seed = seed, sortOrder = order))
+        store.create(PlayQueue(id = 0L, name = name, kind = kind, account = accountForNew(account), seed = seed, sortOrder = order))
     }
+
+    private fun accountForNew(account: String?): String? = account ?: _active.value?.queue?.account
 
     suspend fun rename(queueId: Long, name: String) = mutation {
         store.queue(queueId)?.let { store.update(it.copy(name = name)) }
@@ -102,7 +108,8 @@ class QueueManager @Inject constructor(
     suspend fun duplicate(queueId: Long, name: String): PlayQueue? = mutation {
         val source = store.queue(queueId) ?: return@mutation null
         val order = (store.queues().maxOfOrNull { it.sortOrder } ?: -1) + 1
-        val copy = store.create(source.copy(id = 0L, name = name, kind = QueueKind.STATIC, account = null, seed = null, cursorEntryId = null, positionMs = 0L, sortOrder = order))
+        // The copy stays with the account of the queue it was made from (D57)
+        val copy = store.create(source.copy(id = 0L, name = name, kind = QueueKind.STATIC, seed = null, cursorEntryId = null, positionMs = 0L, sortOrder = order))
         val entries = store.entries(queueId)
         val written = store.replaceEntries(copy.id, entries)
         val cursor = source.cursorEntryId?.let { id -> entries.indexOfFirst { it.entryId == id } }?.takeIf { it >= 0 }?.let { written[it].entryId }
@@ -127,16 +134,25 @@ class QueueManager @Inject constructor(
         activate(queueId)
     }
 
+    /** Saves the active queue's position and makes no queue active (the last account signed out, D62). */
+    suspend fun leave(currentPositionMs: Long?) = mutation {
+        if (currentPositionMs != null) _active.value?.let { store.saveCursor(it.queue.id, it.cursorEntry?.entryId, currentPositionMs) }
+        activate(null)
+    }
+
+    /** Any queue as stored, looked at without making it active (a removed account's queue, D62). */
+    suspend fun peek(queueId: Long): ActiveQueue? = mutation { readActive(queueId) }
+
     // ---- content
 
     /**
      * Replaces the content of the active queue (E5) — the only operation that replaces — and puts the cursor on
      * [startRef] (its first occurrence) or on the first entry. Creates the queue when none is active.
      */
-    suspend fun replaceActive(tracks: List<TrackDetailsDto>, origin: String?, startRef: TrackRef?, nameIfNew: String): ActiveQueue = mutation {
+    suspend fun replaceActive(tracks: List<TrackDetailsDto>, origin: String?, startRef: TrackRef?, nameIfNew: String, accountIfNew: String? = null): ActiveQueue = mutation {
         val queueId = _active.value?.queue?.id ?: run {
             val order = (store.queues().maxOfOrNull { it.sortOrder } ?: -1) + 1
-            val q = store.create(PlayQueue(id = 0L, name = nameIfNew, kind = QueueKind.STATIC, sortOrder = order))
+            val q = store.create(PlayQueue(id = 0L, name = nameIfNew, kind = QueueKind.STATIC, account = accountIfNew, sortOrder = order))
             store.setActiveQueueId(q.id)
             q.id
         }
@@ -254,13 +270,14 @@ class QueueManager @Inject constructor(
     /**
      * Starts a radio (D51): a new RADIO queue, or an existing radio re-seeded in place — its tracks dropped, the
      * name following the seed. [first] is what plays before the first batch (the seed track, or nothing). The
-     * cursor is on the first entry; the caller switches to the queue and plays it.
+     * cursor is on the first entry; the caller switches to the queue and plays it. A new radio is bound to [account]
+     * (else the active queue's); a re-seeded one keeps its own (D61).
      */
-    suspend fun startRadio(target: RadioTarget, seed: String, name: String, keepHistory: Boolean, first: List<TrackDetailsDto>): PlayQueue = mutation {
+    suspend fun startRadio(target: RadioTarget, seed: String, name: String, keepHistory: Boolean, first: List<TrackDetailsDto>, account: String? = null): PlayQueue = mutation {
         val queue = when (target) {
             is RadioTarget.New -> {
                 val order = (store.queues().maxOfOrNull { it.sortOrder } ?: -1) + 1
-                store.create(PlayQueue(id = 0L, name = name, kind = QueueKind.RADIO, seed = seed, keepHistory = keepHistory, sortOrder = order))
+                store.create(PlayQueue(id = 0L, name = name, kind = QueueKind.RADIO, account = accountForNew(account), seed = seed, keepHistory = keepHistory, sortOrder = order))
             }
             is RadioTarget.Replace -> {
                 val existing = store.queue(target.queueId)

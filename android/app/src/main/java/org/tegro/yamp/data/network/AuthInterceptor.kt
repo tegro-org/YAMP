@@ -5,9 +5,14 @@ import okhttp3.Interceptor
 import okhttp3.Response
 import javax.inject.Inject
 
-class AuthInterceptor @Inject constructor(
-    private val authRepository: AuthRepository
-) : Interceptor {
+/**
+ * Adds the Yandex client headers and the OAuth token that [token] gives at request time. The shared client's
+ * one follows the active account; each per-account client (`YandexClients`) gets its own, bound to its account.
+ */
+class AuthInterceptor(private val token: () -> String?) : Interceptor {
+
+    @Inject constructor(authRepository: AuthRepository) : this({ authRepository.getToken() })
+
     override fun intercept(chain: Interceptor.Chain): Response {
         val originalRequest = chain.request()
         val requestBuilder = originalRequest.newBuilder()
@@ -19,9 +24,9 @@ class AuthInterceptor @Inject constructor(
         }
 
         // The token is for Yandex alone: whatever address a request of this client gets, another host never sees it
-        val token = if (isYandexHost(originalRequest.url.host)) authRepository.getToken() else null
-        if (!token.isNullOrEmpty()) {
-            requestBuilder.header("Authorization", "OAuth $token")
+        val oauth = if (isYandexHost(originalRequest.url.host)) token() else null
+        if (!oauth.isNullOrEmpty()) {
+            requestBuilder.header("Authorization", "OAuth $oauth")
         }
 
         return chain.proceed(requestBuilder.build())

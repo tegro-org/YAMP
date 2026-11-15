@@ -13,6 +13,7 @@ import org.tegro.yamp.data.network.YandexMusicApi
 import org.tegro.yamp.data.repository.LibraryRepository
 import org.tegro.yamp.data.repository.UserPlaylistsRepository
 import org.tegro.yamp.data.repository.UserPlaylistsRepository.AddTrackResult
+import org.tegro.yamp.domain.account.accountId
 import org.tegro.yamp.domain.model.UserAccount
 import org.tegro.yamp.domain.repository.AuthRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -54,15 +55,16 @@ class PlaylistEditingInstrumentedTest {
     fun setUp() {
         server = FakeServer()
         cache = PlaylistCacheManager(context, json)
-        runBlocking { cache.clearUserCache(account.folderName) }
+        runBlocking { cache.clearUserCache(account.accountId().value) }
         val auth = SingleAccountAuth(account)
-        repository = UserPlaylistsRepository(server, auth, LibraryRepository(server, auth, cache), cache)
+        val clients = OneApiClients(server)
+        repository = UserPlaylistsRepository(clients, auth, LibraryRepository(clients, auth, cache), cache)
         runBlocking { assertTrue(repository.refresh()) }
     }
 
     @After
     fun tearDown() {
-        runBlocking { cache.clearUserCache(account.folderName) }
+        runBlocking { cache.clearUserCache(account.accountId().value) }
     }
 
     private val playlist get() = repository.playlists.value.single { it.kindString == "1003" }
@@ -127,7 +129,7 @@ class PlaylistEditingInstrumentedTest {
         } catch (_: IllegalStateException) {
         }
         assertEquals(listBefore, repository.playlists.value)
-        assertEquals(before, cache.loadPlaylistTracks(account.folderName, "1003", playlist.revision))
+        assertEquals(before, cache.loadPlaylistTracks(account.accountId().value, "1003", playlist.revision))
     }
 
     @Test
@@ -177,7 +179,7 @@ class PlaylistEditingInstrumentedTest {
 
         repository.delete(created)
         assertEquals(listOf("1003"), repository.playlists.value.map { it.kindString })
-        assertEquals("list is cached", listOf("1003"), cache.loadUserPlaylists(account.folderName).map { it.kindString })
+        assertEquals("list is cached", listOf("1003"), cache.loadUserPlaylists(account.accountId().value).map { it.kindString })
     }
 
     private fun track(id: String) = TrackDetailsDto(

@@ -48,6 +48,7 @@ import org.tegro.yamp.data.history.ListeningHistory
 import org.tegro.yamp.data.network.NetworkMonitor
 import org.tegro.yamp.data.network.TrackDownloadManager
 import org.tegro.yamp.data.network.YandexMusicApi
+import org.tegro.yamp.data.player.fakes.FixedYandexClients
 import org.tegro.yamp.data.player.fakes.FakeAuthRepository
 import org.tegro.yamp.data.player.fakes.FakePlayerRepository
 import org.tegro.yamp.data.player.fakes.FakePlayerRepository.Call
@@ -184,14 +185,19 @@ class PlaybackControllerTest {
     }
 
     /** A controller on the real stores of this test's app, with its saved session (if any) already loaded. */
-    private fun controller(engine: FakePlayerRepository = this.engine, queueManager: QueueManager = manager()): PlaybackController {
+    private fun controller(
+        engine: FakePlayerRepository = this.engine,
+        queueManager: QueueManager = manager(),
+        clients: org.tegro.yamp.data.network.YandexClients = FixedYandexClients(api)
+    ): PlaybackController {
         val legacyImport = LegacySessionImport(store, cacheManager, RoomQueueStore(db.queueDao(), db.dao()), QueueTrackBridge(db.dao(), json))
         val controller = PlaybackController(
-            context, api, auth, engine,
+            context, clients, auth, engine,
             TrackDownloadManager(context, client), resolver, cacheManager, RadioRepository(context),
             queueManager, legacyImport, db.dao(),
             settings, NetworkMonitor(context), RoadReserve(context, client, json),
-            PlaybackJournal(now = { 0L }), DiagnosticLog(context, settings), history
+            PlaybackJournal(now = { 0L }), DiagnosticLog(context, settings), history,
+            org.tegro.yamp.data.account.AccountContext(auth, queueManager)
         )
         controllers += controller
         await { controller.awaitRestoredSession() }
@@ -244,6 +250,18 @@ class PlaybackControllerTest {
         engine.sounds()
         assertFalse(controller.isStarting.value)
         assertTrue(controller.isPlaying.value)
+    }
+
+    /** Phase 2a step 4: a stream is resolved under a named account — the active one until queues carry theirs. */
+    @Test
+    fun aTracksLinkIsResolvedForTheActiveAccount() {
+        val controller = controller()
+        controller.playTrack("1", playlist("1", "2"), PlaylistSource.LIBRARY)
+        controller.settle()
+
+        // The playing track and the one standing by
+        assertEquals(listOf("1", "2"), resolver.fetched)
+        assertEquals(List(2) { org.tegro.yamp.domain.account.AccountId.yandex("1001") }, resolver.fetchedFor)
     }
 
     /** History's tap: the track goes right after the cursor and plays; the queue goes on after it (D35). */
@@ -709,4 +727,243 @@ class PlaybackControllerTest {
         assertEquals("2", controller.currentPlaylist.value.first().idString)
         assertFalse("the old radio's tracks are gone", controller.currentPlaylist.value.ids.any { it.startsWith("r") })
     }
+
+    // region Phase 2a: queues bound to accounts (D56, D57, D61, D63)
+
+    private val second = org.tegro.yamp.domain.model.UserAccount(uid = "2002", login = "rock", token = "token2")
+
+    /** Every account's calls reach the test server; which account asked is written down. */
+    private inner class RecordingClients : org.tegro.yamp.data.network.YandexClients {
+        val asked = java.util.concurrent.CopyOnWriteArrayList<String?>()
+        override fun api(account: org.tegro.yamp.domain.account.AccountId?): YandexMusicApi = api.also { asked += account?.value }
+        override fun current(): YandexMusicApi = api
+        override fun http(account: org.tegro.yamp.domain.account.AccountId?): okhttp3.OkHttpClient = client
+        override fun evictCaches() = Unit
+    }
+
+    /** A queue made with no account given belongs to the account the user is in. */
+    @Test
+    fun aNewQueueIsBoundToTheAccountTheUserIsIn() {
+        val controller = controller()
+        controller.createQueue("Road")
+        controller.settle()
+
+        assertEquals("yandex:1001", controller.queues.value.single { it.queue.name == "Road" }.queue.account)
+    }
+
+    /** "New queue" with an account chosen in its selector binds the queue to that account (D57). */
+    @Test
+    fun aNewQueueTakesTheAccountChosenForIt() {
+        auth.allAccounts.value = listOf(auth.activeAccount.value!!, second)
+        val controller = controller()
+        controller.createQueue("Rock", account = "yandex:2002")
+        controller.createQueueWith("Rock 2", playlist("1"), account = "yandex:2002")
+        controller.settle()
+
+        assertEquals("yandex:2002", controller.queues.value.single { it.queue.name == "Rock" }.queue.account)
+        assertEquals("yandex:2002", controller.queues.value.single { it.queue.name == "Rock 2" }.queue.account)
+    }
+
+    /** "New radio" on the account chosen in the picker: the radio belongs to it, whatever plays now (D57). */
+    @Test
+    fun aNewRadioTakesTheAccountChosenForIt() {
+        auth.allAccounts.value = listOf(auth.activeAccount.value!!, second)
+        val controller = controller()
+        val library = playlist("1", "2", "3")
+        controller.playing("1", library)
+        stations["track:1"] = ArrayDeque(listOf(listOf("r1", "r2", "r3")))
+
+        controller.startRadio(radioSeed("1"), RadioTarget.New, keepHistory = false, track = library[0], account = "yandex:2002")
+        controller.settle()
+
+        assertEquals("yandex:2002", controller.queues.value.single { it.queue.kind == QueueKind.RADIO }.queue.account)
+    }
+
+    /** Making a queue of another account active takes the user into that account; playback is not reset. */
+    @Test
+    fun switchingToAQueueOfAnotherAccountSwitchesTheContext() {
+        auth.allAccounts.value = listOf(auth.activeAccount.value!!, second)
+        val manager = manager()
+        val controller = controller(queueManager = manager)
+        controller.playing("1", playlist("1", "2"))
+        val rock = await { manager.create("Rock", account = "yandex:2002") }
+
+        controller.switchQueue(rock.id)
+        controller.settle()
+
+        assertEquals("2002", auth.activeAccount.value?.uid)
+        controller.switchQueue(controller.queues.value.single { it.queue.account == "yandex:1001" && it.queue.name != "Rock" }.queue.id)
+        controller.settle()
+        assertEquals("1001", auth.activeAccount.value?.uid)
+    }
+
+    /** A radio refills under its own account, even when another account's queue was active before it. */
+    @Test
+    fun aRadioRefillsUnderItsOwnAccount() {
+        auth.allAccounts.value = listOf(auth.activeAccount.value!!, second)
+        val clients = RecordingClients()
+        val manager = manager()
+        val controller = controller(queueManager = manager, clients = clients)
+        val library = playlist("1", "2", "3")
+        controller.playing("1", library)
+        stations["track:9"] = ArrayDeque(listOf(listOf("r1", "r2", "r3"), listOf("r4", "r5")))
+        val radio = await { manager.startRadio(RadioTarget.New, "yandex:track:9", "Radio: Track 9", false, playlist("9"), account = "yandex:2002") }
+        clients.asked.clear()
+
+        controller.switchQueue(radio.id, play = true)
+        controller.awaitPlaylist(4)
+
+        assertTrue(rotorRequests.any { it.contains("rotor/station/track:9/tracks") })
+        assertTrue("the radio asks as its account", clients.asked.contains("yandex:2002"))
+        assertFalse("never as the account in force before it", clients.asked.contains("yandex:1001"))
+    }
+
+    /** Re-seeding a radio keeps its account (D61). */
+    @Test
+    fun reSeedingARadioKeepsItsAccount() {
+        auth.allAccounts.value = listOf(auth.activeAccount.value!!, second)
+        val manager = manager()
+        controller(queueManager = manager)
+        val radio = await { manager.startRadio(RadioTarget.New, "yandex:track:1", "Radio: Track 1", false, emptyList(), account = "yandex:2002") }
+
+        val reSeeded = await { manager.startRadio(RadioTarget.Replace(radio.id), "yandex:track:2", "Radio: Track 2", false, emptyList(), account = "yandex:1001") }
+
+        assertEquals("yandex:2002", reSeeded.account)
+    }
+
+    /** Signing in gives the account its My Wave queue and takes the user there; signing in again reuses it. */
+    @Test
+    fun enteringAnAccountMakesItsMyWaveQueueOnceAndActivatesIt() {
+        auth.allAccounts.value = listOf(auth.activeAccount.value!!, second)
+        val controller = controller()
+        controller.playing("1", playlist("1", "2"))
+        val account = org.tegro.yamp.domain.account.AccountId.yandex("2002")
+
+        controller.ensureWaveQueue(account)
+        controller.enterAccount(account)
+        controller.settle()
+        controller.enterAccount(account)
+        controller.settle()
+
+        val waves = controller.queues.value.filter { it.queue.kind == QueueKind.WAVE && it.queue.account == "yandex:2002" }
+        assertEquals(1, waves.size)
+        assertTrue(waves.single().isActive)
+        assertEquals("2002", auth.activeAccount.value?.uid)
+    }
+
+    // endregion
+
+    // region Sign-out (Phase 2a step 7, D62)
+
+    private val anna = org.tegro.yamp.domain.account.AccountId.yandex("1001")
+    private val rockId = org.tegro.yamp.domain.account.AccountId.yandex("2002")
+
+    /** Playing a queue of the second account at 12 s, with both accounts' My Wave queues made. */
+    private fun PlaybackController.playingRock(manager: QueueManager): Long {
+        playing("1", playlist("1", "2"))
+        ensureWaveQueue(anna)
+        ensureWaveQueue(rockId)
+        settle()
+        val rock = await { manager.create("Rock", account = rockId.value) }
+        addToQueue(rock.id, playlist("7", "8"))
+        settle()
+        switchQueue(rock.id, play = true)
+        settle()
+        engine.sounds()
+        engine.progress.value = 12_000
+        engine.calls.clear()
+        return rock.id
+    }
+
+    @Test
+    fun signingOutStopsTheAccountsQueueKeepsItAndMovesToTheDefaultAccountsMyWave() {
+        auth.allAccounts.value = listOf(auth.activeAccount.value!!, second)
+        val manager = manager()
+        val controller = controller(queueManager = manager)
+        val rock = controller.playingRock(manager)
+
+        controller.leaveAccount(rockId, fallback = anna)
+        controller.settle()
+
+        assertTrue("the engine stops", engine.calls.contains(Call("stop")))
+        assertFalse(controller.isPlaying.value)
+        val now = controller.activeQueue.value!!.queue
+        assertEquals("the default account's My Wave, as the grouped switcher lists it first", QueueKind.WAVE, now.kind)
+        assertEquals(anna.value, now.account)
+        val kept = await { db.queueDao().queue(rock) }!!
+        assertEquals("the queue is kept with its position", 12_000L, kept.positionMs)
+        assertEquals(rockId.value, kept.account)
+        assertEquals(2, controller.queues.value.single { it.queue.id == rock }.size)
+        assertEquals("its My Wave is kept too", 1, controller.queues.value.count { it.queue.kind == QueueKind.WAVE && it.queue.account == rockId.value })
+    }
+
+    @Test
+    fun aRemovedAccountsQueueSavedAsActiveGivesWayOnTheNextStart() {
+        val annaAccount = auth.activeAccount.value!!
+        auth.allAccounts.value = listOf(annaAccount, second)
+        val first = controller(queueManager = manager())
+        val rock = first.playingRock(manager())
+        first.persistNow()
+        first.settle()
+        // The second account is gone by the next start (signed out elsewhere, or its sign-out was cut short)
+        auth.allAccounts.value = listOf(annaAccount)
+        auth.activeAccount.value = annaAccount
+
+        val restarted = controller(FakePlayerRepository(context))
+
+        val now = await { restarted.activeQueue.first { it?.queue?.account == anna.value } }!!.queue
+        assertEquals("the default account's My Wave, as on a sign-out", QueueKind.WAVE, now.kind)
+        assertFalse(restarted.isPlaying.value)
+        val kept = await { db.queueDao().queue(rock) }!!
+        assertEquals("the removed account's queue is kept for its re-sign-in", rockId.value, kept.account)
+    }
+
+    @Test
+    fun theLastAccountSigningOutLeavesNoQueueActiveAndDeletesNone() {
+        val manager = manager()
+        val controller = controller(queueManager = manager)
+        controller.playing("1", playlist("1", "2"))
+        val main = controller.activeQueue.value!!.queue.id
+
+        controller.leaveAccount(anna, fallback = null)
+        controller.settle()
+
+        assertNull(controller.activeQueue.value)
+        assertEquals(2, controller.queues.value.single { it.queue.id == main }.size)
+    }
+
+    @Test
+    fun anotherAccountsQueuePlaysOnWhenAnAccountSignsOut() {
+        auth.allAccounts.value = listOf(auth.activeAccount.value!!, second)
+        val controller = controller()
+        controller.playing("1", playlist("1", "2"))
+        val main = controller.activeQueue.value!!.queue.id
+
+        controller.leaveAccount(rockId, fallback = anna)
+        controller.settle()
+
+        assertEquals(main, controller.activeQueue.value?.queue?.id)
+        assertFalse(engine.calls.contains(Call("stop")))
+        assertTrue(controller.isPlaying.value)
+    }
+
+    @Test
+    fun signingBackInBringsTheQueuesBackAtTheirPositionsWithoutANewMyWave() {
+        auth.allAccounts.value = listOf(auth.activeAccount.value!!, second)
+        val manager = manager()
+        val controller = controller(queueManager = manager)
+        val rock = controller.playingRock(manager)
+        controller.leaveAccount(rockId, fallback = anna)
+        controller.settle()
+
+        controller.ensureWaveQueue(rockId)
+        controller.switchQueue(rock)
+        controller.settle()
+
+        assertEquals(1, controller.queues.value.count { it.queue.kind == QueueKind.WAVE && it.queue.account == rockId.value })
+        assertEquals("7", controller.currentTrack.value?.idString)
+        assertEquals(12_000L, await { controller.progress.first { it == 12_000L } })
+    }
+
+    // endregion
 }

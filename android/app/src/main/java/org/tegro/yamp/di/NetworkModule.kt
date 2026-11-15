@@ -4,6 +4,8 @@ import android.content.Context
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import org.tegro.yamp.BuildConfig
 import org.tegro.yamp.data.network.AuthInterceptor
+import org.tegro.yamp.data.network.YandexClients
+import org.tegro.yamp.data.network.YandexClientsImpl
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -72,20 +74,15 @@ object NetworkModule {
             .apply { interceptors().removeAll { it is AuthInterceptor } }
             .build()
 
-    @Provides
-    @Singleton
-    fun provideRetrofit(okHttpClient: OkHttpClient, json: Json): Retrofit {
-        val contentType = "application/json".toMediaType()
-        return Retrofit.Builder()
+    /** Retrofit for the Yandex API over [client]; one per account (`YandexClients`). */
+    fun yandexRetrofit(client: OkHttpClient, json: Json): Retrofit =
+        Retrofit.Builder()
             .baseUrl("https://api.music.yandex.net/")
-            .client(okHttpClient)
-            .addConverterFactory(json.asConverterFactory(contentType))
+            .client(client)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
-    }
 
     @Provides
     @Singleton
-    fun provideYandexMusicApi(retrofit: Retrofit): org.tegro.yamp.data.network.YandexMusicApi {
-        return retrofit.create(org.tegro.yamp.data.network.YandexMusicApi::class.java)
-    }
+    fun provideYandexClients(clients: YandexClientsImpl): YandexClients = clients
 }

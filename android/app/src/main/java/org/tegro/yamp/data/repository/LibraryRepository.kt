@@ -1,8 +1,11 @@
 package org.tegro.yamp.data.repository
 
 import android.util.Log
+import org.tegro.yamp.domain.account.AccountId
+import org.tegro.yamp.domain.account.accountId
 import org.tegro.yamp.data.cache.PlaylistCacheManager
 import org.tegro.yamp.data.dto.TrackDetailsDto
+import org.tegro.yamp.data.network.YandexClients
 import org.tegro.yamp.data.network.YandexMusicApi
 import org.tegro.yamp.domain.model.UserAccount
 import org.tegro.yamp.domain.repository.AuthRepository
@@ -32,10 +35,18 @@ import javax.inject.Singleton
  */
 @Singleton
 class LibraryRepository @Inject constructor(
-    private val api: YandexMusicApi,
+    private val clients: YandexClients,
     private val authRepository: AuthRepository,
-    private val cacheManager: PlaylistCacheManager
+    private val cacheManager: PlaylistCacheManager,
+    /** Re-keys a provisional account's data once its uid is known (Phase 2a); tests pass none. */
+    private val accountKeys: org.tegro.yamp.data.cache.CacheKeyMigration = org.tegro.yamp.data.cache.CacheKeyMigration.None
 ) {
+    /** [folder]'s API: every call is made for the account whose data it changes (docs/phase-2a-accounts.md §4). */
+    private fun apiOf(folder: String): YandexMusicApi = clients.api(folder.takeIf { it != NO_ACCOUNT }?.let(::AccountId))
+
+    /** The account context's API, for what belongs to nobody in particular (charts). */
+    private val api: YandexMusicApi get() = clients.current()
+
     private val scope = CoroutineScope(
         SupervisorJob() + Dispatchers.IO + CoroutineExceptionHandler { _, e -> Log.e(TAG, "Library job failed", e) }
     )
@@ -61,9 +72,17 @@ class LibraryRepository @Inject constructor(
     private val _popularTracks = MutableStateFlow<List<TrackDetailsDto>>(emptyList())
     val popularTracks: StateFlow<List<TrackDetailsDto>> = _popularTracks.asStateFlow()
 
+    /**
+     * Every account's likes, kept side by side: the flows above show the account context's, and a change of
+     * context only shows another entry — nothing is dropped or reloaded (docs/phase-2a-accounts.md §4).
+     */
+    private class Likes(val tracks: List<TrackDetailsDto>, val ids: Set<String>)
+    private val likesByAccount = java.util.concurrent.ConcurrentHashMap<String, Likes>()
+
     private val likesMutex = Mutex()
     private val pendingMutex = Mutex()
-    private var likesSync: Deferred<Boolean>? = null
+    /** One sync per account at a time; another account's sync runs beside it. */
+    private val likesSyncs = mutableMapOf<String, Deferred<Boolean>>()
     private var chartsLoad: Deferred<Unit>? = null
     private var chartsLoadedThisSession = false
     private var loadedFolder: String? = null
@@ -72,17 +91,37 @@ class LibraryRepository @Inject constructor(
     private val loadingMoreHits = java.util.concurrent.atomic.AtomicBoolean(false)
     private val loadingMoreTrends = java.util.concurrent.atomic.AtomicBoolean(false)
 
+    /** The account context: whose likes the screens show. */
     private val activeFolder: String
-        get() = authRepository.getActiveAccount()?.folderName ?: "default"
+        get() = authRepository.getActiveAccount()?.accountId()?.value ?: NO_ACCOUNT
 
-    /** Shows cached data instantly (no network). Safe to call repeatedly; reloads only for a new account. */
+    private fun folderOf(account: AccountId?): String = account?.value ?: activeFolder
+
+    /** [folder]'s likes: held in memory, else read from its cache once. */
+    private suspend fun likesOf(folder: String): Likes = likesByAccount[folder]
+        ?: cacheManager.loadLikedTracks(folder).let { cached -> Likes(cached, cached.map { it.idString }.toSet()) }
+            .let { loaded -> likesByAccount.putIfAbsent(folder, loaded) ?: loaded }
+
+    /** Keeps [folder]'s likes and shows them when it is the account context. */
+    private fun putLikes(folder: String, tracks: List<TrackDetailsDto>, ids: Set<String> = tracks.map { it.idString }.toSet()) {
+        likesByAccount[folder] = Likes(tracks, ids)
+        if (folder == loadedFolder) {
+            _likedTracks.value = tracks
+            _likedIds.value = ids
+        }
+    }
+
+    /**
+     * Shows the account context's likes, from memory or its cache (no network). Safe to call repeatedly; a
+     * change of context switches the view only.
+     */
     suspend fun loadCached() {
         val folder = activeFolder
         if (loadedFolder == folder) return
+        val likes = likesOf(folder)
         loadedFolder = folder
-        val cached = cacheManager.loadLikedTracks(folder)
-        _likedTracks.value = cached
-        _likedIds.value = cached.map { it.idString }.toSet()
+        _likedTracks.value = likes.tracks
+        _likedIds.value = likes.ids
         if (_weeklyHits.value.isEmpty()) _weeklyHits.value = cacheManager.loadWeeklyHits()
         if (_trendTracks.value.isEmpty()) _trendTracks.value = cacheManager.loadTrendTracks()
         if (_popularTracks.value.isEmpty()) _popularTracks.value = cacheManager.loadPopularTracks()
@@ -92,22 +131,24 @@ class LibraryRepository @Inject constructor(
      * Brings the likes up to date. Joins a sync already in progress.
      * @return true when the liked list changed.
      */
-    suspend fun syncLikes(): Boolean {
+    suspend fun syncLikes(account: AccountId? = null): Boolean {
+        val folder = folderOf(account)
         val running = likesMutex.withLock {
-            likesSync?.takeIf { it.isActive } ?: scope.async { doSyncLikes() }.also { likesSync = it }
+            likesSyncs[folder]?.takeIf { it.isActive } ?: scope.async { doSyncLikes(folder) }.also { likesSyncs[folder] = it }
         }
         return running.await()
     }
 
-    private suspend fun doSyncLikes(): Boolean {
-        if (authRepository.getToken().isNullOrEmpty()) return false
-        _isSyncingLikes.value = true
+    private suspend fun doSyncLikes(folder: String): Boolean {
+        if (folder == NO_ACCOUNT || tokenOf(folder).isNullOrEmpty()) return false
+        val api = apiOf(folder)
+        val showsProgress = folder == activeFolder
+        if (showsProgress) _isSyncingLikes.value = true
         try {
             loadCached()
             // First what was done without a connection, or the sync would take it back
-            flushPendingReactions()
-            val folder = activeFolder
-            val uid = resolveUid()
+            flushPendingReactions(AccountId(folder))
+            val uid = resolveUid(folder)
             val response = try {
                 api.getLikedTracks(uid, richTracks = false)
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -116,7 +157,8 @@ class LibraryRepository @Inject constructor(
                 if (uid != "me") api.getLikedTracks("me", richTracks = false) else throw e
             }
             val result = response.result ?: return false
-            _likesSyncFailed.value = false
+            if (showsProgress) _likesSyncFailed.value = false
+            val held = likesOf(folder)
             val revision = result.library?.revision ?: result.revision
             var ids = result.allTracks.map { it.idString }.filter { it.isNotEmpty() }.distinct()
 
@@ -124,7 +166,7 @@ class LibraryRepository @Inject constructor(
             val metaCurrent = cacheManager.likesMetaIsCurrent(folder)
             // Likes unchanged since the last sync and everything is cached: nothing else to do
             if (metaCurrent && revision != null && revision == cacheManager.loadLikesRevision(folder) &&
-                ids.toSet() == _likedIds.value && _likedTracks.value.size == ids.size
+                ids.toSet() == held.ids && held.tracks.size == ids.size
             ) {
                 Log.d(TAG, "Likes unchanged (revision $revision), ${ids.size} tracks")
                 return false
@@ -136,11 +178,11 @@ class LibraryRepository @Inject constructor(
             }
 
             // A failed refresh keeps what was cached: never fewer details than before
-            val previousById = _likedTracks.value.associateBy { it.idString }
+            val previousById = held.tracks.associateBy { it.idString }
             val cachedById = if (metaCurrent) previousById else emptyMap()
             val embedded = result.allTracks.mapNotNull { it.track }.associateBy { it.idString }
             val missing = ids.filter { it !in cachedById && it !in embedded }
-            val fetched = fetchMetadata(missing).associateBy { it.idString }
+            val fetched = fetchMetadata(missing, api).associateBy { it.idString }
             Log.d(TAG, "Likes changed (revision $revision): ${ids.size} tracks, metadata fetched for ${missing.size}")
 
             // Keep the server's order (most recent like first)
@@ -148,9 +190,8 @@ class LibraryRepository @Inject constructor(
                 cachedById[id] ?: embedded[id] ?: fetched[id] ?: previousById[id]
                     ?: TrackDetailsDto(id = kotlinx.serialization.json.JsonPrimitive(id))
             }
-            if (activeFolder != folder) return false // account switched while syncing
-            _likedTracks.value = tracks
-            _likedIds.value = ids.toSet()
+            // Kept for its own account even when the context moved on meanwhile
+            putLikes(folder, tracks, ids.toSet())
             cacheManager.saveLikedTracks(folder, tracks)
             revision?.let { cacheManager.saveLikesRevision(folder, it) }
             if (!metaCurrent && fetched.size >= missing.size / 2) cacheManager.markLikesMetaCurrent(folder)
@@ -159,14 +200,20 @@ class LibraryRepository @Inject constructor(
             throw e
         } catch (e: Exception) {
             Log.e(TAG, "Likes sync failed", e)
-            _likesSyncFailed.value = true
+            if (showsProgress) _likesSyncFailed.value = true
             return false
         } finally {
-            _isSyncingLikes.value = false
+            if (showsProgress) _isSyncingLikes.value = false
         }
     }
 
-    internal suspend fun fetchMetadata(ids: List<String>): List<TrackDetailsDto> {
+    private fun accountOf(folder: String): UserAccount? =
+        authRepository.getAllAccounts().firstOrNull { it.accountId().value == folder }
+            ?: authRepository.getActiveAccount()?.takeIf { it.accountId().value == folder }
+
+    private fun tokenOf(folder: String): String? = accountOf(folder)?.let { authRepository.token(it.accountId()) }
+
+    internal suspend fun fetchMetadata(ids: List<String>, api: YandexMusicApi = this.api): List<TrackDetailsDto> {
         val out = mutableListOf<TrackDetailsDto>()
         for (chunk in ids.chunked(METADATA_CHUNK)) {
             val meta = runCatching { api.getTracksMetadata(chunk).result.orEmpty() }.getOrDefault(emptyList())
@@ -180,12 +227,13 @@ class LibraryRepository @Inject constructor(
      * The account UID needed by the likes endpoints. Taken from the saved account; asks the server only
      * once for an account that was saved before its UID was known.
      */
-    internal suspend fun resolveUid(): String {
-        val account = authRepository.getActiveAccount()
+    internal suspend fun resolveUid(folder: String = activeFolder): String {
+        val account = accountOf(folder)
         account?.takeIf { it.hasRealUid }?.let { return it.uid }
+        val api = apiOf(folder)
         val status = runCatching { api.getAccountStatus().result }.getOrNull() ?: return "me"
         val uid = status.uidString.takeIf { it.isNotEmpty() } ?: return "me"
-        val token = authRepository.getToken().orEmpty()
+        val token = tokenOf(folder) ?: authRepository.getToken().orEmpty()
         if (token.isNotEmpty()) {
             val avatar = status.avatarUrl ?: runCatching { api.getYandexLoginInfo().avatarUrl }.getOrNull()
             authRepository.saveOrUpdateAccount(
@@ -198,22 +246,29 @@ class LibraryRepository @Inject constructor(
                     hasPlus = status.hasPlus
                 )
             )
+            if (account != null && account.uid != uid) accountKeys.adoptRealUid(account, uid)
         }
         return uid
     }
 
-    /** Like/unlike with an optimistic update; reverted if the server call fails. */
-    fun setLiked(track: TrackDetailsDto, liked: Boolean, onDone: (Boolean) -> Unit = {}) {
+    /**
+     * Like/unlike with an optimistic update; reverted if the server call fails. [account] = whose like it is
+     * (the playing queue's, from step 5); `null` = the account context.
+     */
+    fun setLiked(track: TrackDetailsDto, liked: Boolean, account: AccountId? = null, onDone: (Boolean) -> Unit = {}) {
         val id = track.idString
-        val previousTracks = _likedTracks.value
-        val previousIds = _likedIds.value
-        _likedIds.value = if (liked) previousIds + id else previousIds - id
-        _likedTracks.value = if (liked) listOf(track) + previousTracks.filter { it.idString != id } else previousTracks.filter { it.idString != id }
-        val folder = activeFolder
+        val folder = folderOf(account)
+        val held = likesByAccount[folder] ?: Likes(_likedTracks.value, _likedIds.value).takeIf { folder == loadedFolder }
+        val previousTracks = held?.tracks.orEmpty()
+        val previousIds = held?.ids.orEmpty()
+        val tracks = if (liked) listOf(track) + previousTracks.filter { it.idString != id } else previousTracks.filter { it.idString != id }
+        if (held != null) putLikes(folder, tracks, if (liked) previousIds + id else previousIds - id)
+        val api = apiOf(folder)
         scope.launch {
-            cacheManager.saveLikedTracks(folder, _likedTracks.value)
+            // Likes not loaded yet for that account: the next sync brings this one with the rest
+            if (held != null) cacheManager.saveLikedTracks(folder, tracks)
             val outcome = runCatching {
-                val uid = resolveUid()
+                val uid = resolveUid(folder)
                 if (liked) api.likeTrack(uid, id) else api.unlikeTrack(uid, id)
             }.onFailure { Log.e(TAG, "Like change failed for $id", it) }
             // No connection: the like stands and is sent later. The server refusing it is another matter
@@ -223,25 +278,26 @@ class LibraryRepository @Inject constructor(
                 return@launch
             }
             val ok = outcome.isSuccess
-            if (!ok) {
-                _likedTracks.value = previousTracks
-                _likedIds.value = previousIds
+            if (!ok && held != null) {
+                putLikes(folder, previousTracks, previousIds)
                 cacheManager.saveLikedTracks(folder, previousTracks)
             }
             onDone(ok)
         }
     }
 
-    fun dislike(track: TrackDetailsDto) {
+    fun dislike(track: TrackDetailsDto, account: AccountId? = null) {
         val id = track.idString
-        val wasLiked = id in _likedIds.value
-        _likedIds.value = _likedIds.value - id
-        _likedTracks.value = _likedTracks.value.filter { it.idString != id }
-        val folder = activeFolder
+        val folder = folderOf(account)
+        val held = likesByAccount[folder] ?: Likes(_likedTracks.value, _likedIds.value).takeIf { folder == loadedFolder }
+        val wasLiked = held?.ids?.contains(id) == true
+        val tracks = held?.tracks.orEmpty().filter { it.idString != id }
+        if (held != null) putLikes(folder, tracks, held.ids - id)
+        val api = apiOf(folder)
         scope.launch {
-            cacheManager.saveLikedTracks(folder, _likedTracks.value)
+            if (held != null) cacheManager.saveLikedTracks(folder, tracks)
             runCatching {
-                val uid = resolveUid()
+                val uid = resolveUid(folder)
                 if (wasLiked) api.unlikeTrack(uid, id)
                 api.dislikeTrack(uid, id)
             }.onFailure {
@@ -259,12 +315,13 @@ class LibraryRepository @Inject constructor(
     }
 
     /** Sends what was liked and disliked without a connection, oldest first; what still cannot go stays. */
-    suspend fun flushPendingReactions() {
-        val folder = activeFolder
+    suspend fun flushPendingReactions(account: AccountId? = null) {
+        val folder = folderOf(account)
+        val api = apiOf(folder)
         pendingMutex.withLock {
             val queue = cacheManager.loadPendingReactions(folder).mapNotNull(PendingReactions::parse)
             if (queue.isEmpty()) return
-            val uid = resolveUid()
+            val uid = resolveUid(folder)
             var left = queue
             for (reaction in queue) {
                 try {
@@ -353,10 +410,11 @@ class LibraryRepository @Inject constructor(
         }
     }
 
-    /** Account switch, logout or "clear cache": forget in-memory state of the previous account. */
+    /** Logout or "clear cache": forget every account's in-memory likes; they are read again from the cache. */
     fun resetForAccountChange() {
-        likesSync?.cancel()
-        likesSync = null
+        likesSyncs.values.forEach { it.cancel() }
+        likesSyncs.clear()
+        likesByAccount.clear()
         loadedFolder = null
         _likedTracks.value = emptyList()
         _likedIds.value = emptySet()
@@ -392,6 +450,8 @@ class LibraryRepository @Inject constructor(
     private companion object {
         const val TAG = "LibraryRepository"
         const val METADATA_CHUNK = 100
+        /** The cache key when nobody is signed in (as before Phase 2a). */
+        const val NO_ACCOUNT = "default"
         val HITS_QUERIES = listOf("чарт", "топ 100", "главные хиты", "суперхиты")
         val TRENDS_QUERIES = listOf("новинки", "в тренде", "горячие новинки", "премьеры")
     }

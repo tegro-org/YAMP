@@ -1,6 +1,7 @@
 package org.tegro.yamp.data.repository
 
 import android.content.Context
+import org.tegro.yamp.domain.account.accountId
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
@@ -27,7 +28,7 @@ class SearchHistoryRepository @Inject constructor(
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val history: Flow<List<String>> = authRepository.activeAccount.flatMapLatest { account ->
-        context.searchHistoryStore.data.map { prefs -> decode(prefs[key(account?.folderName)]) }
+        context.searchHistoryStore.data.map { prefs -> decode(prefs[key(account?.accountId()?.value)]) }
     }
 
     suspend fun add(query: String) {
@@ -40,8 +41,23 @@ class SearchHistoryRepository @Inject constructor(
     suspend fun clear() = update { emptyList() }
 
     private suspend fun update(change: (List<String>) -> List<String>) {
-        val k = key(authRepository.getActiveAccount()?.folderName)
+        val k = key(authRepository.getActiveAccount()?.accountId()?.value)
         context.searchHistoryStore.edit { prefs -> prefs[k] = encode(change(decode(prefs[k]))) }
+    }
+
+    /** Phase 2a: moves each old key's history to its new account key; a history the new key already has wins. */
+    suspend fun renameKeys(oldToNew: Map<String, String>) {
+        if (oldToNew.isEmpty()) return
+        context.searchHistoryStore.edit { prefs ->
+            oldToNew.forEach { (old, new) ->
+                if (old == new) return@forEach
+                val from = key(old)
+                val moved = prefs[from] ?: return@forEach
+                val to = key(new)
+                if (prefs[to] == null) prefs[to] = moved
+                prefs.remove(from)
+            }
+        }
     }
 
     private fun decode(raw: String?) = raw?.split(SEPARATOR)?.filter { it.isNotBlank() }.orEmpty()

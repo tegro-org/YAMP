@@ -18,5 +18,8 @@ abstract class ResolverModule {
     abstract fun bindQueueStore(impl: org.tegro.yamp.data.queue.RoomQueueStore): org.tegro.yamp.domain.queue.QueueStore
 
     @Binds
+    abstract fun bindCacheKeyMigration(impl: org.tegro.yamp.data.account.AccountKeyMigration): org.tegro.yamp.data.cache.CacheKeyMigration
+
+    @Binds
     abstract fun bindQueueTrackBridge(impl: org.tegro.yamp.data.queue.QueueTrackBridge): org.tegro.yamp.data.queue.QueueTrackBridgeApi
 }

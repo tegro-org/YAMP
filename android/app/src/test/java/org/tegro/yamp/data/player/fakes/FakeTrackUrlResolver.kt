@@ -4,6 +4,7 @@ import java.io.File
 import kotlinx.coroutines.CompletableDeferred
 import org.tegro.yamp.data.network.TrackPreloadManager
 import org.tegro.yamp.data.network.TrackUrlResolver
+import org.tegro.yamp.domain.account.AccountId
 
 /**
  * Stream links by track id, no network. [getOrFetchUrl] answers from [urls] at once, or waits on
@@ -18,6 +19,8 @@ class FakeTrackUrlResolver : TrackUrlResolver {
     var pending: CompletableDeferred<Unit>? = null
 
     val fetched = mutableListOf<String>()
+    /** The account each [getOrFetchUrl] was for, in call order (`null` = the account context). */
+    val fetchedFor = mutableListOf<AccountId?>()
     val evicted = mutableListOf<String>()
     val preloaded = mutableListOf<List<String>>()
 
@@ -25,23 +28,24 @@ class FakeTrackUrlResolver : TrackUrlResolver {
 
     override fun qualityOf(trackId: String): TrackPreloadManager.StreamQuality? = null
     override fun offeredOf(trackId: String): String? = null
-    override fun getResolvedUrl(trackId: String): String? = null
+    override fun getResolvedUrl(trackId: String, account: AccountId?): String? = null
 
-    override suspend fun getOrFetchUrl(trackId: String): String? {
+    override suspend fun getOrFetchUrl(trackId: String, account: AccountId?): String? {
         fetched += trackId
+        fetchedFor += account
         pending?.await()
         return urls[trackId]
     }
 
-    override suspend fun resolveOrdinaryStream(trackId: String): TrackPreloadManager.ResolvedStream? = null
+    override suspend fun resolveOrdinaryStream(trackId: String, account: AccountId?): TrackPreloadManager.ResolvedStream? = null
     override fun playableCopy(trackId: String): File? = null
     override fun hasPlayableCopy(trackId: String): Boolean = trackId in copies
 
-    override fun evictUrl(trackId: String) {
+    override fun evictUrl(trackId: String, account: AccountId?) {
         evicted += trackId
     }
 
-    override fun preloadTracks(trackIds: List<String>) {
+    override fun preloadTracks(trackIds: List<String>, account: AccountId?) {
         preloaded += trackIds
     }
 

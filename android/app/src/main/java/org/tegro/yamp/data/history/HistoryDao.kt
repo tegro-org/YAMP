@@ -11,6 +11,10 @@ interface HistoryDao {
     @Insert
     suspend fun insert(row: HistoryEntity): Long
 
+    /** Phase 2a: a provisional account's rows follow it to its real uid. */
+    @Query("UPDATE history SET account = :to WHERE account = :from")
+    suspend fun rebindAccount(from: String, to: String)
+
     /** A new row, and the oldest ones beyond [keep] go — one transaction, so a crash never leaves the cap broken. */
     @Transaction
     suspend fun insertAndPrune(row: HistoryEntity, keep: Int): Long {

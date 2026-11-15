@@ -35,6 +35,7 @@ class FakeSettingsRepository : SettingsRepository {
     override val keepAudioStreams = MutableStateFlow(false)
     override val duckForAnnouncements = MutableStateFlow(true)
     override val keepBothPlayersRunning = MutableStateFlow(false)
+    override val groupQueuesByAccount = MutableStateFlow(true)
     override val listeningHistory = MutableStateFlow(true)
 
     override suspend fun setDarkTheme(enabled: Boolean) { isDarkTheme.value = enabled }
@@ -63,5 +64,6 @@ class FakeSettingsRepository : SettingsRepository {
     override suspend fun setKeepAudioStreams(enabled: Boolean) { keepAudioStreams.value = enabled }
     override suspend fun setDuckForAnnouncements(enabled: Boolean) { duckForAnnouncements.value = enabled }
     override suspend fun setKeepBothPlayersRunning(enabled: Boolean) { keepBothPlayersRunning.value = enabled }
+    override suspend fun setGroupQueuesByAccount(enabled: Boolean) { groupQueuesByAccount.value = enabled }
     override suspend fun setListeningHistory(enabled: Boolean) { listeningHistory.value = enabled }
 }

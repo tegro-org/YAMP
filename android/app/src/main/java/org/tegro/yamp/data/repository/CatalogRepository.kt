@@ -2,6 +2,7 @@ package org.tegro.yamp.data.repository
 
 import org.tegro.yamp.data.dto.AlbumDto
 import org.tegro.yamp.data.dto.ArtistBriefDto
+import org.tegro.yamp.data.network.YandexClients
 import org.tegro.yamp.data.network.YandexMusicApi
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -9,8 +10,11 @@ import javax.inject.Singleton
 /** Artist and album pages. Kept in memory for the session, so going back and forth costs no requests. */
 @Singleton
 class CatalogRepository @Inject constructor(
-    private val api: YandexMusicApi
+    private val clients: YandexClients
 ) {
+    /** The account context's API; calls name their own account from Phase 2a step 4 on. */
+    private val api: YandexMusicApi get() = clients.current()
+
     private val artists = lruMap<String, ArtistBriefDto>()
     private val albums = lruMap<String, AlbumDto>()
 

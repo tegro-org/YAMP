@@ -17,6 +17,8 @@ import org.tegro.yamp.data.repository.UserPlaylistsRepository
 import org.tegro.yamp.utils.toCoverUrl
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
+import kotlinx.coroutines.flow.first
+import org.tegro.yamp.domain.account.accountId
 import javax.inject.Singleton
 
 /**
@@ -32,7 +34,9 @@ class MediaLibraryTree @Inject constructor(
     private val downloadManager: TrackDownloadManager,
     private val playbackController: PlaybackController,
     private val searchRepository: org.tegro.yamp.data.repository.SearchRepository,
-    private val playlistsRepository: UserPlaylistsRepository
+    private val playlistsRepository: UserPlaylistsRepository,
+    private val authRepository: org.tegro.yamp.domain.repository.AuthRepository,
+    private val settingsRepository: org.tegro.yamp.domain.repository.SettingsRepository
 ) {
     fun root(): MediaItem = folder(ROOT_ID, context.getString(R.string.app_name), MediaMetadata.MEDIA_TYPE_FOLDER_MIXED)
         .withExtras(Bundle().apply {
@@ -48,6 +52,12 @@ class MediaLibraryTree @Inject constructor(
         if (parentId.startsWith(PLAYLIST_PREFIX)) {
             val kind = parentId.removePrefix(PLAYLIST_PREFIX)
             return playlistTracks(kind)?.map { trackItem("$PLAYLIST_TRACK_PREFIX$kind/", it) }
+        }
+        if (parentId.startsWith(QUEUES_ACCOUNT_PREFIX)) {
+            val account = parentId.removePrefix(QUEUES_ACCOUNT_PREFIX)
+            return queueSummaries().filter { it.queue.account == account }
+                .sortedBy { if (it.queue.kind == org.tegro.yamp.domain.queue.QueueKind.WAVE) 0 else 1 }
+                .map { queueItem(it, null) }
         }
         return when (parentId) {
             ROOT_ID -> listOf(
@@ -68,14 +78,19 @@ class MediaLibraryTree @Inject constructor(
                 folder(PLAYLIST_PREFIX + playlist.kindString, playlist.title.orEmpty(), MediaMetadata.MEDIA_TYPE_PLAYLIST)
                     .withArtwork(playlist.coverUri.toCoverUrl(CoverSize.Medium))
             }
-            // One playable item per queue (docs/phase-1-queues.md §5); the car's own switcher holds no more either
-            QUEUES_ID -> playbackController.queues.value.take(MAX_QUEUE_ITEMS).map { summary ->
-                playable(
-                    QUEUE_PREFIX + summary.queue.id, summary.queue.name,
-                    summary.current?.let { listOf(it.title, it.artist).filter(String::isNotBlank).joinToString(" · ") }.orEmpty(),
-                    artwork = summary.current?.coverUrl.toCoverUrl(CoverSize.Medium)?.let(Uri::parse),
-                    mediaType = MediaMetadata.MEDIA_TYPE_PLAYLIST
-                )
+            // One playable item per queue (docs/phase-1-queues.md §5); the car's own switcher holds no more either.
+            // Several accounts (D64): a sub-folder per account when grouped, else the account's name in the subtitle
+            QUEUES_ID -> {
+                val names = accountNames()
+                val queues = queueSummaries()
+                if (names.size > 1 && settingsRepository.groupQueuesByAccount.first()) {
+                    queues.filter { it.queue.account == null }.map { queueItem(it, null) } +
+                        names.filter { (key, _) -> queues.any { it.queue.account == key } }.map { (key, name) ->
+                            folder(QUEUES_ACCOUNT_PREFIX + key, name, MediaMetadata.MEDIA_TYPE_FOLDER_PLAYLISTS)
+                        }
+                } else {
+                    queues.map { queueItem(it, names[it.queue.account].takeIf { names.size > 1 }) }
+                }
             }
             RADIO_ID -> radioRepository.getBuiltinStations().map { station ->
                 playable(
@@ -97,7 +112,8 @@ class MediaLibraryTree @Inject constructor(
             mediaId.startsWith(LIKED_PREFIX) -> LIKED_ID
             mediaId.startsWith(DOWNLOADED_PREFIX) -> DOWNLOADED_ID
             mediaId.startsWith(RADIO_PREFIX) -> RADIO_ID
-            mediaId.startsWith(QUEUE_PREFIX) -> QUEUES_ID
+            mediaId.startsWith(QUEUES_ACCOUNT_PREFIX) -> QUEUES_ID
+            mediaId.startsWith(QUEUE_PREFIX) -> queueParent(mediaId.removePrefix(QUEUE_PREFIX).toLongOrNull())
             else -> ROOT_ID
         }
         return children(parent)?.firstOrNull { it.mediaId == mediaId }
@@ -125,7 +141,7 @@ class MediaLibraryTree @Inject constructor(
                 .firstOrNull { it.id == mediaId.removePrefix(RADIO_PREFIX) }
                 ?.let { station -> { playbackController.playRadioStation(station) } }
             mediaId.startsWith(QUEUE_PREFIX) -> mediaId.removePrefix(QUEUE_PREFIX).toLongOrNull()
-                ?.takeIf { id -> playbackController.queues.value.any { it.queue.id == id } }
+                ?.takeIf { id -> queueSummaries().any { it.queue.id == id } }
                 ?.let { id ->
                     { playbackController.switchQueue(id, play = true) }
                 }
@@ -183,6 +199,32 @@ class MediaLibraryTree @Inject constructor(
         mediaType = MediaMetadata.MEDIA_TYPE_MUSIC
     )
 
+    /** The signed-in accounts' names by key (`AccountId.value`), in the accounts' order. */
+    private fun accountNames(): Map<String, String> = authRepository.getAllAccounts().associate { account ->
+        account.accountId().value to account.displayName.ifBlank { account.login }.ifBlank { account.uid }
+    }
+
+    /** The queues the car may show: a removed account's queues never (D62). */
+    private fun queueSummaries(): List<org.tegro.yamp.domain.queue.QueueSummary> =
+        carQueues(playbackController.queues.value, accountNames().keys).take(MAX_QUEUE_ITEMS)
+
+    private suspend fun queueParent(id: Long?): String {
+        val account = queueSummaries().firstOrNull { it.queue.id == id }?.queue?.account
+        val grouped = accountNames().size > 1 && settingsRepository.groupQueuesByAccount.first()
+        return if (grouped && account != null) QUEUES_ACCOUNT_PREFIX + account else QUEUES_ID
+    }
+
+    /** A queue as a playable item; [accountName] leads the subtitle in a flat list of several accounts. */
+    private fun queueItem(summary: org.tegro.yamp.domain.queue.QueueSummary, accountName: String?): MediaItem {
+        val track = summary.current?.let { listOf(it.title, it.artist).filter(String::isNotBlank).joinToString(" · ") }.orEmpty()
+        return playable(
+            QUEUE_PREFIX + summary.queue.id, summary.queue.name,
+            listOfNotNull(accountName, track.ifBlank { null }).joinToString(" · "),
+            artwork = summary.current?.coverUrl.toCoverUrl(CoverSize.Medium)?.let(Uri::parse),
+            mediaType = MediaMetadata.MEDIA_TYPE_PLAYLIST
+        )
+    }
+
     private fun folder(id: String, title: String, mediaType: Int): MediaItem = MediaItem.Builder()
         .setMediaId(id)
         .setMediaMetadata(
@@ -227,6 +269,8 @@ class MediaLibraryTree @Inject constructor(
         const val PLAYLISTS_ID = "playlists"
         const val QUEUES_ID = "queues"
         private const val QUEUE_PREFIX = "queue/"
+        /** A sub-folder of "Queues" per account when grouped (D64). */
+        private const val QUEUES_ACCOUNT_PREFIX = "queues/"
         /** Android Auto lists are paged at a few hundred items; the user's queues never come near. */
         private const val MAX_QUEUE_ITEMS = 100
         private const val PLAYLIST_PREFIX = "playlist/"
@@ -243,3 +287,10 @@ class MediaLibraryTree @Inject constructor(
         private const val CONTENT_STYLE_GRID = 2
     }
 }
+
+/**
+ * The queues Android Auto lists and lets the car play: those of no account and of a signed-in one — a removed
+ * account's queues are never shown nor played there (D62); they wait in the phone's switcher.
+ */
+internal fun carQueues(queues: List<org.tegro.yamp.domain.queue.QueueSummary>, signedIn: Set<String>) =
+    queues.filter { it.queue.account == null || it.queue.account in signedIn }

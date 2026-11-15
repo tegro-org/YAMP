@@ -22,7 +22,8 @@ data class TrackEntity(
 
 /**
  * One position of a track list: likes, a playlist, the wave queue, charts, history.
- * [owner] is the account's cache folder, or [CacheDatabase.SHARED] for lists common to all accounts.
+ * [owner] is the account key (`yandex:<uid>`, Phase 2a; a folder name before), or [CacheDatabase.SHARED] for lists
+ * common to all accounts.
  */
 @Entity(
     tableName = "list_items",
@@ -102,6 +103,27 @@ interface CacheDao {
         deleteOrphanTracks()
     }
 
+    /** Every account key that owns rows ([SHARED] included). */
+    @Query("SELECT owner FROM list_items UNION SELECT owner FROM cache_values")
+    suspend fun owners(): List<String>
+
+    @Query("UPDATE list_items SET owner = :to WHERE owner = :from AND list NOT IN (SELECT list FROM list_items WHERE owner = :to)")
+    suspend fun moveOwnerItems(from: String, to: String)
+
+    @Query("UPDATE cache_values SET owner = :to WHERE owner = :from AND `key` NOT IN (SELECT `key` FROM cache_values WHERE owner = :to)")
+    suspend fun moveOwnerValues(from: String, to: String)
+
+    /**
+     * Re-keys an account's rows (Phase 2a). A list or value [to] already has is kept and the old one dropped:
+     * the newer key was written by the app after the change, the old one before it.
+     */
+    @Transaction
+    suspend fun renameOwner(from: String, to: String) {
+        moveOwnerItems(from, to)
+        moveOwnerValues(from, to)
+        deleteOwner(from)
+    }
+
     @Query("DELETE FROM list_items")
     suspend fun deleteAllItems()
 
@@ -132,7 +154,7 @@ interface CacheDao {
         org.tegro.yamp.data.queue.QueueEntity::class, org.tegro.yamp.data.queue.QueueEntryEntity::class,
         org.tegro.yamp.data.history.HistoryEntity::class
     ],
-    version = 4
+    version = 5
 )
 abstract class CacheDatabase : RoomDatabase() {
     abstract fun dao(): CacheDao
@@ -149,7 +171,7 @@ abstract class CacheDatabase : RoomDatabase() {
         /** One database per process, also for tests that build their own cache manager. */
         fun get(context: Context): CacheDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, CacheDatabase::class.java, "music_cache.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .build()
                 .also { instance = it }
         }
@@ -194,6 +216,18 @@ abstract class CacheDatabase : RoomDatabase() {
         val MIGRATION_3_4 = object : androidx.room.migration.Migration(3, 4) {
             override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `queues` ADD COLUMN `keepHistory` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        /**
+         * v4 → v5: accounts (docs/phase-2a-accounts.md §6) — an index on `queues.account` and the account a history
+         * row played under. The account *values* are rewritten from folder names to `yandex:<uid>` in code
+         * (`AccountKeyMigration`): a Room migration cannot read the account list from the Keystore.
+         */
+        val MIGRATION_4_5 = object : androidx.room.migration.Migration(4, 5) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_queues_account` ON `queues` (`account`)")
+                db.execSQL("ALTER TABLE `history` ADD COLUMN `account` TEXT")
             }
         }
     }

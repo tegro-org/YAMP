@@ -24,7 +24,9 @@ data class HistoryEntity(
     val startedAt: Long,
     val playedMs: Long = 0L,
     val queueId: Long? = null,
-    val queueName: String? = null
+    val queueName: String? = null,
+    /** Phase 2a (v5): the account it played under (`yandex:<uid>`), for a later filter; not shown yet. */
+    val account: String? = null
 )
 
 /** A queue that appears in the history, with the name it was last recorded under. */

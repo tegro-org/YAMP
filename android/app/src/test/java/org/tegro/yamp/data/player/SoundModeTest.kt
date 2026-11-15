@@ -6,6 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import org.tegro.yamp.data.network.TrackDownloadManager
 import org.tegro.yamp.data.network.TrackPreloadManager
 import org.tegro.yamp.data.network.YandexMusicApi
+import org.tegro.yamp.data.player.fakes.FixedYandexClients
 import org.tegro.yamp.domain.model.UserAccount
 import org.tegro.yamp.domain.repository.AuthRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -72,7 +73,7 @@ class SoundModeTest {
     private fun mode(choice: Boolean?, decoder: Boolean = true) = SoundMode(flowOf(choice), {}, { decoder })
 
     private fun manager(mode: SoundMode, downloads: TrackDownloadManager = TrackDownloadManager(context, client)) =
-        TrackPreloadManager(api, downloads, client, NoAuth, mode)
+        TrackPreloadManager(FixedYandexClients(api, client), downloads, NoAuth, mode, org.tegro.yamp.data.account.AccountContext(NoAuth))
 
     /** Wait for the mode to load: [SoundMode.compatible] is the main thread's quick answer. */
     private suspend fun SoundMode.loaded(value: Boolean) = apply { withTimeout(2_000) { compatible.first { it == value } } }

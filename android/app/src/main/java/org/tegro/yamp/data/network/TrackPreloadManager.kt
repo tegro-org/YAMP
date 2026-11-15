@@ -14,15 +14,30 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.tegro.yamp.data.account.AccountContext
+import org.tegro.yamp.domain.account.AccountId
+import org.tegro.yamp.domain.account.accountId
 
 @Singleton
 class TrackPreloadManager @Inject constructor(
-    private val api: YandexMusicApi,
+    private val clients: YandexClients,
     private val downloadManager: TrackDownloadManager,
-    private val okHttpClient: OkHttpClient,
     private val authRepository: org.tegro.yamp.domain.repository.AuthRepository,
-    private val soundMode: org.tegro.yamp.data.player.SoundMode
+    private val soundMode: org.tegro.yamp.data.player.SoundMode,
+    private val accountContext: AccountContext
 ) : TrackUrlResolver {
+    /** The account a call is for: the one named, else the account context (docs/phase-2a-accounts.md §4). */
+    private fun accountOf(account: AccountId?): AccountId? = account ?: accountContext.current()
+
+    /** Links are kept per account: one resolved for another account's subscription is never reused. */
+    private fun key(account: AccountId?, trackId: String) = "${accountOf(account)?.value ?: "none"}|$trackId"
+
+    private fun hasPlus(account: AccountId?): Boolean {
+        val id = accountOf(account) ?: return false
+        return authRepository.getAllAccounts().firstOrNull { it.accountId() == id }?.hasPlus
+            ?: (authRepository.getActiveAccount()?.takeIf { it.accountId() == id }?.hasPlus == true)
+    }
+
     private data class CachedTrackUrl(val url: String, val fetchedAtMs: Long)
 
     /**
@@ -58,10 +73,11 @@ class TrackPreloadManager @Inject constructor(
     /** Diagnostic failure reason for Lossless if fallback occurred. */
     private val lastLosslessError = ConcurrentHashMap<String, String>()
 
-    override fun getResolvedUrl(trackId: String): String? {
-        val cached = resolvedUrls[trackId] ?: return null
+    override fun getResolvedUrl(trackId: String, account: AccountId?): String? {
+        val key = key(account, trackId)
+        val cached = resolvedUrls[key] ?: return null
         if (System.currentTimeMillis() - cached.fetchedAtMs > URL_TTL_MS) {
-            resolvedUrls.remove(trackId)
+            resolvedUrls.remove(key)
             return null
         }
         return cached.url
@@ -71,9 +87,10 @@ class TrackPreloadManager @Inject constructor(
      * The best stream for keeping offline, ignoring any copy already downloaded.
      * Null when the track has no playable stream or the network failed.
      */
-    suspend fun resolveForDownload(trackId: String): ResolvedStream? = withContext(Dispatchers.IO) {
+    suspend fun resolveForDownload(trackId: String, account: AccountId? = null): ResolvedStream? = withContext(Dispatchers.IO) {
         try {
-            if (soundMode.isCompatible()) resolveCompatible(trackId) else resolveBest(trackId)
+            val forAccount = accountOf(account)
+            if (soundMode.isCompatible()) resolveCompatible(forAccount, trackId) else resolveBest(forAccount, trackId)
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -86,11 +103,12 @@ class TrackPreloadManager @Inject constructor(
      * The ordinary stream the service offers this app, for the road reserve: full tracks only (without a
      * subscription there are just previews, so null), and only what download-info lists.
      */
-    override suspend fun resolveOrdinaryStream(trackId: String): ResolvedStream? = withContext(Dispatchers.IO) {
+    override suspend fun resolveOrdinaryStream(trackId: String, account: AccountId?): ResolvedStream? = withContext(Dispatchers.IO) {
         try {
-            val offered = api.getTrackDownloadInfo(trackId).result.orEmpty()
+            val forAccount = accountOf(account)
+            val offered = clients.api(forAccount).getTrackDownloadInfo(trackId).result.orEmpty()
             StreamVariants.ranked(offered).filter { !it.preview }.firstNotNullOfOrNull { variant ->
-                resolveXmlToStreamUrl(variant.downloadInfoUrl, variant.codec)?.let { url ->
+                resolveXmlToStreamUrl(clients.http(forAccount), variant.downloadInfoUrl, variant.codec)?.let { url ->
                     ResolvedStream(url, StreamQuality(variant.codec, variant.bitrateInKbps))
                 }
             }
@@ -103,13 +121,13 @@ class TrackPreloadManager @Inject constructor(
     }
 
     /** Compatible sound: what download-info offers, from the best down, previews included as usual. */
-    private suspend fun resolveCompatible(trackId: String): ResolvedStream? {
-        val offeredList = api.getTrackDownloadInfo(trackId).result.orEmpty()
+    private suspend fun resolveCompatible(account: AccountId?, trackId: String): ResolvedStream? {
+        val offeredList = clients.api(account).getTrackDownloadInfo(trackId).result.orEmpty()
         offered[trackId] = StreamVariants.describe(offeredList)
         val bestMp3 = offeredList.filter { !it.preview && it.codec.equals("mp3", ignoreCase = true) }
             .maxByOrNull { it.bitrateInKbps }?.let { StreamQuality(it.codec, it.bitrateInKbps) }
         return StreamVariants.ranked(offeredList).firstNotNullOfOrNull { variant ->
-            resolveXmlToStreamUrl(variant.downloadInfoUrl, variant.codec)?.let { url ->
+            resolveXmlToStreamUrl(clients.http(account), variant.downloadInfoUrl, variant.codec)?.let { url ->
                 ResolvedStream(url, StreamQuality(variant.codec, variant.bitrateInKbps), bestMp3)
             }
         }
@@ -126,13 +144,14 @@ class TrackPreloadManager @Inject constructor(
         soundMode.compatible.value && downloadManager.downloadedQuality(trackId)?.isLossless == true
 
     /** Tries the offered variants from the best down until one gives a link. */
-    private suspend fun resolveBest(trackId: String): ResolvedStream? {
+    private suspend fun resolveBest(account: AccountId?, trackId: String): ResolvedStream? {
+        val api = clients.api(account)
         // STEP 1: Attempt to get true Lossless (FLAC)
-        val losslessStream = tryResolveLossless(trackId)
+        val losslessStream = tryResolveLossless(api, trackId)
         if (losslessStream != null) return losslessStream
 
         // STEP 2: If FLAC is unavailable for this track, attempt to get HQ 320 kbps MP3 via get-file-info
-        val hqStream = tryResolveHq(trackId)
+        val hqStream = tryResolveHq(api, trackId)
         if (hqStream != null) return hqStream
 
         val offeredList = api.getTrackDownloadInfo(trackId).result.orEmpty()
@@ -142,7 +161,7 @@ class TrackPreloadManager @Inject constructor(
             val userFriendly = when {
                 losslessErr.contains("превью", ignoreCase = true) -> "нужен Яндекс Плюс (превью)"
                 losslessErr.contains("not-allowed", ignoreCase = true) || losslessErr.contains("no-rights", ignoreCase = true) -> {
-                    if (authRepository.getActiveAccount()?.hasPlus != true) {
+                    if (!hasPlus(account)) {
                         "нужен Яндекс Плюс"
                     } else {
                         "нет FLAC для этого трека"
@@ -150,7 +169,7 @@ class TrackPreloadManager @Inject constructor(
                 }
                 losslessErr.contains("bad-signature", ignoreCase = true) -> "ошибка подписи"
                 losslessErr.contains("403") -> {
-                    if (authRepository.getActiveAccount()?.hasPlus != true) {
+                    if (!hasPlus(account)) {
                         "нужен Яндекс Плюс (403)"
                     } else {
                         "доступ ограничен (403)"
@@ -167,7 +186,7 @@ class TrackPreloadManager @Inject constructor(
         val bestMp3 = offeredList.filter { !it.preview && it.codec.equals("mp3", ignoreCase = true) }
             .maxByOrNull { it.bitrateInKbps }?.let { StreamQuality(it.codec, it.bitrateInKbps) }
         for (variant in StreamVariants.ranked(offeredList)) {
-            val url = resolveXmlToStreamUrl(variant.downloadInfoUrl, variant.codec) ?: continue
+            val url = resolveXmlToStreamUrl(clients.http(account), variant.downloadInfoUrl, variant.codec) ?: continue
             return ResolvedStream(url, StreamQuality(variant.codec, variant.bitrateInKbps), bestMp3)
         }
         return null
@@ -193,7 +212,7 @@ class TrackPreloadManager @Inject constructor(
         return null
     }
 
-    private suspend fun tryResolveLossless(trackId: String): ResolvedStream? {
+    private suspend fun tryResolveLossless(api: YandexMusicApi, trackId: String): ResolvedStream? {
         val numericId = LosslessSigner.parseNumericTrackId(trackId) ?: run {
             lastLosslessError[trackId] = "некорректный ID"
             return null
@@ -275,7 +294,7 @@ class TrackPreloadManager @Inject constructor(
         return null
     }
 
-    private suspend fun tryResolveHq(trackId: String): ResolvedStream? {
+    private suspend fun tryResolveHq(api: YandexMusicApi, trackId: String): ResolvedStream? {
         val numericId = LosslessSigner.parseNumericTrackId(trackId) ?: return null
         val idString = numericId.toString()
 
@@ -334,58 +353,63 @@ class TrackPreloadManager @Inject constructor(
     /** For tests: a stream that needs no account. */
     @androidx.annotation.VisibleForTesting
     internal fun seedForTest(trackId: String, url: String, quality: StreamQuality) {
-        resolvedUrls[trackId] = CachedTrackUrl(url, System.currentTimeMillis())
+        resolvedUrls[key(null, trackId)] = CachedTrackUrl(url, System.currentTimeMillis())
         qualities[trackId] = quality
     }
 
-    override fun evictUrl(trackId: String) {
-        resolvedUrls.remove(trackId)
-        inFlightRequests.remove(trackId)?.cancel()
+    override fun evictUrl(trackId: String, account: AccountId?) {
+        val key = key(account, trackId)
+        resolvedUrls.remove(key)
+        inFlightRequests.remove(key)?.cancel()
     }
 
-    override fun preloadTracks(trackIds: List<String>) {
+    override fun preloadTracks(trackIds: List<String>, account: AccountId?) {
+        // The account is fixed now: a context change while these resolve doesn't move them to another account
+        val forAccount = accountOf(account)
         scope.launch {
             trackIds.map { trackId ->
                 async {
-                    fetchOrAwait(trackId)
+                    fetchOrAwait(trackId, forAccount)
                 }
             }.awaitAll()
         }
     }
 
-    suspend fun preloadSingleTrackPriority(trackId: String): String? {
-        return fetchOrAwait(trackId)
+    suspend fun preloadSingleTrackPriority(trackId: String, account: AccountId? = null): String? {
+        return fetchOrAwait(trackId, accountOf(account))
     }
 
-    override suspend fun getOrFetchUrl(trackId: String): String? = fetchOrAwait(trackId)
+    override suspend fun getOrFetchUrl(trackId: String, account: AccountId?): String? = fetchOrAwait(trackId, accountOf(account))
 
-    private suspend fun fetchOrAwait(trackId: String): String? {
+    private suspend fun fetchOrAwait(trackId: String, account: AccountId?): String? {
         if (trackId.startsWith("radio_")) return null
         if (playableCopy(trackId) != null) return null
+        val key = key(account, trackId)
         // Reuse a cached link unless its quality was neither lossless nor 320k — then re-resolve to try for better.
-        resolvedUrls[trackId]?.takeIf {
+        resolvedUrls[key]?.takeIf {
             qualities[trackId]?.isLossless == true || (qualities[trackId]?.bitrateKbps ?: 0) >= 320
-        }?.let { getResolvedUrl(trackId)?.let { url -> return url } }
+        }?.let { getResolvedUrl(trackId, account)?.let { url -> return url } }
 
-        val deferred = inFlightRequests.computeIfAbsent(trackId) {
+        val deferred = inFlightRequests.computeIfAbsent(key) {
             scope.async(Dispatchers.IO) {
                 try {
-                    val stream = (if (soundMode.isCompatible()) resolveCompatible(trackId) else resolveBest(trackId)) ?: return@async null
-                    resolvedUrls[trackId] = CachedTrackUrl(stream.url, System.currentTimeMillis())
+                    val stream = (if (soundMode.isCompatible()) resolveCompatible(account, trackId) else resolveBest(account, trackId))
+                        ?: return@async null
+                    resolvedUrls[key] = CachedTrackUrl(stream.url, System.currentTimeMillis())
                     qualities[trackId] = stream.quality
                     stream.url
                 } catch (e: Exception) {
                     Log.e("TrackPreloadManager", "Error resolving URL for track $trackId", e)
                     null
                 } finally {
-                    inFlightRequests.remove(trackId)
+                    inFlightRequests.remove(key)
                 }
             }
         }
         return try {
             deferred.await()
         } catch (e: Exception) {
-            inFlightRequests.remove(trackId)
+            inFlightRequests.remove(key)
             null
         }
     }
@@ -396,10 +420,10 @@ class TrackPreloadManager @Inject constructor(
         inFlightRequests.clear()
     }
 
-    private suspend fun resolveXmlToStreamUrl(infoUrl: String, codec: String): String? = withContext(Dispatchers.IO) {
+    private suspend fun resolveXmlToStreamUrl(http: OkHttpClient, infoUrl: String, codec: String): String? = withContext(Dispatchers.IO) {
         try {
             val request = Request.Builder().url(infoUrl).build()
-            val xmlData = okHttpClient.newCall(request).execute().use { response ->
+            val xmlData = http.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return@use null
                 val xmlResponse = response.body.string().ifEmpty { return@use null }
                 DownloadInfoParser.parseXml(xmlResponse)

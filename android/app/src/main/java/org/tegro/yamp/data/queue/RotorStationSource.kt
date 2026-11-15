@@ -21,10 +21,13 @@ import java.io.IOException
  */
 internal class RotorStationSource(
     val station: String,
-    private val api: YandexMusicApi,
+    /** Whose API: read per call, so the account in force at that moment is used. */
+    private val apiOf: () -> YandexMusicApi,
     private val heardLately: (String) -> Boolean,
     private val keep: (TrackDetailsDto) -> Boolean = { true }
 ) : DynamicSource {
+    private val api: YandexMusicApi get() = apiOf()
+
     private val fetching = Mutex()
 
     override suspend fun fetchBatch(exclude: Set<TrackRef>): List<TrackRef> =

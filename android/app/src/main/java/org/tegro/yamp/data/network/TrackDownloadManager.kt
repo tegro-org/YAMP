@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
+import org.tegro.yamp.domain.account.AccountId
 import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
@@ -29,7 +30,9 @@ class TrackDownloadManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val okHttpClient: OkHttpClient,
     /** Null in tests that do not need the card. */
-    private val card: CardStorage? = null
+    private val card: CardStorage? = null,
+    /** The per-account clients a download is fetched through (D60); null in tests: the shared client. */
+    private val clients: YandexClients? = null
 ) {
     private val tracksDir = File(context.filesDir, "tracks").apply {
         if (!exists()) mkdirs()
@@ -117,13 +120,15 @@ class TrackDownloadManager @Inject constructor(
         trackId: String,
         url: String,
         quality: TrackPreloadManager.StreamQuality? = null,
-        replace: Boolean = false
+        replace: Boolean = false,
+        /** The account the link was resolved under: its client fetches the file. */
+        account: AccountId? = null
     ): Boolean {
         // One download per track: several jobs may want it at once (all liked, the like just given, a playlist,
         // the quality upgrade), and they would write the same temporary file together. The others wait and
         // find the finished file.
         // The locks stay in the map: dropping one while a job is about to take it would let two in again
-        return trackLocks.getOrPut(trackId) { Mutex() }.withLock { downloadNow(trackId, url, quality, replace) }
+        return trackLocks.getOrPut(trackId) { Mutex() }.withLock { downloadNow(trackId, url, quality, replace, account) }
     }
 
     private val trackLocks = java.util.concurrent.ConcurrentHashMap<String, Mutex>()
@@ -132,7 +137,8 @@ class TrackDownloadManager @Inject constructor(
         trackId: String,
         url: String,
         quality: TrackPreloadManager.StreamQuality?,
-        replace: Boolean
+        replace: Boolean,
+        account: AccountId?
     ): Boolean = withContext(Dispatchers.IO) {
         if (!replace && isTrackDownloaded(trackId)) return@withContext true
 
@@ -150,7 +156,8 @@ class TrackDownloadManager @Inject constructor(
 
         try {
             val request = Request.Builder().url(cleanUrl).build()
-            val isSuccess = okHttpClient.newCall(request).execute().use { response ->
+            val http = if (account != null && clients != null) clients.http(account) else okHttpClient
+            val isSuccess = http.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return@use false
                 val body = response.body
 

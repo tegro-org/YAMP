@@ -37,6 +37,14 @@ interface QueueDao {
     @Query("DELETE FROM queues WHERE id = :id")
     suspend fun deleteQueue(id: Long)
 
+    /** Phase 2a: re-keys the queues of an account (folder name or provisional id → `yandex:<uid>`). */
+    @Query("UPDATE queues SET account = :to WHERE account = :from")
+    suspend fun rebindAccount(from: String, to: String)
+
+    /** Phase 2a: queues bound to no account yet go to [to] (the default account). */
+    @Query("UPDATE queues SET account = :to WHERE account IS NULL")
+    suspend fun bindUnbound(to: String)
+
     @Query("UPDATE queues SET cursorEntryId = :cursorEntryId, positionMs = :positionMs, updatedAt = :now WHERE id = :queueId")
     suspend fun saveCursor(queueId: Long, cursorEntryId: Long?, positionMs: Long, now: Long)
 

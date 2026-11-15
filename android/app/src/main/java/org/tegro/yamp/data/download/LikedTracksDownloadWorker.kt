@@ -39,6 +39,7 @@ class LikedTracksDownloadWorker(
         fun downloadManager(): TrackDownloadManager
         fun preloadManager(): TrackPreloadManager
         fun soundMode(): org.tegro.yamp.data.player.SoundMode
+        fun accountContext(): org.tegro.yamp.data.account.AccountContext
     }
 
     private val deps = EntryPointAccessors.fromApplication(context.applicationContext, Dependencies::class.java)
@@ -55,6 +56,8 @@ class LikedTracksDownloadWorker(
         if (tracks.isEmpty()) return Result.success()
 
         var failed = 0
+        // The account in force now: its links, and its client fetches the files (D60)
+        val account = deps.accountContext().current()
         try {
             for ((index, track) in tracks.withIndex()) {
                 if (isStopped) break
@@ -64,16 +67,16 @@ class LikedTracksDownloadWorker(
                     downloads.setDownloadProgress(DownloadProgressInfo(index, tracks.size, title, artist))
                     setForeground(foregroundInfo(index, tracks.size, title, upgrade))
                 }
-                val stream = deps.preloadManager().resolveForDownload(track.idString)
+                val stream = deps.preloadManager().resolveForDownload(track.idString, account)
                 val ok = when {
                     stream == null -> false
-                    !upgrade -> downloads.downloadTrack(track.idString, stream.url, stream.quality)
+                    !upgrade -> downloads.downloadTrack(track.idString, stream.url, stream.quality, account = account)
                     else -> {
                         val saved = downloads.downloadedQuality(track.idString) ?: stream.bestMp3
                         // A FLAC file is silent on a device in compatible sound, so the ordinary one is an upgrade
                         val silentFile = saved?.isLossless == true && deps.soundMode().isCompatible()
                         saved != null && !silentFile && !StreamVariants.isBetter(stream.quality, saved) ||
-                            downloads.downloadTrack(track.idString, stream.url, stream.quality, replace = true)
+                            downloads.downloadTrack(track.idString, stream.url, stream.quality, replace = true, account = account)
                     }
                 }
                 if (!ok) failed++

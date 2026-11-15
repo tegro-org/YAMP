@@ -190,6 +190,10 @@ class SettingsRepositoryImpl @Inject constructor(
     override val keepBothPlayersRunning = bothPlayersPref.first
     override suspend fun setKeepBothPlayersRunning(enabled: Boolean) = bothPlayersPref.second(enabled)
 
+    private val groupQueuesPref = bool("group_queues_by_account", true)
+    override val groupQueuesByAccount = groupQueuesPref.first
+    override suspend fun setGroupQueuesByAccount(enabled: Boolean) = groupQueuesPref.second(enabled)
+
     private val diagnosticLogPref = bool("diagnostic_log", org.tegro.yamp.BuildConfig.DEBUG)
     override val diagnosticLog = diagnosticLogPref.first
     override suspend fun setDiagnosticLog(enabled: Boolean) = diagnosticLogPref.second(enabled)

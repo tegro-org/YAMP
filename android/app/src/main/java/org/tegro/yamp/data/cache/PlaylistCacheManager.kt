@@ -24,7 +24,9 @@ import javax.inject.Singleton
 @Singleton
 class PlaylistCacheManager @Inject constructor(
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: Context,
-    private val json: Json
+    private val json: Json,
+    /** Rewrites the rows' owner keys once (Phase 2a); tests that build their own manager pass none. */
+    private val keyMigration: CacheKeyMigration = CacheKeyMigration.None
 ) {
     private val database by lazy { CacheDatabase.get(context) }
     private val legacyRoot = File(context.cacheDir, "playlists")
@@ -32,8 +34,9 @@ class PlaylistCacheManager @Inject constructor(
     @Volatile
     private var legacyImported = false
 
+    /** The owner key of an account's rows: `yandex:<uid>` since Phase 2a (the colon is kept), a folder name before. */
     fun sanitizeUserFolder(name: String): String {
-        val sanitized = name.replace(Regex("[^a-zA-Z0-9а-яА-Я_-]"), "_").trim('_')
+        val sanitized = name.replace(Regex("[^a-zA-Z0-9а-яА-Я_:-]"), "_").trim('_')
         return sanitized.ifBlank { "default" }.take(50)
     }
 
@@ -186,6 +189,7 @@ class PlaylistCacheManager @Inject constructor(
     private suspend fun <T> io(block: suspend () -> T): T? = withContext(Dispatchers.IO) {
         try {
             importLegacyFiles()
+            keyMigration.ensure()
             block()
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e

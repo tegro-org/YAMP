@@ -118,6 +118,13 @@ interface SettingsRepository {
     val keepBothPlayersRunning: Flow<Boolean>
     suspend fun setKeepBothPlayersRunning(enabled: Boolean)
 
+    /**
+     * "Group" in Settings → Accounts (D64): with more than one account the queue lists show a section per account
+     * (on) or one flat list with an account marker on every row (off). Default on; meaningless with one account.
+     */
+    val groupQueuesByAccount: Flow<Boolean>
+    suspend fun setGroupQueuesByAccount(enabled: Boolean)
+
     /** The diagnostic log file (Settings → About). Default: on in debug builds, off in release. */
     val diagnosticLog: Flow<Boolean>
     suspend fun setDiagnosticLog(enabled: Boolean)

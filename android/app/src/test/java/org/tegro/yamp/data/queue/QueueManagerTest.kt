@@ -232,4 +232,18 @@ class QueueManagerTest {
         assertEquals(q.id, m.active.value?.queue?.id)
         assertTrue(m.loaded.value)
     }
+
+    /** A queue is bound to an account at creation (D57): the given one, else the active queue's; a copy keeps it. */
+    @Test
+    fun newQueuesAreBoundToTheGivenOrTheActiveQueuesAccount() = runTest {
+        val m = manager(StandardTestDispatcher(testScheduler))
+        m.load()
+        val active = m.replaceActive(listOf(dto("1")), null, null, "Main", accountIfNew = "yandex:1")
+        assertEquals("yandex:1", active.queue.account)
+
+        assertEquals("yandex:1", m.create("Road").account)
+        assertEquals("yandex:2", m.create("Rock", account = "yandex:2").account)
+        assertEquals("yandex:1", m.startRadio(RadioTarget.New, "yandex:track:1", "Radio", false, emptyList()).account)
+        assertEquals("yandex:1", m.duplicate(active.queue.id, "Copy")?.account)
+    }
 }
