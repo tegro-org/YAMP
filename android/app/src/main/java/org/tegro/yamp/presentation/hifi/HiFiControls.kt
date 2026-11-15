@@ -255,7 +255,15 @@ private fun PillLabel(text: String, icon: ImageVector?) {
 
 /** Filter/genre pill: anodized when selected, glass otherwise. */
 @Composable
-fun HiFiFilterPill(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, icon: ImageVector? = null) {
+fun HiFiFilterPill(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    /** Drawn before the text in place of [icon] (e.g. an account marker). */
+    leading: (@Composable () -> Unit)? = null
+) {
     val shape = RoundedCornerShape(18.dp)
     Row(
         modifier = modifier
@@ -265,7 +273,10 @@ fun HiFiFilterPill(text: String, selected: Boolean, onClick: () -> Unit, modifie
             .padding(horizontal = 15.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (icon != null) {
+        if (leading != null) {
+            leading()
+            Spacer(Modifier.width(6.dp))
+        } else if (icon != null) {
             Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
             Spacer(Modifier.width(6.dp))
         }

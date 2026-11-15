@@ -110,6 +110,15 @@ class MainViewModel @Inject constructor(
     val queues: StateFlow<List<org.tegro.yamp.domain.queue.QueueSummary>> = playbackController.queues
     val activeQueue: StateFlow<org.tegro.yamp.data.queue.ActiveQueue?> = playbackController.activeQueue
 
+    /** The signed-in accounts as markers; markers show only with more than one (D58). */
+    val accountTags: StateFlow<List<org.tegro.yamp.presentation.account.AccountTag>> = authRepository.allAccounts
+        .map { org.tegro.yamp.presentation.account.accountTags(it) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, org.tegro.yamp.presentation.account.accountTags(authRepository.getAllAccounts()))
+
+    /** The marker of [queue]'s account with more than one account; null otherwise (D58, D64). */
+    fun markOf(tags: List<org.tegro.yamp.presentation.account.AccountTag>, account: String?): org.tegro.yamp.presentation.account.AccountTag? =
+        if (tags.size > 1) tags.firstOrNull { it.key == account } else null
+
     // endregion
 
     init {

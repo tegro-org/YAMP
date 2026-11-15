@@ -106,7 +106,8 @@ fun HistoryScreen(
                     HiFiFilterPill(
                         text = filterLabel(filter),
                         selected = filter.queueId == state.selectedQueueId,
-                        onClick = { onSelectFilter(filter.queueId) }
+                        onClick = { onSelectFilter(filter.queueId) },
+                        leading = filter.account?.let { tag -> { org.tegro.yamp.presentation.account.AccountMark(tag, 18.dp) } }
                     )
                 }
             }

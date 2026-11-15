@@ -16,7 +16,9 @@ data class SettingsUiState(
     val accountName: String = "",
     val avatarUrl: String? = null,
     val hasPlus: Boolean = false,
-    val defaultAccountName: String? = null,
+    /** More than one signed-in account: the "Group" switch shows (D58, D64). */
+    val multiAccount: Boolean = false,
+    val groupQueues: Boolean = true,
     val updateStatus: String? = null,
     val crashReports: Int = 0,
     /** The last hour of music, for "Playback journal" in About. */
@@ -56,6 +58,7 @@ data class SettingsActions(
     val onAccountManagement: () -> Unit = {},
     val onAddAccount: () -> Unit = {},
     val onLogout: () -> Unit = {},
+    val onGroupQueuesChange: (Boolean) -> Unit = {},
     val onCheckForUpdates: () -> Unit = {},
     val onOpenCrashLog: () -> Unit = {},
     val onShareJournal: (String) -> Unit = {},

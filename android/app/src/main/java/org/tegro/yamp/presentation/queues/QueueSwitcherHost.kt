@@ -4,6 +4,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -54,7 +55,10 @@ val LocalQueueSwitcher = staticCompositionLocalOf<QueueSwitcherLauncher?> { null
 /** What the switcher has open on top of its list. */
 private sealed interface QueueDialog {
     data object New : QueueDialog
-    data class Menu(val row: QueueRowState) : QueueDialog
+    data class Menu(val row: QueueRowState, val removed: Boolean = false) : QueueDialog
+
+    /** A removed account's queue opened (D62): its tracks, unavailable; nothing plays. */
+    data class Removed(val row: QueueRowState) : QueueDialog
     data class Rename(val row: QueueRowState) : QueueDialog
     data class Delete(val row: QueueRowState) : QueueDialog
 }
@@ -75,6 +79,9 @@ fun QueueSwitcherHost(viewModel: QueueSwitcherViewModel, snackbar: SnackbarHostS
     val car = (request as? QueueSwitcherRequest.Switch)?.car == true || radio?.car == true
     val side = (request as? QueueSwitcherRequest.Switch)?.side ?: radio?.side ?: PanelSide.RIGHT
     var keep by remember(request) { mutableStateOf(false) }
+    // The account of a new queue or radio (D57): the active queue's until the user picks another
+    var newAccount by remember(request) { mutableStateOf<String?>(null) }
+    val chosenAccount = newAccount ?: state.contextAccount
     val addedTo = { name: String -> scope.launch { snackbar.showSnackbar(resources.getString(R.string.queue_added_to, name)) } }
     val defaultName = stringResource(R.string.queue_default_name, state.queues.size + 1)
 
@@ -85,6 +92,10 @@ fun QueueSwitcherHost(viewModel: QueueSwitcherViewModel, snackbar: SnackbarHostS
         onDismiss = viewModel::close,
         keepHistory = keep,
         onKeepHistory = { keep = it },
+        newAccount = chosenAccount,
+        onNewAccount = { newAccount = it },
+        onRemoved = { row -> dialog = QueueDialog.Removed(row) },
+        onRemovedMenu = { row -> dialog = QueueDialog.Menu(row, removed = true) },
         onSelect = { row ->
             if (radio != null) {
                 viewModel.startRadioIn(row.id, keep)
@@ -101,7 +112,7 @@ fun QueueSwitcherHost(viewModel: QueueSwitcherViewModel, snackbar: SnackbarHostS
             when {
                 // A radio is named after its seed: nothing to type
                 radio != null -> {
-                    viewModel.startRadioIn(null, keep)
+                    viewModel.startRadioIn(null, keep, chosenAccount.takeIf { state.multiAccount })
                     viewModel.close()
                 }
                 // In the car nothing is typed (D32): the queue is named on the spot and renamed on the phone
@@ -117,13 +128,17 @@ fun QueueSwitcherHost(viewModel: QueueSwitcherViewModel, snackbar: SnackbarHostS
             title = stringResource(R.string.queue_new),
             confirmLabel = stringResource(R.string.queue_create),
             hint = if (adding == null) stringResource(R.string.queue_new_hint) else null,
+            accounts = state.accounts,
+            selectedAccount = chosenAccount,
+            onAccount = { newAccount = it },
             onConfirm = { name ->
+                val account = chosenAccount.takeIf { state.multiAccount }
                 if (adding != null) {
-                    viewModel.createAndAdd(name)
+                    viewModel.createAndAdd(name, account)
                     addedTo(name)
                     viewModel.close()
                 } else {
-                    viewModel.create(name)
+                    viewModel.create(name, account)
                 }
                 dialog = null
             },
@@ -146,7 +161,22 @@ fun QueueSwitcherHost(viewModel: QueueSwitcherViewModel, snackbar: SnackbarHostS
                 },
                 onDelete = { dialog = QueueDialog.Delete(open.row) },
                 onKeepHistory = { on -> viewModel.setKeepHistory(open.row.id, on) },
+                removed = open.removed,
+                mark = if (open.removed) state.removedTagOf(open.row.account) else null,
+                removedAccountName = open.row.account?.let { state.removedNames[it] },
                 onDismiss = { dialog = null }
+            )
+        }
+        is QueueDialog.Removed -> {
+            val view by produceState<RemovedQueueView?>(null, open.row.id) { value = viewModel.removedQueue(open.row.id) }
+            RemovedQueueSheet(
+                row = open.row,
+                mark = state.removedTagOf(open.row.account),
+                view = view,
+                side = side,
+                removedAccountName = open.row.account?.let { state.removedNames[it] },
+                onQueues = { dialog = null },
+                onDismiss = viewModel::close
             )
         }
         is QueueDialog.Rename -> QueueNameDialog(

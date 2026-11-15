@@ -58,12 +58,19 @@ import org.tegro.yamp.presentation.main.waveShelfOf
 import org.tegro.yamp.presentation.player.FullScreenPlayer
 import org.tegro.yamp.presentation.player.QueueModes
 import org.tegro.yamp.presentation.queues.DeleteQueueDialog
+import org.tegro.yamp.presentation.account.AccountTag
+import org.tegro.yamp.presentation.account.accountTags
+import org.tegro.yamp.domain.model.UserAccount
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import org.tegro.yamp.presentation.queues.QueueMenuSheet
 import org.tegro.yamp.presentation.queues.QueueNameDialog
 import org.tegro.yamp.presentation.queues.QueueRowState
 import org.tegro.yamp.presentation.queues.QueueSwitcherRequest
 import org.tegro.yamp.presentation.queues.QueueSwitcherSheet
 import org.tegro.yamp.presentation.queues.QueueSwitcherUiState
+import org.tegro.yamp.presentation.queues.RemovedQueueSheet
+import org.tegro.yamp.presentation.queues.RemovedQueueView
 import org.tegro.yamp.ui.theme.YandexMusicTheme
 import java.util.TimeZone
 
@@ -402,14 +409,170 @@ class QueueScreenshotsTest {
         snap("head_car_queue")
     }
 
+    // ---- Phase 2a: two accounts (docs/phase-2a-accounts.md D57, D62, D64; canvas accounts.jsx)
+
+    /** The canvas `useAcAccounts()`: Anna and Rock, each with its My Wave, a queue and a radio. */
+    private val accounts = accountTags(
+        listOf(
+            UserAccount(uid = "1001", login = "anna", displayName = "Anna", token = "t"),
+            UserAccount(uid = "2002", login = "rock", displayName = "Rock", token = "t")
+        )
+    )
+    private val anna = accounts[0]
+    private val rock = accounts[1]
+
+    private val accountQueues = listOf(
+        QueueRowState(11, "With family", QueueKind.STATIC, "Wish You Were Here", "Pink Floyd", null, 0.42f, 12, 48, isActive = true, account = anna.key),
+        QueueRowState(10, "My Wave", QueueKind.WAVE, "First song", "The Band", null, 0.3f, 5, 40, isActive = false, account = anna.key),
+        QueueRowState(12, "Radio: Time", QueueKind.RADIO, "Echoes", "Pink Floyd", null, 0.55f, 7, 25, isActive = false, keepHistory = true, account = anna.key),
+        QueueRowState(20, "My Wave", QueueKind.WAVE, "Кукушка", "Кино", null, 0.1f, 2, 30, isActive = false, account = rock.key),
+        QueueRowState(21, "Solo drive", QueueKind.STATIC, "Du hast", "Rammstein", null, 0.71f, 3, 112, isActive = false, account = rock.key),
+        QueueRowState(22, "Radio: Rammstein", QueueKind.RADIO, "Sonne", "Rammstein", null, 0.2f, 4, 15, isActive = false, account = rock.key),
+        // A removed account's queue (D62)
+        QueueRowState(30, "Road trip", QueueKind.STATIC, "Выхода нет", "Сплин", null, 0.3f, 20, 64, isActive = false, account = "yandex:3003")
+    )
+
+    private fun accountState(mode: QueueSwitcherRequest = QueueSwitcherRequest.Switch(), grouped: Boolean = true) =
+        QueueSwitcherUiState(accountQueues, activeId = 11, mode = mode, accounts = accounts, grouped = grouped, removedNames = removedNames)
+
+    /** The account "Road trip" belonged to, signed out (D62): its name is kept for the marker. */
+    private val removedNames = mapOf("yandex:3003" to "Max")
+    private val max = org.tegro.yamp.presentation.account.removedAccountTag("yandex:3003", "Max")
+
+    @Test
+    fun switcherGroupedByAccount() {
+        show { QueueSwitcherSheet(accountState(), car = false, side = PanelSide.RIGHT, onDismiss = {}, onSelect = {}, onLongPress = {}, onNew = {}) }
+        snapScreen("accounts_switcher_grouped")
+    }
+
+    @Test
+    fun switcherFlatWithMarkers() {
+        show { QueueSwitcherSheet(accountState(grouped = false), car = false, side = PanelSide.RIGHT, onDismiss = {}, onSelect = {}, onLongPress = {}, onNew = {}) }
+        snapScreen("accounts_switcher_flat")
+    }
+
+    /** The removed accounts' group opened: dimmed rows at the bottom (D62). */
+    @Test
+    @Config(qualifiers = "w411dp-h1400dp")
+    fun switcherRemovedAccountsOpen() {
+        show { QueueSwitcherSheet(accountState(), car = false, side = PanelSide.RIGHT, onDismiss = {}, onSelect = {}, onLongPress = {}, onNew = {}) }
+        compose.onNodeWithText("Removed accounts · 1 queue").performClick()
+        repeat(5) {
+            compose.mainClock.advanceTimeBy(100)
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
+        }
+        snapScreen("accounts_switcher_removed")
+    }
+
+    @Test
+    fun removedQueueMenu() {
+        show {
+            QueueMenuSheet(
+                row = accountQueues[6], side = PanelSide.RIGHT, onRename = {}, onDuplicate = {}, onClear = {}, onDelete = {},
+                removed = true, mark = max, removedAccountName = "Max", onDismiss = {}
+            )
+        }
+        snapScreen("accounts_menu_removed")
+    }
+
+    /** A removed account's queue opened (canvas `ac-removed-open`): its tracks unavailable, no banner (D62). */
+    @Test
+    fun removedQueueOpened() {
+        val view = RemovedQueueView(
+            next = listOf(
+                RemovedQueueView.Track("Выхода нет", "Сплин"),
+                RemovedQueueView.Track("Кукушка", "Кино"),
+                RemovedQueueView.Track("Штиль", "Ария"),
+                RemovedQueueView.Track("Группа крови", "Кино")
+            ),
+            position = 20,
+            total = 64
+        )
+        show { RemovedQueueSheet(accountQueues[6], max, view, PanelSide.RIGHT, removedAccountName = "Max", onQueues = {}, onDismiss = {}) }
+        snapScreen("accounts_removed_open")
+    }
+
+    @Test
+    fun newQueueDialogWithAccounts() {
+        show {
+            QueueNameDialog(
+                title = "New queue", confirmLabel = "Create", initialName = "Weekend trip",
+                hint = "Starts empty. Add music with “Add to queue…”, or make it active and play something.",
+                accounts = accounts, selectedAccount = anna.key, onConfirm = {}, onDismiss = {}
+            )
+        }
+        snapScreen("accounts_dialog_new")
+    }
+
+    @Test
+    fun radioPickerWithAccounts() {
+        show {
+            QueueSwitcherSheet(accountState(radioRequest), car = false, side = PanelSide.RIGHT, onDismiss = {}, onSelect = {}, onLongPress = null, onNew = {}, newAccount = anna.key)
+        }
+        snapScreen("accounts_radio_picker")
+    }
+
+    @Test
+    @Config(qualifiers = WIDE_HEAD_UNIT)
+    fun carPanelGroupedWideHeadUnit() {
+        show {
+            Car(account = anna)
+            QueueSwitcherSheet(accountState(), car = true, side = PanelSide.LEFT, onDismiss = {}, onSelect = {}, onLongPress = null, onNew = {})
+        }
+        snapScreen("accounts_wide_head_queue_panel")
+    }
+
+    @Test
+    @Config(qualifiers = WIDE_HEAD_UNIT)
+    fun carPanelFlatWideHeadUnit() {
+        show {
+            Car(account = anna)
+            QueueSwitcherSheet(accountState(grouped = false), car = true, side = PanelSide.LEFT, onDismiss = {}, onSelect = {}, onLongPress = null, onNew = {})
+        }
+        snapScreen("accounts_wide_head_queue_panel_flat")
+    }
+
+    @Test
+    @Config(qualifiers = WIDE_HEAD_UNIT)
+    fun carRadioPickerWideHeadUnit() {
+        show {
+            Car(account = anna)
+            QueueSwitcherSheet(accountState(radioRequest.copy(car = true)), car = true, side = PanelSide.LEFT, onDismiss = {}, onSelect = {}, onLongPress = null, onNew = {}, newAccount = anna.key)
+        }
+        snapScreen("accounts_wide_head_radio_picker")
+    }
+
+    /** The car with the account marker in the queue pill (always with more than one account). */
+    @Test
+    @Config(qualifiers = WIDE_HEAD_UNIT)
+    fun carPillWithMarker() {
+        show { Car(account = anna) }
+        snap("accounts_wide_head_car")
+    }
+
+    /** The player's queue sheet: the playing queue's account in its header. */
+    @Test
+    fun playerQueueWithAccount() {
+        show {
+            FullScreenPlayer(
+                track = tracks[0], isPlaying = true, isLiked = true, progress = { 82_000L }, queue = tracks,
+                onPlayPauseClick = {}, onToggleLike = {}, onNextClick = {}, onPrevClick = {}, onSeekTo = {},
+                onTrackSelect = {}, onRemoveFromQueue = {}, onCollapse = {}, onCloseAndClear = {}, onDislikeClick = {},
+                sourceLabel = "With family", initialQueueOpen = true, queueAccount = anna,
+                queueEntryIds = listOf(10L, 11L, 12L, 13L), queueCursorIndex = 0
+            )
+        }
+        snap("accounts_player_queue")
+    }
+
     @Composable
-    private fun Car(steeringWheelOnLeft: Boolean = true, waveActive: Boolean = true) = CompositionLocalProvider(LocalCarClock provides { FIXED_TIME }) {
+    private fun Car(steeringWheelOnLeft: Boolean = true, waveActive: Boolean = true, account: AccountTag? = null) = CompositionLocalProvider(LocalCarClock provides { FIXED_TIME }) {
         CarScreen(
             currentTrack = tracks[0], isPlaying = true, likedTrackIds = setOf("1"), onPlayPauseClick = {}, onNextClick = {},
             onPrevClick = {}, onToggleLike = {}, onDislikeClick = {}, onPlayMyVibe = {}, onPlayFavorites = {}, onPlayHits = {},
             onPlayDownloaded = {}, onPlayRadio = {}, onExit = {}, isLandscape = true, steeringWheelOnLeft = steeringWheelOnLeft,
             progress = { 82_000L }, durationMs = 286_000, upcoming = tracks.drop(1), source = org.tegro.yamp.data.player.PlaylistSource.LIBRARY,
-            activeQueueName = "With family", waveActive = waveActive
+            activeQueueName = "With family", waveActive = waveActive, activeQueueAccount = account
         )
     }
 

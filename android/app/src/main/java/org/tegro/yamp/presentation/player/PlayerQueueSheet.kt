@@ -110,6 +110,8 @@ import androidx.compose.ui.unit.IntOffset
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import org.tegro.yamp.R
+import org.tegro.yamp.presentation.account.AccountMark
+import org.tegro.yamp.presentation.account.AccountTag
 import org.tegro.yamp.data.dto.TrackDetailsDto
 import org.tegro.yamp.presentation.hifi.GlassCircleButton
 import org.tegro.yamp.presentation.hifi.HiFiMotion
@@ -133,7 +135,8 @@ internal fun QueueSheet(
     onMove: (String, String) -> Unit,
     onLoadMore: () -> Unit,
     modes: QueueModes = QueueModes(),
-    onEntrySelect: (Long) -> Unit = {}
+    onEntrySelect: (Long) -> Unit = {},
+    account: AccountTag? = null
 ) {
     // Back closes the sheet first; the predictive gesture lowers it under the finger
     val back = rememberPredictiveBack(enabled = visible, onBack = onDismiss)
@@ -156,6 +159,7 @@ internal fun QueueSheet(
                 split = split,
                 isPlaying = isPlaying,
                 sourceLabel = sourceLabel,
+                account = account,
                 isFetchingMore = isFetchingMore,
                 onDismiss = onDismiss,
                 onTrackSelect = onTrackSelect,
@@ -187,7 +191,8 @@ private fun QueueSheetContent(
     onLoadMore: () -> Unit,
     modes: QueueModes,
     onEntrySelect: (Long) -> Unit,
-    modifier: Modifier
+    modifier: Modifier,
+    account: AccountTag? = null
 ) {
     val listState = rememberLazyListState()
     val reorder = rememberReorderState(listState)
@@ -217,7 +222,8 @@ private fun QueueSheetContent(
     val total = split.next.size + if (split.current != null) 1 else 0
     val subtitle = listOfNotNull(
         sourceLabel.takeIf { it.isNotEmpty() },
-        pluralStringResource(R.plurals.player_queue_tracks, total, total)
+        pluralStringResource(R.plurals.player_queue_tracks, total, total),
+        account?.name
     ).joinToString(" · ")
 
     Column(
@@ -249,14 +255,25 @@ private fun QueueSheetContent(
             )
             Row(Modifier.fillMaxWidth().padding(start = 22.dp, end = 16.dp, top = 10.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(
-                        stringResource(R.string.player_queue_title),
-                        color = Color.White,
-                        fontSize = 26.sp,
-                        lineHeight = 32.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = (-0.02).em
-                    )
+                    val title: @Composable () -> Unit = {
+                        Text(
+                            stringResource(R.string.player_queue_title),
+                            color = Color.White,
+                            fontSize = 26.sp,
+                            lineHeight = 32.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = (-0.02).em
+                        )
+                    }
+                    // The playing queue's account, with more than one account (D58)
+                    if (account == null) {
+                        title()
+                    } else {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            AccountMark(account, 26.dp)
+                            title()
+                        }
+                    }
                     Text(subtitle, color = Color.White.copy(alpha = 0.62f), fontSize = 14.sp, lineHeight = 20.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 val queues = LocalQueueSwitcher.current

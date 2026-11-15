@@ -12,7 +12,6 @@ import org.tegro.yamp.data.dto.UserPlaylistDto
 import org.tegro.yamp.data.updater.UpdateCheckResult
 import org.tegro.yamp.presentation.account.AccountManagementDialog
 import org.tegro.yamp.presentation.account.AccountViewModel
-import org.tegro.yamp.presentation.account.StartupAccountPickerDialog
 import org.tegro.yamp.presentation.catalog.CatalogViewModel
 import org.tegro.yamp.presentation.crash.CrashLogDialog
 import org.tegro.yamp.presentation.crash.CrashLogViewModel
@@ -108,46 +107,40 @@ internal fun UpdateHost(updateVm: UpdateViewModel) {
     )
 }
 
-/** Account management (from Settings) and the profile picker shown at start when there are several accounts. */
+/**
+ * Account management (from Settings): add, remove, default. No switcher and no startup picker any more — every
+ * signed-in account is live at once and the active queue's account is the context (D56).
+ */
 @Composable
 internal fun AccountHost(
     accountVm: AccountViewModel,
     showManagement: Boolean,
     onCloseManagement: () -> Unit,
-    startupPickerHandled: Boolean,
-    onStartupPickerHandled: () -> Unit,
     onAddAccount: () -> Unit
 ) {
     val accounts by accountVm.allAccounts.collectAsStateWithLifecycle()
     val active by accountVm.activeAccount.collectAsStateWithLifecycle()
     val defaultUid by accountVm.defaultAccountUid.collectAsStateWithLifecycle()
+    val hidden by accountVm.hiddenAccounts.collectAsStateWithLifecycle()
     if (showManagement) {
         AccountManagementDialog(
             accounts = accounts,
             activeAccount = active,
             defaultAccountUid = defaultUid,
             onSetDefaultAccount = { accountVm.setDefaultAccount(it) },
-            onSwitchAccount = { accountVm.switchAccount(it) },
             onRemoveAccount = { accountVm.removeAccount(it) },
             onAddNewAccount = onAddAccount,
             onLogoutCurrent = { accountVm.logoutCurrentAccount() },
             onLogoutAll = { accountVm.logoutAllAccounts() },
-            onDismiss = onCloseManagement
-        )
-    }
-    if (!startupPickerHandled && accounts.size > 1 && defaultUid == null) {
-        StartupAccountPickerDialog(
-            accounts = accounts,
-            activeAccount = active,
-            onSelectAccount = { uid, rememberAsDefault ->
-                accountVm.switchAccount(uid)
-                if (rememberAsDefault) accountVm.setDefaultAccount(uid)
-                onStartupPickerHandled()
-            },
-            onAddNewAccount = {
-                onStartupPickerHandled()
-                onAddAccount()
-            }
+            onDismiss = onCloseManagement,
+            // Debug: test sign-out without losing credentials
+            debugActions = if (org.tegro.yamp.BuildConfig.DEBUG) {
+                org.tegro.yamp.presentation.account.AccountDebugActions(
+                    hidden = hidden,
+                    onHide = { accountVm.hideAccount(it) },
+                    onUnhide = { accountVm.unhideAccount(it) }
+                )
+            } else null
         )
     }
 }

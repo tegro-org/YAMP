@@ -86,6 +86,7 @@ internal fun HomeTab(
     val tuning by viewModel.waveTuning.collectAsStateWithLifecycle()
     val seed by viewModel.waveSeed.collectAsStateWithLifecycle()
     val queues by viewModel.queues.collectAsStateWithLifecycle()
+    val accountTags by viewModel.accountTags.collectAsStateWithLifecycle()
     var tuneOpen by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     if (tuneOpen) {
         org.tegro.yamp.presentation.main.components.WaveTuneSheet(tuning, onChange = viewModel::setWaveTuning, onDismiss = { tuneOpen = false })
@@ -118,6 +119,7 @@ internal fun HomeTab(
         onTune = { tuneOpen = true },
         onBackToMyWave = viewModel::returnToMyWave,
         queueCount = queues.size,
+        account = viewModel.markOf(accountTags, active?.queue?.account),
         mode = mode
     )
 }
@@ -195,10 +197,10 @@ internal fun LibraryTab(
     val downloadedTrackIds by viewModel.downloadedTrackIds.collectAsStateWithLifecycle()
     val downloadProgress by viewModel.downloadProgress.collectAsStateWithLifecycle()
     val settingsState by settingsVm.state.collectAsStateWithLifecycle()
-    val activeAccount by accountVm.activeAccount.collectAsStateWithLifecycle()
     val accountName by accountVm.accountName.collectAsStateWithLifecycle()
+    val contextAccount by accountVm.contextAccount.collectAsStateWithLifecycle()
     val accountAvatarUrl by accountVm.accountAvatarUrl.collectAsStateWithLifecycle()
-    val defaultAccountName by accountVm.defaultAccountName.collectAsStateWithLifecycle()
+    val allAccounts by accountVm.allAccounts.collectAsStateWithLifecycle()
     val updateStatusMessage by updateVm.statusMessage.collectAsStateWithLifecycle()
     val crashReports by crashVm.reports.collectAsStateWithLifecycle()
     val userPlaylists by playlistsVm.playlists.collectAsStateWithLifecycle()
@@ -211,8 +213,8 @@ internal fun LibraryTab(
     val settings = settingsState.copy(
         accountName = accountName,
         avatarUrl = accountAvatarUrl,
-        hasPlus = activeAccount?.hasPlus == true,
-        defaultAccountName = defaultAccountName,
+        hasPlus = contextAccount?.hasPlus == true,
+        multiAccount = allAccounts.size > 1,
         updateStatus = updateStatusMessage,
         crashReports = crashReports.size
     )
@@ -221,6 +223,7 @@ internal fun LibraryTab(
             onAccountManagement = onOpenAccounts,
             onAddAccount = onAddAccount,
             onLogout = { accountVm.logoutCurrentAccount() },
+            onGroupQueuesChange = settingsVm::setGroupQueues,
             onCheckForUpdates = { updateVm.checkForUpdates(silent = false) },
             onOpenCrashLog = onOpenCrashLog,
             onShareJournal = settingsVm::shareJournal,
@@ -355,6 +358,7 @@ internal fun CarTab(
     val waveSeed by viewModel.waveSeed.collectAsStateWithLifecycle()
     val skipExplicit by viewModel.skipExplicit.collectAsStateWithLifecycle()
     val activeQueue by viewModel.activeQueue.collectAsStateWithLifecycle()
+    val accountTags by viewModel.accountTags.collectAsStateWithLifecycle()
     val queueSwitcher = LocalQueueSwitcher.current
     val track = now.track
     // What will really play next, by the player's own rule (explicit passed over, a playlist goes on from its start)
@@ -399,6 +403,7 @@ internal fun CarTab(
         },
         onBackToMyWave = viewModel::returnToMyWave,
         activeQueueName = activeQueue?.queue?.name,
+        activeQueueAccount = viewModel.markOf(accountTags, activeQueue?.queue?.account),
         // The wave's pills only while the wave queue is active (D49); the queue pill is always there
         waveActive = activeQueue?.queue?.kind == QueueKind.WAVE,
         // The panel opens on the driver's side, as the tune panel does

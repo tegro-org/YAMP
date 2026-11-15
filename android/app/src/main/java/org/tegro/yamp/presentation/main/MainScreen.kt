@@ -160,7 +160,6 @@ fun MainScreen(
     LaunchedEffect(currentTrack == null) { if (currentTrack == null) isPlayerExpanded = false }
     var showAccountDialog by remember { mutableStateOf(false) }
     var showCrashLog by remember { mutableStateOf(false) }
-    var startupPickerHandled by rememberSaveable { mutableStateOf(false) }
     var qualityDetails by remember { mutableStateOf<PlaybackController.QualityDetails?>(null) }
     var trackMenu by remember { mutableStateOf<TrackMenuRequest?>(null) }
     val trackMenuLauncher = remember {
@@ -419,8 +418,6 @@ fun MainScreen(
                     accountVm,
                     showManagement = showAccountDialog,
                     onCloseManagement = { showAccountDialog = false },
-                    startupPickerHandled = startupPickerHandled,
-                    onStartupPickerHandled = { startupPickerHandled = true },
                     onAddAccount = onNavigateToAuth
                 )
             }
@@ -456,6 +453,7 @@ private fun PlayerHost(
 ) {
     val queue by viewModel.currentPlaylist.collectAsStateWithLifecycle()
     val activeQueue by viewModel.activeQueue.collectAsStateWithLifecycle()
+    val accountTags by viewModel.accountTags.collectAsStateWithLifecycle()
     val isFetchingMoreQueue by viewModel.isFetchingMoreQueue.collectAsStateWithLifecycle()
     val waveActive by viewModel.waveActive.collectAsStateWithLifecycle()
     val queueSwitcher = LocalQueueSwitcher.current
@@ -482,6 +480,7 @@ private fun PlayerHost(
         progress = progress,
         queue = queue,
         sourceLabel = playerSourceLabelRes(now.source, track.isRadio)?.let { stringResource(it) }.orEmpty(),
+        queueAccount = viewModel.markOf(accountTags, activeQueue?.queue?.account),
         onPlayPauseClick = { viewModel.togglePlayPause() },
         onToggleLike = { viewModel.toggleLike(track) },
         onNextClick = { viewModel.playNext() },

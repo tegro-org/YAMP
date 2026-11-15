@@ -188,7 +188,9 @@ fun HomeScreen(
     onBackToMyWave: () -> Unit = {},
     /** How many queues the user has: the badge on the queue button. */
     queueCount: Int = 0,
-    mode: HomeMode = HomeMode.Wave
+    mode: HomeMode = HomeMode.Wave,
+    /** The active queue's account, with more than one account: "as Anna" under the title (D56, D58). */
+    account: org.tegro.yamp.presentation.account.AccountTag? = null
 ) {
     val wave = mode is HomeMode.Wave
     val title = when (mode) {
@@ -244,7 +246,8 @@ fun HomeScreen(
                     HiFiLinkBadge()
                     QueueButton(queueCount, modifier = Modifier.padding(start = 8.dp))
                 }
-                if (!chipsOverKnob) chips(Modifier.padding(top = 10.dp))
+                if (account != null) AccountCaption(account, Modifier.padding(top = 4.dp))
+                if (!chipsOverKnob) chips(Modifier.padding(top = if (account != null) 8.dp else 10.dp))
                 Spacer(Modifier.weight(1f))
                 WaveTrackInfo(waveTrack, shelf.startsWith, wave, isLiked, onLike, onDislike)
                 WaveShelf(shelf, wave, shimmer, onOpenPlayer, onShelfClick, horizontalPadding = 0.dp, cardSize = if (windowSize.heightDp < 480) 84.dp else 112.dp)
@@ -264,7 +267,8 @@ fun HomeScreen(
                             HiFiLinkBadge()
                             QueueButton(queueCount, modifier = Modifier.padding(start = 8.dp))
                         }
-                        chips(Modifier.padding(top = 10.dp).height(36.dp))
+                        if (account != null) AccountCaption(account, Modifier.padding(top = 4.dp))
+                        chips(Modifier.padding(top = if (account != null) 8.dp else 10.dp).height(36.dp))
                     }
                 },
                 {
@@ -311,6 +315,15 @@ private val WaveInstrumentPadding = 8.dp
  * tall head unit (the Geely's 960 dp) shows about as many cards across as a phone, not a short strip.
  */
 internal fun portraitShelfCard(width: Dp): Dp = ((width - 40.dp - 36.dp) / 3.4f).coerceIn(132.dp, 200.dp)
+/** "as Anna": whose Home this is — the active queue's account (canvas `AcHomeCaption`). */
+@Composable
+private fun AccountCaption(account: org.tegro.yamp.presentation.account.AccountTag, modifier: Modifier = Modifier) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        org.tegro.yamp.presentation.account.AccountMark(account, 18.dp)
+        Text(stringResource(R.string.queue_account_caption, account.name), color = HiFi.TextSecondary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
 /** From the bottom of the spectrum ring to the track title. */
 private val WaveRingToTrackGap = 18.dp
 

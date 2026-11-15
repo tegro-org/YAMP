@@ -258,8 +258,8 @@ class LayoutSafetyTest {
             displayName = "Роман Коренской",
             token = "secret_token_1"
         )
-        // Login takes priority for folderName and dots are replaced with underscores
-        org.junit.Assert.assertEquals("roman_korenskoy", accountWithLogin.folderName)
+        // Login takes priority for the legacy folder name (only the Phase 2a key migration reads it) and dots are replaced with underscores
+        org.junit.Assert.assertEquals("roman_korenskoy", accountWithLogin.legacyFolderName)
 
         val accountWithDisplayNameOnly = org.tegro.yamp.domain.model.UserAccount(
             uid = "1002",
@@ -267,7 +267,7 @@ class LayoutSafetyTest {
             displayName = "Анна Смирнова",
             token = "secret_token_2"
         )
-        org.junit.Assert.assertEquals("Анна_Смирнова", accountWithDisplayNameOnly.folderName)
+        org.junit.Assert.assertEquals("Анна_Смирнова", accountWithDisplayNameOnly.legacyFolderName)
 
         val accountWithUidFallback = org.tegro.yamp.domain.model.UserAccount(
             uid = "998877",
@@ -275,7 +275,7 @@ class LayoutSafetyTest {
             displayName = "",
             token = "secret_token_3"
         )
-        org.junit.Assert.assertEquals("998877", accountWithUidFallback.folderName)
+        org.junit.Assert.assertEquals("998877", accountWithUidFallback.legacyFolderName)
 
         val accountWithBlankAll = org.tegro.yamp.domain.model.UserAccount(
             uid = "!!!",
@@ -283,7 +283,7 @@ class LayoutSafetyTest {
             displayName = "",
             token = "secret_token_4"
         )
-        org.junit.Assert.assertEquals("user_!!!", accountWithBlankAll.folderName)
+        org.junit.Assert.assertEquals("user_!!!", accountWithBlankAll.legacyFolderName)
     }
 
     @Test
@@ -320,7 +320,8 @@ class LayoutSafetyTest {
         val dialogFile = File(sourceDir, "presentation/account/AccountManagementDialog.kt").readText()
         assertTrue("AccountManagementDialog must declare AccountManagementDialog composable",
             dialogFile.contains("fun AccountManagementDialog("))
-        assertTrue("AccountManagementDialog must support switching accounts",
+        // No account switch any more: every account is live, the active queue's account is the context (D56)
+        org.junit.Assert.assertFalse("AccountManagementDialog must not switch accounts (D56)",
             dialogFile.contains("onSwitchAccount"))
         assertTrue("AccountManagementDialog must support removing accounts",
             dialogFile.contains("onRemoveAccount"))
@@ -354,15 +355,11 @@ class LayoutSafetyTest {
         assertTrue("AuthRepositoryImpl must implement setDefaultAccountUid",
             authRepoImpl.contains("fun setDefaultAccountUid("))
 
-        val startupDialogFile = File(sourceDir, "presentation/account/StartupAccountPickerDialog.kt").readText()
-        assertTrue("StartupAccountPickerDialog must declare composable",
-            startupDialogFile.contains("fun StartupAccountPickerDialog("))
-        assertTrue("StartupAccountPickerDialog must have rememberAsDefault option",
-            startupDialogFile.contains("rememberAsDefault"))
-
+        // The startup account picker retired with the account switch (D56)
+        org.junit.Assert.assertFalse("StartupAccountPickerDialog is gone (D56)",
+            File(sourceDir, "presentation/account/StartupAccountPickerDialog.kt").exists())
         val dialogsFile = File(sourceDir, "presentation/main/MainDialogs.kt").readText()
-        assertTrue("The startup picker shows only for several accounts without a default one",
-            dialogsFile.contains("!startupPickerHandled && accounts.size > 1 && defaultUid == null"))
+        org.junit.Assert.assertFalse("No startup picker in MainDialogs (D56)", dialogsFile.contains("StartupAccountPicker"))
     }
 
     @Test
@@ -444,7 +441,7 @@ class LayoutSafetyTest {
         assertTrue("TrackPreloadManager must define URL_TTL_MS constant",
             preloadManagerFile.contains("URL_TTL_MS = 45 * 60 * 1000L"))
         assertTrue("TrackPreloadManager must implement evictUrl",
-            preloadManagerFile.contains("fun evictUrl(trackId: String)"))
+            preloadManagerFile.contains("fun evictUrl(trackId: String"))
         assertTrue("TrackPreloadManager must skip radio streams",
             preloadManagerFile.contains("trackId.startsWith(\"radio_\")"))
         assertTrue("TrackPreloadManager must check TTL expiration",
@@ -469,7 +466,8 @@ class LayoutSafetyTest {
     @Test
     fun testLibrarySyncIsSingleFlightAndIncremental() {
         val repo = File(sourceDir, "data/repository/LibraryRepository.kt").readText()
-        assertTrue("concurrent syncs must join the running one", repo.contains("likesSync?.takeIf { it.isActive }"))
+        // One running sync per account (Phase 2a): a concurrent call for the same account joins it
+        assertTrue("concurrent syncs must join the running one", repo.contains("likesSyncs[folder]?.takeIf { it.isActive }"))
         assertTrue("unchanged revision must skip work", repo.contains("cacheManager.loadLikesRevision(folder)"))
         assertTrue("metadata only for tracks that are not cached", repo.contains("it !in cachedById"))
         val viewModel = File(sourceDir, "presentation/main/MainViewModel.kt").readText()

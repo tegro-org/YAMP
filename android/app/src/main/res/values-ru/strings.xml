@@ -67,4 +67,29 @@
     <string name="radio_started">Радио: %1$s</string>
     <string name="msg_radio_load_failed">Не удалось загрузить радио. Проверьте подключение</string>
     <string name="cd_radio_keep_on">История хранится</string>
+    <!-- Phase 2a: аккаунты одновременно, очереди привязаны к аккаунту (D56–D64) -->
+    <string name="settings_g_queues">Очереди</string>
+    <string name="settings_group_queues">Группировать</string>
+    <string name="settings_group_queues_hint">Раздел на каждый аккаунт. Выкл. — один список с метками</string>
+    <string name="radio_new_on">Новое радио в аккаунте</string>
+    <string name="queue_account">Аккаунт</string>
+    <string name="queue_account_hint">Очередь играет, ставит лайки и получает рекомендации от этого аккаунта. Позже его не поменять.</string>
+    <string name="queue_removed_account_note">Её аккаунт удалён · войдите в него снова, и очередь вернётся</string>
+    <string name="queue_removed_account_note_named">Аккаунт %1$s удалён · войдите в него снова, и очередь вернётся</string>
+    <string name="queue_removed_place">%1$d из %2$d</string>
+    <string name="queue_removed_open_subtitle_named">Аккаунт %1$s удалён · %2$s</string>
+    <string name="queue_removed_open_subtitle">Её аккаунт удалён · %1$s</string>
+    <string name="queue_removed_next">Далее</string>
+    <string name="queue_track_unavailable">недоступен</string>
+    <string name="queue_removed_open_hint_named">Войдите в аккаунт %1$s снова в «Настройки → Аккаунты», и очередь заиграет как прежде.</string>
+    <string name="queue_removed_open_hint">Войдите в её аккаунт снова в «Настройки → Аккаунты», и очередь заиграет как прежде.</string>
+    <plurals name="queue_removed_accounts">
+        <item quantity="one">Удалённые аккаунты · %1$d</item>
+        <item quantity="few">Удалённые аккаунты · %1$d</item>
+        <item quantity="many">Удалённые аккаунты · %1$d</item>
+        <item quantity="other">Удалённые аккаунты · %1$d</item>
+    </plurals>
+    <string name="queue_account_caption">аккаунт %1$s</string>
+    <string name="account_management_all_live">Все аккаунты работают одновременно. Каждая очередь принадлежит аккаунту, в котором создана.</string>
+    <string name="settings_logout_note">Очереди аккаунта скрываются и вернутся, когда вы снова войдёте в него; его загрузки удаляются.</string>
 </resources>

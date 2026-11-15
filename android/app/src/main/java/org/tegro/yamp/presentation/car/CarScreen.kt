@@ -99,6 +99,8 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import org.tegro.yamp.R
+import org.tegro.yamp.presentation.account.AccountMark
+import org.tegro.yamp.presentation.account.AccountTag
 import org.tegro.yamp.data.dto.TrackDetailsDto
 import org.tegro.yamp.data.player.PlaylistSource
 import org.tegro.yamp.presentation.hifi.ArtworkTint
@@ -182,6 +184,8 @@ fun CarScreen(
     initialTuneOpen: Boolean = false,
     /** The active queue's name on the queue pill; the pill opens the switcher (2 taps to switch, D26). */
     activeQueueName: String? = null,
+    /** The active queue's account on the pill, with more than one account (D64); null otherwise. */
+    activeQueueAccount: AccountTag? = null,
     onQueues: () -> Unit = {},
     /** The wave queue is active: its pills ("Волна по треку", "Настроить") are shown next to the queue pill (D49). */
     waveActive: Boolean = true
@@ -330,7 +334,7 @@ fun CarScreen(
         val wavePills: @Composable () -> Unit = {
             val pillHeight = u(56f)
             val pillFont = u.sp(18f)
-            CarQueuePill(activeQueueName ?: stringResource(R.string.queue_switcher_title), height = pillHeight, fontSize = pillFont, onClick = onQueues)
+            CarQueuePill(activeQueueName ?: stringResource(R.string.queue_switcher_title), activeQueueAccount, height = pillHeight, fontSize = pillFont, onClick = onQueues)
             if (!waveActive) {
                 // Off My Wave the wave-by-track pill is "Start radio" (D54); tuning has no radio equivalent
                 currentTrack?.takeIf { !it.isRadio }?.let { track ->
@@ -538,7 +542,7 @@ private fun CarHeader(u: Scale, onExit: () -> Unit, showClock: Boolean, pills: (
 
 /** The queue pill (canvas `CarPill`): anodized, the active queue's name, a chevron — opens the switcher. */
 @Composable
-private fun CarQueuePill(name: String, height: Dp, fontSize: TextUnit, onClick: () -> Unit) {
+private fun CarQueuePill(name: String, account: AccountTag?, height: Dp, fontSize: TextUnit, onClick: () -> Unit) {
     val shape = RoundedCornerShape(height / 2)
     val label = stringResource(R.string.cd_queues)
     Row(
@@ -552,6 +556,10 @@ private fun CarQueuePill(name: String, height: Dp, fontSize: TextUnit, onClick: 
     ) {
         Icon(Icons.Rounded.Layers, contentDescription = null, tint = Color.White, modifier = Modifier.size(height * 0.5f))
         Spacer(Modifier.width(height * 0.2f))
+        if (account != null) {
+            AccountMark(account, height * 0.5f)
+            Spacer(Modifier.width(height * 0.17f))
+        }
         Text(name, color = Color.White, fontSize = fontSize, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
         Spacer(Modifier.width(height * 0.12f))
         Icon(Icons.Rounded.ExpandMore, contentDescription = null, tint = HiFi.TextSecondary, modifier = Modifier.size(height * 0.5f))

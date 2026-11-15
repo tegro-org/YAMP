@@ -1,5 +1,9 @@
 package org.tegro.yamp.presentation.account
 
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.TextButton
 import org.tegro.yamp.presentation.hifi.HiFiDialogDefaults
 import org.tegro.yamp.presentation.hifi.HiFiDialogActionKind
 import org.tegro.yamp.presentation.hifi.HiFiDialogAction
@@ -48,16 +52,18 @@ fun AccountManagementDialog(
     activeAccount: UserAccount?,
     defaultAccountUid: String? = null,
     onSetDefaultAccount: (String?) -> Unit = {},
-    onSwitchAccount: (String) -> Unit,
     onRemoveAccount: (String) -> Unit,
     onAddNewAccount: () -> Unit,
     onLogoutCurrent: () -> Unit,
     onLogoutAll: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    debugActions: AccountDebugActions? = null
 ) {
     var confirmLogoutCurrent by remember { mutableStateOf(false) }
     var confirmLogoutAll by remember { mutableStateOf(false) }
     var accountToDelete by remember { mutableStateOf<UserAccount?>(null) }
+    // Several accounts are all live (D56): no "active" one to switch to; each can be removed on its own
+    val multi = accounts.size > 1
 
     AppDialog(
         onDismissRequest = onDismiss,
@@ -105,7 +111,7 @@ fun AccountManagementDialog(
                             )
                             Spacer(modifier = Modifier.height(3.dp))
                             Text(
-                                text = stringResource(R.string.account_management_pereklyuchenie_profiley_i_nastroyki),
+                                text = stringResource(if (multi) R.string.account_management_all_live else R.string.account_management_pereklyuchenie_profiley_i_nastroyki),
                                 color = Color.White.copy(alpha = 0.55f),
                                 fontSize = 12.sp
                             )
@@ -145,7 +151,7 @@ fun AccountManagementDialog(
                                 .heightIn(max = 240.dp)
                         ) {
                             items(accounts, key = { it.uid }) { account ->
-                                val isActive = account.uid == activeAccount?.uid
+                                val isActive = !multi && account.uid == activeAccount?.uid
                                 val initialLetter = (account.displayName.ifBlank { account.login }.firstOrNull() ?: 'Я')
                                     .uppercaseChar()
 
@@ -171,10 +177,6 @@ fun AccountManagementDialog(
                                             ),
                                             RoundedCornerShape(16.dp)
                                         )
-                                        .clickable(enabled = !isActive) {
-                                            onSwitchAccount(account.uid)
-                                            onDismiss()
-                                        }
                                         .padding(horizontal = 14.dp, vertical = 11.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
@@ -316,6 +318,8 @@ fun AccountManagementDialog(
                         )
                     }
 
+                    debugActions?.let { AccountDebugRows(accounts, it) }
+
                     Spacer(modifier = Modifier.height(14.dp))
 
                     // "+ Войти в другой аккаунт" Button
@@ -350,8 +354,8 @@ fun AccountManagementDialog(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // "Выйти из этого аккаунта" Button
-                    Button(
+                    // "Выйти из этого аккаунта": with several accounts each row has its own Remove (D56)
+                    if (!multi) Button(
                         onClick = { confirmLogoutCurrent = true },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -427,5 +431,37 @@ fun AccountManagementDialog(
             confirm = { HiFiDialogAction(stringResource(R.string.account_management_udalit), { val uidToRemove = target.uid; accountToDelete = null; onRemoveAccount(uidToRemove) }, HiFiDialogActionKind.Danger) },
             dismiss = { HiFiDialogAction(stringResource(R.string.account_management_otmena), { accountToDelete = null }, HiFiDialogActionKind.Quiet) }
         )
+    }
+}
+
+// Debug: test sign-out without losing credentials
+/** Debug builds only: hide an account the way a sign-out does, keeping its token, and bring it back. */
+class AccountDebugActions(
+    val hidden: List<UserAccount>,
+    val onHide: (String) -> Unit,
+    val onUnhide: (String) -> Unit
+)
+
+@Composable
+private fun AccountDebugRows(accounts: List<UserAccount>, actions: AccountDebugActions) {
+    Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        accounts.forEach { account ->
+            TextButton(onClick = { actions.onHide(account.uid) }) {
+                Text(
+                    text = stringResource(R.string.debug_account_hide, account.displayName.ifBlank { account.login }),
+                    color = Color.White.copy(alpha = 0.6f),
+                    fontSize = 12.sp
+                )
+            }
+        }
+        actions.hidden.forEach { account ->
+            TextButton(onClick = { actions.onUnhide(account.uid) }) {
+                Text(
+                    text = stringResource(R.string.debug_account_unhide, account.displayName.ifBlank { account.login }),
+                    color = Color.White.copy(alpha = 0.6f),
+                    fontSize = 12.sp
+                )
+            }
+        }
     }
 }

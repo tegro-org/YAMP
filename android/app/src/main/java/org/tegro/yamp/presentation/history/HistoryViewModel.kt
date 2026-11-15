@@ -28,7 +28,13 @@ import javax.inject.Inject
 
 /** One chip: a queue (its id and name, the kind when the queue still exists), or "All" when [queueId] is null. */
 @Immutable
-data class HistoryFilter(val queueId: Long?, val name: String?, val kind: QueueKind?)
+data class HistoryFilter(
+    val queueId: Long?,
+    val name: String?,
+    val kind: QueueKind?,
+    /** The queue's account marker, with more than one account (D58). */
+    val account: org.tegro.yamp.presentation.account.AccountTag? = null
+)
 
 /** One row: the track as [org.tegro.yamp.presentation.main.components.TrackItem] shows it, and where it played. */
 @Immutable
@@ -60,7 +66,8 @@ data class HistoryUiState(
 class HistoryViewModel @Inject constructor(
     private val history: ListeningHistory,
     private val playbackController: PlaybackController,
-    settings: SettingsRepository
+    settings: SettingsRepository,
+    authRepository: org.tegro.yamp.domain.repository.AuthRepository
 ) : ViewModel() {
 
     private sealed interface Selection {
@@ -78,11 +85,12 @@ class HistoryViewModel @Inject constructor(
         }
     }.distinctUntilChanged()
 
-    private val filters: Flow<List<HistoryFilter>> = combine(playbackController.queues, history.queues()) { queues, inHistory ->
+    private val filters: Flow<List<HistoryFilter>> = combine(playbackController.queues, history.queues(), authRepository.allAccounts) { queues, inHistory, accounts ->
         val activeId = queues.firstOrNull { it.isActive }?.queue?.id
+        val tags = org.tegro.yamp.presentation.account.accountTags(accounts).takeIf { it.size > 1 }.orEmpty()
         val known = queues
             .sortedWith(compareBy({ it.queue.id != activeId }, { it.queue.kind.rank }))
-            .map { HistoryFilter(it.queue.id, it.queue.name, it.queue.kind) }
+            .map { q -> HistoryFilter(q.queue.id, q.queue.name, q.queue.kind, tags.firstOrNull { it.key == q.queue.account }) }
         val gone = inHistory.filter { h -> known.none { it.queueId == h.queueId } }.map { HistoryFilter(it.queueId, it.queueName, null) }
         known + gone + HistoryFilter(null, null, null)
     }

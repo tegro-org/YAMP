@@ -123,6 +123,8 @@ fun FullScreenPlayer(
     onLoadMoreQueue: () -> Unit = {},
     isFetchingMoreQueue: Boolean = false,
     sourceLabel: String = "",
+    /** The playing queue's account in the queue sheet's header, with more than one account (D58). */
+    queueAccount: org.tegro.yamp.presentation.account.AccountTag? = null,
     sleepTimer: SleepTimerState? = null,
     onSleepTimer: (Int) -> Unit = {},
     onSleepAtEndOfTrack: () -> Unit = {},
@@ -298,6 +300,7 @@ fun FullScreenPlayer(
             split = split,
             isPlaying = isPlaying,
             sourceLabel = sourceLabel,
+            account = queueAccount,
             isFetchingMore = isFetchingMoreQueue,
             fullHeight = isLandscape,
             onDismiss = { showQueue = false },

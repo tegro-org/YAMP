@@ -72,7 +72,7 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PowerSettingsNew
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.SdCard
-import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.AccountTree
 import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material.icons.rounded.SwipeLeft
@@ -395,7 +395,7 @@ private fun aboutSummary(): String = stringResource(R.string.settings_version, L
 private fun ColumnScope.RootPage(state: SettingsUiState, onOpen: (SettingsPage) -> Unit) {
     Spacer(Modifier.heightIn(min = 14.dp))
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Color.White.copy(alpha = 0.05f))) {
-        AccountCard(state.accountName, state.avatarUrl, state.hasPlus, onSwitch = null, onClick = { onOpen(SettingsPage.ACCOUNT) })
+        AccountCard(state.accountName, state.avatarUrl, state.hasPlus, onClick = { onOpen(SettingsPage.ACCOUNT) })
     }
     Spacer(Modifier.heightIn(min = 14.dp))
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Color.White.copy(alpha = 0.05f)).selectableGroup()) {
@@ -467,14 +467,15 @@ private fun ColumnScope.SettingsPageContent(page: SettingsPage, state: SettingsU
 @Composable
 private fun ColumnScope.AccountPage(state: SettingsUiState, actions: SettingsActions) {
     SettingsGroup(stringResource(R.string.settings_g_profile)) {
-        AccountCard(state.accountName, state.avatarUrl, state.hasPlus, onSwitch = actions.onAccountManagement)
-        SettingsRow(
-            icon = Icons.Rounded.Star,
-            title = stringResource(R.string.settings_startup_profile),
-            value = state.defaultAccountName ?: stringResource(R.string.settings_startup_ask),
-            onClick = actions.onAccountManagement
-        )
+        // All accounts are live (D56): the card opens the accounts list (add, remove, default), nothing to switch to
+        AccountCard(state.accountName, state.avatarUrl, state.hasPlus, onClick = actions.onAccountManagement)
         SettingsRow(icon = Icons.AutoMirrored.Rounded.Login, title = stringResource(R.string.settings_add_account), onClick = actions.onAddAccount)
+    }
+    // With one account nothing is grouped, so the switch only shows with two or more (D58, D64)
+    if (state.multiAccount) {
+        SettingsGroup(stringResource(R.string.settings_g_queues)) {
+            SwitchRow(Icons.Rounded.AccountTree, stringResource(R.string.settings_group_queues), stringResource(R.string.settings_group_queues_hint), state.groupQueues, actions.onGroupQueuesChange)
+        }
     }
     SettingsGroup(null) {
         SettingsRow(icon = Icons.AutoMirrored.Rounded.Logout, title = stringResource(R.string.settings_logout), danger = true, chevron = false, onClick = actions.onLogout)

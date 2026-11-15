@@ -166,6 +166,26 @@ class HistoryScreenshotsTest {
         snap("history_all")
     }
 
+    /** Two accounts (D58): each queue chip carries its account's marker. */
+    @Test
+    fun historyWithAccounts() {
+        val tags = org.tegro.yamp.presentation.account.accountTags(
+            listOf(
+                org.tegro.yamp.domain.model.UserAccount(uid = "1001", login = "anna", displayName = "Anna", token = "t"),
+                org.tegro.yamp.domain.model.UserAccount(uid = "2002", login = "rock", displayName = "Rock", token = "t")
+            )
+        )
+        val marked = filters.map { f ->
+            when (f.queueId) {
+                1L, 4L -> f.copy(account = tags[0])
+                2L, 3L -> f.copy(account = tags[1])
+                else -> f
+            }
+        }
+        show { History(state = state.copy(filters = marked)) }
+        snap("accounts_history")
+    }
+
     @Test
     fun historyEmpty() {
         show { History(state = state.copy(days = emptyList())) }

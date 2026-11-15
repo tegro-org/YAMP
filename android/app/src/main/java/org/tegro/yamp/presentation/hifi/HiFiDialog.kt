@@ -1,5 +1,9 @@
 package org.tegro.yamp.presentation.hifi
 
+import android.view.WindowManager
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.runtime.SideEffect
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -72,6 +76,13 @@ fun AppDialog(
 ) {
     val appDensity = LocalDensity.current
     Dialog(onDismissRequest = onDismissRequest, properties = properties) {
+        // The dialog window shrinks above the keyboard instead of sliding under it: on a 720 px head unit a name
+        // field's keyboard otherwise covers the dialog's actions (its content scrolls, so they stay reachable)
+        val dialogWindow = (LocalView.current.parent as? DialogWindowProvider)?.window
+        SideEffect {
+            @Suppress("DEPRECATION")
+            dialogWindow?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        }
         CompositionLocalProvider(LocalDensity provides appDensity, content = content)
     }
 }

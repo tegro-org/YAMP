@@ -280,7 +280,7 @@ class ScreenshotTest {
         show {
             org.tegro.yamp.presentation.account.AccountManagementDialog(
                 accounts = listOf(me, other), activeAccount = me, defaultAccountUid = "1",
-                onSwitchAccount = {}, onRemoveAccount = {}, onAddNewAccount = {}, onLogoutCurrent = {}, onLogoutAll = {}, onDismiss = {}
+                onRemoveAccount = {}, onAddNewAccount = {}, onLogoutCurrent = {}, onLogoutAll = {}, onDismiss = {}
             )
         }
         snapScreen("dialog_accounts")
@@ -309,7 +309,7 @@ class ScreenshotTest {
     }
 
     private val settingsState = org.tegro.yamp.presentation.main.components.SettingsUiState(
-        accountName = "Тестовый Аккаунт", hasPlus = true, defaultAccountName = null, crashReports = 0,
+        accountName = "Тестовый Аккаунт", hasPlus = true, crashReports = 0,
         crossfadeSeconds = 3, reserveMb = 100, reserveUsedBytes = 64L * 1024 * 1024, autoDownload = true, cacheSizeBytes = 1_288_000_000L,
         equalizerAvailable = true,
         storage = org.tegro.yamp.data.download.StorageStatus(cardAvailable = true, onCard = false, cardFreeBytes = 21_400_000_000L)
@@ -338,6 +338,15 @@ class ScreenshotTest {
     @Test
     @Config(qualifiers = "w411dp-h1100dp")
     fun settingsAccount() = settings("settings_account", org.tegro.yamp.presentation.main.components.SettingsPage.ACCOUNT)
+
+    /** Settings → Accounts with two accounts: the "Group" switch shows (D64). */
+    @Test
+    @Config(qualifiers = "w411dp-h1100dp")
+    fun settingsAccountMulti() = settings(
+        "accounts_settings_account",
+        org.tegro.yamp.presentation.main.components.SettingsPage.ACCOUNT,
+        settingsState.copy(multiAccount = true)
+    )
 
     // Tall windows: the whole page in one picture, so nothing below the fold goes unchecked
     @Test

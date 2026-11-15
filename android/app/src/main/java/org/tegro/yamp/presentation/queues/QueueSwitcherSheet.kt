@@ -16,6 +16,19 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.PersonOff
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.res.pluralStringResource
+import org.tegro.yamp.presentation.account.AccountChips
+import org.tegro.yamp.presentation.account.AccountHeader
+import org.tegro.yamp.presentation.account.AccountMark
+import org.tegro.yamp.presentation.account.AccountTag
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -85,18 +98,30 @@ internal fun QueueSwitcherSheet(
     onLongPress: ((QueueRowState) -> Unit)?,
     onNew: () -> Unit,
     keepHistory: Boolean = false,
-    onKeepHistory: (Boolean) -> Unit = {}
+    onKeepHistory: (Boolean) -> Unit = {},
+    /** "New radio"'s account (the radio picker's selector, only with more than one account — D57, D58). */
+    newAccount: String? = null,
+    onNewAccount: (String) -> Unit = {},
+    /** A tap on a removed account's queue (D62): it opens, its tracks unavailable (canvas `ac-removed-open`). */
+    onRemoved: (QueueRowState) -> Unit = {},
+    /** A hold on a removed account's queue: its menu, Delete only (canvas `ac-menu-removed`). */
+    onRemovedMenu: ((QueueRowState) -> Unit)? = null
 ) {
     val window = org.tegro.yamp.utils.currentWindowSizeDp()
     val carScale = if (car) carScaleOf(window.widthDp.dp, window.heightDp.dp, window.heightDp.dp, isLandscape = true) else 1f
     val adding = state.mode as? QueueSwitcherRequest.AddTo
     val radio = state.mode as? QueueSwitcherRequest.StartRadio
+    val signedIn = state.queues.filterNot(state::isRemoved)
     val rows = when {
-        adding != null -> state.queues.filter { it.editable }.map { it.copy(isActive = false) }
+        adding != null -> signedIn.filter { it.editable }.map { it.copy(isActive = false) }
         // Only radios are re-seeded; the user's queues are never a target (D51)
-        radio != null -> state.queues.filter { it.kind == QueueKind.RADIO }
-        else -> state.queues
+        radio != null -> signedIn.filter { it.kind == QueueKind.RADIO }
+        else -> signedIn
     }
+    // The removed accounts' queues: collapsed at the bottom of the phone switcher only, never in the car (D62)
+    val removed = if (adding == null && radio == null && !car) state.queues.filter(state::isRemoved) else emptyList()
+    var removedOpen by remember { mutableStateOf(false) }
+    val chooseAccount = radio != null && state.multiAccount
     val newLabel = stringResource(if (radio != null) R.string.radio_new else R.string.queue_new)
     HiFiSheetPanel(onDismiss = onDismiss, side = side, sheetHeight = 0.78f, panelWidth = if (car) (720f * carScale).dp else 460.dp) { landscape ->
         val d = RowDims(big = car && landscape, factor = if (car && landscape) carScale else 1f)
@@ -127,9 +152,36 @@ internal fun QueueSwitcherSheet(
             if (radio != null) {
                 item(key = "keep") { KeepRow(keepHistory, onKeepHistory, d) }
             }
-            items(rows, key = { it.id }) { row ->
-                QueueRow(row, d, onClick = { onSelect(row) }, onLongClick = if (d.big || onLongPress == null) null else ({ onLongPress(row) }))
+            queueItems(rows, state, d, onSelect, onLongPress)
+            if (removed.isNotEmpty()) {
+                item(key = "removed") { RemovedRow(removed.size, removedOpen) { removedOpen = !removedOpen } }
+                if (removedOpen) {
+                    items(removed, key = { it.id }) { row ->
+                        QueueRow(
+                            row.copy(isActive = false), d,
+                            onClick = { onRemoved(row) },
+                            onLongClick = onRemovedMenu?.let { menu -> { menu(row) } },
+                            mark = state.removedTagOf(row.account),
+                            dim = true
+                        )
+                    }
+                }
             }
+        }
+        if (chooseAccount) {
+            Text(
+                stringResource(R.string.radio_new_on),
+                color = HiFi.TextSecondary,
+                fontSize = d.sp(13f, 17f),
+                modifier = Modifier.padding(start = d.dp(20f, 34f), end = d.dp(20f, 34f), top = d.dp(10f, 12f), bottom = d.dp(8f, 10f))
+            )
+            AccountChips(
+                state.accounts,
+                selected = newAccount ?: state.contextAccount,
+                onSelect = onNewAccount,
+                big = d.big,
+                modifier = Modifier.padding(start = d.dp(20f, 34f), end = d.dp(20f, 34f), bottom = if (d.big) 26.dp else 0.dp)
+            )
         }
         if (!d.big) {
             GlassPillButton(
@@ -139,6 +191,67 @@ internal fun QueueSwitcherSheet(
                 modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 24.dp)
             )
         }
+    }
+}
+
+/**
+ * The rows of a list, grouped by account or flat (D64): grouped — a header per account, its My Wave first, no
+ * markers; flat — a marker on every row. With one account neither (D58). Queues of no account lead, headerless.
+ */
+private fun LazyListScope.queueItems(
+    rows: List<QueueRowState>,
+    state: QueueSwitcherUiState,
+    d: RowDims,
+    onSelect: (QueueRowState) -> Unit,
+    onLongPress: ((QueueRowState) -> Unit)?
+) {
+    val longPress = { row: QueueRowState -> if (d.big || onLongPress == null) null else ({ onLongPress(row) }) }
+    if (!state.multiAccount || !state.grouped) {
+        items(rows, key = { it.id }) { row ->
+            QueueRow(row, d, onClick = { onSelect(row) }, onLongClick = longPress(row), mark = if (state.multiAccount) state.tagOf(row.account) else null)
+        }
+        return
+    }
+    val unbound = rows.filter { state.tagOf(it.account) == null }
+    items(unbound, key = { it.id }) { row -> QueueRow(row, d, onClick = { onSelect(row) }, onLongClick = longPress(row)) }
+    state.accounts.forEach { tag ->
+        // Stable: the account's My Wave first, the rest in the manual order
+        val group = rows.filter { it.account == tag.key }.sortedBy { if (it.kind == QueueKind.WAVE) 0 else 1 }
+        if (group.isEmpty()) return@forEach
+        item(key = "account:${tag.key}") { AccountHeader(tag, big = d.big) }
+        items(group, key = { it.id }) { row -> QueueRow(row, d, onClick = { onSelect(row) }, onLongClick = longPress(row)) }
+    }
+}
+
+/** The collapsed group of removed accounts' queues (D62), at the bottom of the phone switcher. */
+@Composable
+private fun RemovedRow(count: Int, open: Boolean, onToggle: () -> Unit) {
+    val shape = RoundedCornerShape(16.dp)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 6.dp)
+            .padding(top = 6.dp)
+            .height(52.dp)
+            .clip(shape)
+            .background(HiFi.GlassFill)
+            .border(1.dp, HiFi.Hairline, shape)
+            .hifiPress(onToggle)
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Icon(Icons.Rounded.PersonOff, contentDescription = null, tint = HiFi.TextSecondary, modifier = Modifier.size(22.dp))
+        Text(
+            pluralStringResource(R.plurals.queue_removed_accounts, count, count),
+            color = HiFi.TextSecondary,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        Icon(if (open) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, contentDescription = null, tint = HiFi.TextSecondary, modifier = Modifier.size(24.dp))
     }
 }
 
@@ -205,12 +318,13 @@ private fun QueueSheetHeader(title: String, subtitle: String?, d: RowDims, onClo
 
 /** One queue: cover with the kind badge, name, current track, progress; the active one on anodized metal. */
 @Composable
-private fun QueueRow(row: QueueRowState, d: RowDims, onClick: () -> Unit, onLongClick: (() -> Unit)?) {
+private fun QueueRow(row: QueueRowState, d: RowDims, onClick: () -> Unit, onLongClick: (() -> Unit)?, mark: AccountTag? = null, dim: Boolean = false) {
     val shape = RoundedCornerShape(d.dp(18f, 24f))
     Row(
         Modifier
             .fillMaxWidth()
             .height(d.dp(78f, 100f))
+            .then(if (dim) Modifier.alpha(0.45f) else Modifier)
             .then(if (row.isActive) Modifier.hifiAnodized(shape) else Modifier.clip(shape))
             .hifiPress(onClick, onLongClick = onLongClick)
             .padding(start = d.dp(12f, 16f), end = d.dp(14f, 20f)),
@@ -219,15 +333,25 @@ private fun QueueRow(row: QueueRowState, d: RowDims, onClick: () -> Unit, onLong
     ) {
         QueueCover(row, d)
         Column(Modifier.weight(1f)) {
-            Text(
-                row.name,
-                color = Color.White,
-                fontSize = d.sp(17f, 24f),
-                lineHeight = d.sp(22f, 30f),
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            val name: @Composable () -> Unit = {
+                Text(
+                    row.name,
+                    color = Color.White,
+                    fontSize = d.sp(17f, 24f),
+                    lineHeight = d.sp(22f, 30f),
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (mark == null) {
+                name()
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(d.dp(7f, 10f))) {
+                    AccountMark(mark, d.dp(18f, 26f))
+                    name()
+                }
+            }
             Text(
                 listOfNotNull(row.trackTitle, row.artist?.takeIf { it.isNotBlank() }).joinToString(" · "),
                 color = HiFi.TextSecondary,

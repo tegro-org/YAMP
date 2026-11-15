@@ -48,7 +48,7 @@ class SettingsViewModel @Inject constructor(
     )
     private data class Look(val startPage: StartPage, val expand: Boolean, val swipe: Boolean, val left: Boolean, val clock: Boolean)
     private data class Scale(val auto: Boolean, val manual: Float, val animations: AnimationMode)
-    private data class Library(val reserveMb: Int, val reserveUsed: Long, val autoDownload: Boolean, val cacheBytes: Long, val journal: PlaybackJournal.Snapshot = PlaybackJournal.Snapshot(), val diagnosticLog: Boolean = false)
+    private data class Library(val reserveMb: Int, val reserveUsed: Long, val autoDownload: Boolean, val cacheBytes: Long, val journal: PlaybackJournal.Snapshot = PlaybackJournal.Snapshot(), val diagnosticLog: Boolean = false, val groupQueues: Boolean = true)
 
     private val sound: Flow<Sound> = combine(
         combine(soundMode.compatible, settings.crossfadeSeconds, settings.normalizeVolume, settings.separateAudioSessions, settings.keepAudioStreams) { c, f, n, s, k -> Sound(c, f, n, s, StartMusic.OFF, false, false, keepStreams = k) },
@@ -71,8 +71,9 @@ class SettingsViewModel @Inject constructor(
             Library(mb, used, auto, cache)
         },
         journal.state,
-        settings.diagnosticLog
-    ) { lib, journal, diag -> lib.copy(journal = journal, diagnosticLog = diag) }
+        settings.diagnosticLog,
+        settings.groupQueuesByAccount
+    ) { lib, journal, diag, group -> lib.copy(journal = journal, diagnosticLog = diag, groupQueues = group) }
 
     val state: StateFlow<SettingsUiState> = combine(sound, look, scale, library, storage.state) { s, l, sc, lib, card ->
         SettingsUiState(
@@ -95,6 +96,7 @@ class SettingsViewModel @Inject constructor(
             cacheSizeBytes = lib.cacheBytes,
             journal = lib.journal,
             diagnosticLog = lib.diagnosticLog,
+            groupQueues = lib.groupQueues,
             storage = card,
             startPage = l.startPage,
             expandPlayerOnPlay = l.expand,
@@ -125,6 +127,7 @@ class SettingsViewModel @Inject constructor(
     fun setKeepAudioStreams(enabled: Boolean) = save { setKeepAudioStreams(enabled) }
     fun setDuckForAnnouncements(enabled: Boolean) = save { setDuckForAnnouncements(enabled) }
     fun setKeepBothPlayersRunning(enabled: Boolean) = save { setKeepBothPlayersRunning(enabled) }
+    fun setGroupQueues(enabled: Boolean) = save { setGroupQueuesByAccount(enabled) }
     fun openEqualizer() = equalizer.open()
     fun clearJournal() = journal.clear()
     fun setDiagnosticLog(enabled: Boolean) = save { setDiagnosticLog(enabled) }

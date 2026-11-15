@@ -138,7 +138,7 @@ internal fun SettingsRow(
 }
 
 @Composable
-internal fun AccountCard(name: String, avatarUrl: String?, hasPlus: Boolean, onSwitch: (() -> Unit)?, onClick: (() -> Unit)? = null) {
+internal fun AccountCard(name: String, avatarUrl: String?, hasPlus: Boolean, onClick: (() -> Unit)? = null) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -172,23 +172,7 @@ internal fun AccountCard(name: String, avatarUrl: String?, hasPlus: Boolean, onS
                 overflow = TextOverflow.Ellipsis
             )
         }
-        if (onSwitch != null) {
-            Box(
-                Modifier
-                    .height(36.dp)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.10f))
-                    .clickable(role = Role.Button, onClick = onSwitch)
-                    .padding(horizontal = 14.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.SwapHoriz, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(stringResource(R.string.settings_switch_account), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                }
-            }
-        } else if (onClick != null) {
+        if (onClick != null) {
             Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, tint = Color.White.copy(alpha = 0.45f), modifier = Modifier.size(20.dp))
         }
     }
