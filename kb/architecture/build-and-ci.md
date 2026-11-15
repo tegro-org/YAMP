@@ -17,7 +17,8 @@ goldens render identically on this Linux PC and can serve as the baseline for YA
   `org.tegro.yamp`; upstream was `com.korenskoy.yandexmusic` /
   `YandexMusicLite.KorenskoyR`), compileSdk 37, minSdk 26, targetSdk 36, Java 11. **Version from git (D37):**
   `versionName` = tag `vX.Y.Z` → `X.Y.Z`, otherwise `X.Y.Z-dev.N+sha` (`0.0.0-dev…` before the first tag,
-  `0.0.0-local` without git); `versionCode` = commit count. ABIs: all four. No flavors.
+  `0.0.0-local` without git); `versionCode` = commit count, except debug builds from `scripts/build-apk.sh` (below).
+  ABIs: all four. No flavors.
 - BuildConfig: `YANDEX_SALT` (local.properties → env → committed default, not secret),
   `YANDEX_DEVICE_SECRET` (empty → device-code sign-in disabled).
 - Signing: `KEYSTORE_FILE` (default `android/release.keystore`), `KEYSTORE_PASSWORD`, `KEY_ALIAS`,
@@ -67,9 +68,12 @@ DataStore 1.3.0, security-crypto 1.1.0, WorkManager 2.12.0. Tests: JUnit4, Robol
 ## Local builds
 
 `scripts/build-apk.sh [debug|release] [--tests] [--install]` builds the APK and copies it to
-`dist/YAMP-<versionName>-<variant>.apk` (git-ignored); `--tests` runs unit tests, screenshot compare and lint
-first, `--install` adb-installs it. Release needs the signing key in `android/local.properties` or the
-environment.
+`dist/YAMP-b<versionCode>-<versionName>[-dirty-<time>]-<variant>.apk` (git-ignored); `--tests` runs unit tests,
+screenshot compare and lint first, `--install` adb-installs it. Release needs the signing key in
+`android/local.properties` or the environment. **Debug build numbers:** each debug build gets a fresh versionCode
+from the local counter `dist/.build-number` (one above max(last counter, commit count), passed as
+`-Pyamp.buildNumber`), so two builds of one commit never share a number in the APK name or the journal's
+`(N, debug)`; release builds keep the commit count (a release can't install over a debug build anyway).
 
 ## Gotchas
 

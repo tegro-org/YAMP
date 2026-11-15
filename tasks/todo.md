@@ -293,3 +293,19 @@ until the app is killed, even after the network is back.
 - [ ] Failed next-track loads retry by themselves when the link comes back (`LINK NONE → GOOD`)
 - [ ] Progress bar shows the buffered part (like YouTube Music)
 - [ ] Design on the canvas first: phone player, car screen, the next-track artwork in the car
+
+## Small fixes before v0.3.0 (branch `fix/journal-buildno-radio-menu`, 2026-11-15)
+
+From the 2026-11-15 head-unit ride (b71) and the user's notes.
+- [x] Journal: `SETTINGS` lines — everything stored at process start, then each change "key: old → new"
+      (`SettingsRepository.allSettings` diffed in `DiagnosticLog`, one place for every setting); `FORMAT` line after
+      each TIMING (codec, rate, channels, bitrate of the track that started) and `OUTPUT` line on every AudioTrack
+      (re)configuration (player, encoding, rate, channels, buffer, offload/tunneling) — to match the new-track stutter
+      with output changes and the auto-pauses with FLAC on a slow link
+- [x] Debug build numbers from a local counter (`dist/.build-number`, `-Pyamp.buildNumber`), one per build;
+      release builds keep the commit count
+- [x] Skip to a warm next track whose link left the cache: no link fetch, starts at once (the "skip→request
+      1257 ms" in the ride log was that fetch, heard as silence after the fade); TIMING now counts from the
+      controller's request, so a link lookup shows as "→link"
+- [x] "Запустить радио" in the track menu on every queue, next to "Добавить в очередь" (D65, revises D54)
+- [ ] Ride: read FORMAT / OUTPUT / SETTINGS lines against the stutters and auto-pauses

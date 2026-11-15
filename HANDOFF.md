@@ -1,56 +1,56 @@
-# HANDOFF — 2026-11-13
+# HANDOFF — 2026-11-15
 
 ## State
 
-- **Released:** `v0.2.1` (`v0.2.0` tag exists, its release build failed on flaky tests — no release) — Phase 1 queues, Phase 1b History, Home per queue (D49), Phase 2 radio queues, head-unit
-  fixes and diagnostics, upstream 1.14.3 crossfade-stall port. `main` = the release commit; feature branches
-  `feature/phase-1-queues` and `feature/phase-2-radio` are fully merged (fast-forward).
-- **Phase 2 radio** (`docs/phase-2-radio.md`, as built): many `RADIO` queues; "Start radio" (track menu, player
-  button, album/artist ⋮, car pill on every queue but My Wave — D54) opens the picker: new radio or re-seed an
-  existing one; per-radio Keep = retain history (off → played head trimmed to `RADIO_BEHIND = 3` at the next
-  refill); refill only while active; `WAVE` untouched (D53). Room v4 (`queues.keepHistory`). Decisions D35′,
-  D51–D54 in `kb/decisions.md`. Tested by the user on the phone; **the unit check is still open** (todo 4c).
-- **`debug/radio-probe`** (pushed): debug-only About button "Probe radio stations" — calls `track:`/`album:`/
-  `artist:` rotor stations and feedback, logs `PROBE` lines. Removed from `main`; cherry-pick onto a branch when
-  needed.
-- **Builds:** `scripts/build-apk.sh debug` → `dist/YAMP-b<versionCode>-<versionName>[-dirty-<time>]-debug.apk`;
-  uploads go to the user's Nextcloud share by WebDAV `PUT` (share token as the user name, same file name).
-  Releases: push tag `vX.Y.Z` → `release.yml` builds and publishes; notes are auto-generated, edit them after with
-  `gh release edit`.
-- **Head-unit AVD** `yamp-headunit` (API 28, 1920×720, 160 dpi), the user's secondary Yandex account signed in;
-  `adb -s emulator-5554`. Good for queue/radio flows, force-stop cases, History; not for the unit's audio
-  behaviour. The auth token is Keystore-encrypted — don't try to extract it; use the app (a debug probe) instead.
-- `gh` is installed and logged in.
+- **Released:** `v0.3.0` — new app id `org.tegro.music.yamp` (D55; fresh install beside the old `org.tegro.yamp`,
+  sign in again), Phase 2a accounts, car skip/focus fixes, journal diagnostics, "Start radio" on every queue.
+  Before it: `v0.2.1` (queues, History, radio). `main` = the release commit; all feature/fix branches merged.
+- **Phase 2a accounts** (`docs/phase-2a-accounts.md`, as built; D22′, D56–D64): all signed-in Yandex accounts live
+  at once, no global switch — the active queue's account is the context (Home, Library, Search, likes); every queue
+  bound to its account at creation, permanently; every account's My Wave queue exists from sign-in; queue list
+  grouped by account ("Группировать", default on) or flat with markers; sign-out hides the account's queues
+  ("Удалённые аккаунты"), re-sign-in (same uid) restores them. Per-account `YandexClients` (own token + HTTP
+  cache); accounts keyed `yandex:<uid>`; Room v5. Debug builds: Hide/Unhide in Settings → Accounts tests sign-out
+  without losing the token.
+- **Player** (branch work of 2026-11-14/15): a picked track loads first, then a 0.5 s skip fade (no 3 s
+  crossfade); "Keep playing under announcements" (default on, ducks unless a call); "Keep both players running"
+  (experimental, off); a preloaded pick starts instantly. Journal lines: `UNDERRUN`, `TIMING`, `FORMAT`, `OUTPUT`,
+  `SETTINGS`.
+- **Radio (Phase 2)**: many `RADIO` queues, picker, Keep; "Start radio" in the track menu on every queue, "Wave by
+  track" stays on My Wave (D65 revises D54).
+- **`debug/radio-probe`** (pushed): debug-only rotor-station probe; cherry-pick when needed.
+- **Builds:** `scripts/build-apk.sh debug` → `dist/YAMP-b<N>-…-debug.apk`; debug build numbers come from the local
+  counter `dist/.build-number` (+1 per build) — never share two APKs with the same number. Release builds use the
+  commit count. Uploads: the user's Nextcloud share by WebDAV `PUT`. Releases: tag `vX.Y.Z` → `release.yml`;
+  replace the auto notes with `gh release edit`.
+- **Head-unit AVD** `yamp-headunit` (1920×720), `org.tegro.music.yamp` with the user's 3 Yandex accounts;
+  `adb -s emulator-5554`. Never sign accounts out there (use debug Hide). Tokens are Keystore-encrypted — don't
+  extract.
+- The real unit's screen is 1760×720 (navigation panel on the left).
 
 ## Known issues
 
-- **Rotor feedback answers 400 "condition is not met"** for every station incl. My Wave (found by the probe;
-  listed in the v0.2.1 notes). Next: compare the form fields / headers with upstream's current version.
-- **Head-unit auto-pause:** permanent audio-focus loss 0.1–3 s after a track starts. "Separate audio sessions" off
-  cut it to 3 per 1 h 15. Waiting for the unit: "Не закрывать звуковые потоки" (Settings → Playback, off by
-  default). Still wanted: `adb shell dumpsys audio | grep -A 25 -i "focus stack"` on the unit right after a loss,
-  and one ride on upstream 1.14.4 as a baseline. No decompiling of closed players (D15).
-- "Далее" tap stutter — retest after the 1.14.3 port.
-- Back-button crash (player screen, twice, no `CRASH` line) — ask for Settings → About → "Журнал сбоев".
-- Head-unit HUD app shows nothing for YAMP — app name needed.
+- **New-track stutter on the unit**: with "Keep both players running" the current track no longer stutters, the
+  new one stutters 1–3 times; no `UNDERRUN` on the active player. Hypothesis: output reconfiguration on track start —
+  check `FORMAT`/`OUTPUT` lines in the next log.
+- **Auto-pause**: tied to lossless (FLAC) on a slow link — repeated buffering, then a permanent focus loss; gone
+  with "compatible" quality. Idea: fall back to a lighter format on a slow link.
+- **Rotor feedback 400** for every station; YAMP also never reports plays to Yandex — fix both together (todo).
+- App restarted once on the unit without a journal trace (2026-11-15 12:52) — probably killed in the background.
 
 ## Next steps (user sets the pace)
 
-1. The user's findings from the unit (Phase 2 car UI, the two head-unit switches) → patch releases `v0.2.x`.
-2. Rotor feedback 400 (above).
-3. Triage the rest of upstream 1.14.2–1.14.4 (lyrics, flat-unit layout, car stations, downloads on device, AI
-   marks, Android 7.1, sign-in code fallback, certificates) — `kb/upstream-tracking.md`.
-4. Phase 1 leftovers: `removeEntry`/`moveEntry` in the player's queue sheet; `WaveQueue`'s own list when the
-   dynamic source is generalised to WAVE; the D36 resolver doc.
-5. Next phase per `docs/multi-source-player.md`.
+1. Read the next unit log (`FORMAT`/`OUTPUT` vs stutter, `SETTINGS`).
+2. Next-track buffering state (preload early, Next never disabled, buffered part in the progress bar) — canvas first.
+3. Rotor feedback 400 + play reporting under the queue's account.
+4. Split `PlayerRepositoryImpl` (in the detekt baseline).
+5. Upstream 1.14.2–1.14.4 triage; Phase 1 leftovers; Phase 3 per `docs/multi-source-player.md`.
 
 ## Notes
 
-- Workflow: design doc approved before code; stage → report → confirm → commit, in groups; push/merge only on the
-  user's word. Chat: file names only, short. The user dislikes being rushed. Heavy research/implementation goes
-  to subagents to keep the main session slim.
-- New strings: EN in `values/`, RU in `values-ru/`; `tools:ignore="MissingTranslation"` on the `values/` root until
-  K4. Gates before every hand-off: `cd android && sh gradlew testDebugUnitTest verifyRoborazziDebug lintDebug` and
-  detekt (`config/detekt.yml` + baseline; jar per `.github/workflows/ci.yml`).
+- Workflow: design doc approved before code; stage → report → confirm → commit, one group at a time; push/merge only
+  on the user's word. Chat: short. The user sets the pace. Heavy work goes to subagents (keep the session slim).
+- New strings: EN in `values/`, RU in `values-ru/`. Gates: `cd android && sh gradlew testDebugUnitTest
+  verifyRoborazziDebug lintDebug compileDebugAndroidTestKotlin` + detekt (jar per `.github/workflows/ci.yml`).
 - Docs and commit messages describe YAMP only; the repo is public — no server URLs, tokens, keystores.
 - User setup: `kb/environment.md`. Upstream clone for reading: `~/Projects/Github/YandexMusicLite`.

@@ -53,6 +53,7 @@ adds one flag per radio, **Keep**, that says whether its history is retained.
   | Control | File | On the `WAVE` queue | On any other queue |
   |---|---|---|---|
   | Track menu row "Волна по треку" | `presentation/main/components/TrackContextMenu.kt:192` | wave by track (as today) | **"Start radio"** → picker |
+  | *As built, 2026-11-15 (D65):* track menu "Запустить радио" | `TrackContextMenu.kt`, next to "Add to queue" | **also shown** (wave by track stays as its own row above) | the only radio row (the top row is not repeated) |
   | Player title-row wave button | `presentation/player/PlayerParts.kt:424` (via `FullScreenPlayer.kt:174`) | wave by track | "Start radio" → picker (radio icon) |
   | Car header pill "Волна по треку" | `presentation/car/CarScreen.kt:341` (today shown only while the wave is active) | wave by track | **shown on every queue** as "Start radio" → picker |
   | Snackbar "Волна по треку «…»" + Undo | `presentation/main/MainScreen.kt:372` | as today | a plain message "Radio: <seed>" (the app's usual message, not the Undo snackbar; the previous queue is one switch away) |

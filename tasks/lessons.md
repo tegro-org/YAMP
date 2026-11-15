@@ -19,6 +19,10 @@
   unrelated to it. Rule: docs, comments and commit messages describe YAMP only; where something came from
   another project of the user's, don't mention it unless the user asks for the reference.
 
+- **2026-11-15 — Never hand over two builds with the same build number.** Two debug APKs built from uncommitted
+  changes on one commit both said "b71", so the user's log couldn't tell which one ran. Rule: every debug build
+  gets a new build number (local counter); before uploading, check the number differs from the last shared APK.
+
 - **2026-11-11 — "Let's commit" is not "commit everything".** After the user said "lets commit and do U2" I made
   three commits in one command without staging each group, showing the message and waiting. Rule: every group,
   every time — stage, report the file list and the message, wait for the user's word, then commit; a general
