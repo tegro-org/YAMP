@@ -88,6 +88,12 @@ Snapshot of the imported code before any YAMP change. Paths relative to
   Hard-depends on `YandexMusicApi`, `PlaybackController`, concrete repos.
 - Sign-in: WebView implicit OAuth, or `DeviceSignIn` (device flow, sealed `Poll` result,
   `BuildConfig.YANDEX_DEVICE_SECRET`). One active account; token via interceptor.
+- **Since Phase 2a (2026-11-14):** all signed-in accounts are live; `AccountId` = `yandex:<uid>` (D59) replaces the
+  folder-name key (`legacyFolderName` is read only by the one-time `AccountKeyMigration`); one Retrofit/OkHttp client
+  per account (`YandexClients`, own token and HTTP cache under `http_cache_accounts/<id>`, D60); `AccountContext`
+  (the active queue's account) answers "which account" for calls that don't name one. Likes and playlists are held
+  per account. `AccountSessionManager` no longer switches by resetting: entering an account = its My Wave queue;
+  sign-out keeps the account's queues hidden (D62) and remembers its name (`removedAccountNames`).
 
 ## Downloads & offline
 

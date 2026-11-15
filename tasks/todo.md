@@ -150,39 +150,118 @@
 - [ ] Report plays to Yandex (play-audio / history) under the queue's account — upstream never does; this is what lets
       each account's taste follow what's listened to in YAMP. Do together with the feedback-400 fix.
 
-## Phase 2a — Accounts: every account live, queues bound to an account (design doc first: `docs/phase-2a-accounts.md`)
+## Phase 2a — Accounts: every account live, queues bound to an account (`docs/phase-2a-accounts.md`) — implemented 2026-11-14
 
 Why (user, 2026-11-14 ride): two radios on one Yandex account converge — the account's history steers both. Separate
 tastes need separate accounts, so a queue must play, refill and report under its own account.
 
 Model and UX (agreed in discussion 2026-11-14):
-- [ ] **No global account switch.** All signed-in accounts are live at once (search, browse); the active queue *is*
+- [x] **No global account switch.** All signed-in accounts are live at once (search, browse); the active queue *is*
       the current account — Home (D49), Library, Search, likes follow it.
-- [ ] **Every queue is bound to an account at creation** (normal and radio): its Yandex tracks stream under that
+- [x] **Every queue is bound to an account at creation** (normal and radio): its Yandex tracks stream under that
       account; likes and (once fixed) feedback/plays go to it; a radio's recommendations come from it.
       WAVE stays one per account (no choice). Default = the active queue's account (first start: the first account).
-- [ ] **Choose the account** in "New queue" and in "Start radio" → "New radio"; re-seeding a radio keeps its
+- [x] **Choose the account** in "New queue" and in "Start radio" → "New radio"; re-seeding a radio keeps its
       account. **The binding is permanent** — no "change account" anywhere (D61).
-- [ ] **Queues of every signed-in account always shown**, each with an account marker (initial / avatar); no filter
+- [x] **Queues of every signed-in account always shown**, each with an account marker (initial / avatar); no filter
       control. Car / Android Auto the same.
-- [ ] **One account → no extra controls** anywhere (no selector, no marker).
-- [ ] Revise D22 (queues stay visible to all; each has an owner account) and D7 history note in `kb/decisions.md`.
+- [x] **One account → no extra controls** anywhere (no selector, no marker).
+- [x] Revise D22 (queues stay visible to all; each has an owner account) and D7 history note in `kb/decisions.md`.
 
 Technical (from the 2026-11-14 code check):
-- [ ] Per-request account instead of the global token swapped on switch: the Yandex client resolves the token by
+- [x] Per-request account instead of the global token swapped on switch: the Yandex client resolves the token by
       the queue's / caller's account (streaming, likes, rotor, search) — `ProviderAccount` and per-provider clients
       from Phase 3 (C5, C6) introduced here for Yandex, so Phase 3 builds on them.
-- [ ] Key accounts by Yandex uid, not the folder name (`UserAccount.kt:27-30`: login → display name → uid; can
+- [x] Key accounts by Yandex uid, not the folder name (`UserAccount.kt:27-30`: login → display name → uid; can
       collide, and changes when a provisional `temp_` account gets its details). Migrate `owner` / `account` columns.
-- [ ] `queues.account` for every queue (today only WAVE), migration: existing queues → the current default account.
-- [ ] Sign-out (D62): the account's queues (its WAVE queue too) are kept but hidden — a collapsed "Signed-out
+- [x] `queues.account` for every queue (today only WAVE), migration: existing queues → the current default account.
+- [x] Sign-out (D62): the account's queues (its WAVE queue too) are kept but hidden — a collapsed "Signed-out
       accounts · N queues" row at the bottom of the phone switcher (Delete only), absent in the car / Android Auto;
       signing back in to the same uid restores them. Its cached lists and unshared downloads are removed. History
       stays app-wide (D46), with a nullable account column.
-- [ ] Startup account picker and the account switcher of upstream retire (Settings keeps add / remove / default).
+- [x] Startup account picker and the account switcher of upstream retire (Settings keeps add / remove / default).
 
 Later (multi-source queues, with Phase 3+): a queue holds entries from several accounts/providers; the selector
 becomes multi-select, the marker shows "mixed".
+
+- [x] Step 1 — canvas boards approved and committed (`9c3289a`, 2026-11-14)
+- [x] Step 2 done — files: new `domain/account/ProviderAccount.kt`, `data/account/AccountContext.kt`,
+      `data/network/YandexClients.kt`, test `data/network/YandexClientsTest.kt` (5), fake
+      `test/.../fakes/FixedYandexClients.kt`; changed `domain/repository/AuthRepository.kt` (`token(account)`),
+      `data/network/AuthInterceptor.kt` (token supplier), `di/NetworkModule.kt` (single Retrofit/API bindings →
+      `YandexClients`), `data/account/AccountSessionManager.kt` (also evicts per-account caches),
+      `data/repository/{Library,Search,Catalog,UserPlaylists}Repository.kt`, `data/network/TrackPreloadManager.kt`,
+      `data/player/{PlaybackController,WaveQueue}.kt`, `data/queue/RotorStationSource.kt`, tests `PlaybackControllerTest`,
+      `SoundModeTest`, `PlaylistOpeningTest`, `RotorStationSourceTest` — 479 tests green, no goldens changed (2026-11-14)
+- [x] Step 3 done — accounts keyed by `yandex:<uid>` (D59), Room v5, `AccountKeyMigration` (2026-11-14). Files: new
+      `data/account/AccountKeyMigration.kt`, `data/cache/CacheKeyMigration.kt`, `schemas/…/5.json`, test
+      `data/account/AccountKeyMigrationTest.kt`; changed `domain/model/UserAccount.kt` (`folderName` → `legacyFolderName`),
+      `data/cache/{CacheDatabase,PlaylistCacheManager}.kt`, `data/queue/{QueueDao,QueueEntities,LegacySessionImport}.kt`,
+      `data/history/{HistoryDao,HistoryEntities}.kt`, `data/repository/{LibraryRepository,UserPlaylistsRepository,
+      SearchHistoryRepository}.kt`, `data/account/AccountSessionManager.kt`, `data/player/PlaybackController.kt`,
+      `di/ResolverModule.kt`; tests `CacheDatabaseMigrationTest`, `LayoutSafetyTest`, `PlaylistOpeningTest`,
+      `fakes/FakeAuthRepository`; androidTest `PlaylistEditingInstrumentedTest`
+- [x] Step 4 done — per-account state (2026-11-14): likes and playlists held per account (a switch only shows the
+      other account's; no reset, no cache eviction), every like / sync / playlist edit made with its account's API;
+      stream links resolved and cached per account (`TrackUrlResolver` calls take `account`, `null` = context; the
+      download-info XML through the account's own HTTP client); the controller names `playbackAccount` (still the
+      active account — step 5 makes it the queue's). `AccountContext` unchanged (= active account). Files: new
+      test `data/repository/PerAccountLibraryTest.kt`, androidTest `OneApiClients.kt`; changed
+      `data/network/{TrackUrlResolver,TrackPreloadManager,YandexClients}.kt`, `data/repository/{LibraryRepository,
+      UserPlaylistsRepository}.kt`, `data/account/AccountSessionManager.kt`, `data/player/PlaybackController.kt`,
+      `config/detekt-baseline.xml` (renamed signatures); tests `PlaybackControllerTest`, `SoundModeTest`,
+      `LayoutSafetyTest`, `fakes/{FakeTrackUrlResolver,FixedYandexClients}`; androidTest
+      `PlayerEngineInstrumentedTest`, `PlaylistEditingInstrumentedTest`
+- [x] Step 5 done — queue binding (2026-11-14): `AccountContext` = the active queue's account while it is signed
+      in (else the active account); the active account follows the active queue (`PlaybackController.
+      followQueueAccount`: wave state reloaded, `accountEntered` → the session loads that account's lists; playback
+      untouched); new queues / radios / the auto-made main and offline-mix queues bound to the context account,
+      a re-seed and a copy keep theirs; a radio's source asks with its queue's account; downloads fetched through
+      the account's client; "Switch account" = `enterAccount` (its My Wave queue becomes active); sign-in →
+      `ensureWaveQueue` (D63) and, for a fresh sign-in or no queue at all, `enterAccount`; `refreshAccountStatus`
+      asks with the account being signed in. `resetForAccount` stays for sign-out only (step 7). Files:
+      `data/account/{AccountContext,AccountSessionManager}.kt`, `data/queue/QueueManager.kt`,
+      `data/player/PlaybackController.kt`, `data/network/TrackDownloadManager.kt`,
+      `data/download/LikedTracksDownloadWorker.kt`; tests `PlaybackControllerTest` (+5), `QueueManagerTest` (+1),
+      `fakes/FakeAuthRepository.kt`
+- [x] Step 6 done — UI (2026-11-14), per the approved boards: account markers / section headers / chips
+      (`presentation/account/AccountMarks.kt`, colour per account key); switcher grouped (header per account, its
+      My Wave first, no row markers) or flat (marker per row) by "Группировать" / "Group" (Settings → Accounts, only
+      with >1 account, default on, `SettingsRepository.groupQueuesByAccount`); the removed accounts' queues collapse
+      into "Удалённые аккаунты · N" at the bottom of the phone switcher (dimmed, tap → Delete-only menu; never in the
+      car / pickers); account chips in "New queue" (also from "Add to queue…") and the radio picker's "New radio"
+      (phone + car), default = the active queue's account; car pill marker; player queue header marker; Home "as
+      <name>" caption; History chips with markers; Android Auto "Queues": a sub-folder per account when grouped,
+      the account name in the subtitle when flat, removed accounts' queues never; account dialog without switching
+      (each account removable, "log out of this account" only with one) and the startup picker removed. 519 unit
+      tests; 13 new goldens `accounts_*`; `dialog_accounts` re-recorded (two-account dialog lost its switch). Files:
+      `AccountMarks.kt` (new), `AccountManagementDialog.kt`, `AccountViewModel.kt`, `StartupAccountPickerDialog.kt`
+      (deleted), `QueueSwitcherViewModel.kt`, `QueueSwitcherSheet.kt`, `QueueSwitcherHost.kt`, `QueueDialogs.kt`,
+      `CarScreen.kt`, `MediaLibraryTree.kt`, `PlaybackController.kt` (account params on create / startRadio),
+      `MainViewModel.kt`, `MainTabs.kt`, `MainScreen.kt`, `MainDialogs.kt`, `HomeScreen.kt`, `FullScreenPlayer.kt`,
+      `PlayerQueueSheet.kt`, `HistoryViewModel.kt`, `HistoryScreen.kt`, `HiFiControls.kt` (filter pill `leading`),
+      `SettingsRepository(Impl).kt`, `SettingsModel.kt`, `SettingsSheet.kt`, `SettingsViewModel.kt`, both
+      `strings.xml` (startup-picker strings dropped); tests `AccountTagsTest` (new), `PlaybackControllerTest` (+2),
+      `QueueScreenshotsTest`, `HistoryScreenshotsTest`, `ScreenshotTest`, `LayoutSafetyTest`, `FakeSettingsRepository`,
+      `UserPlaylistsInstrumentedTest`; goldens `accounts_*.png`, `dialog_accounts.png`
+- [x] Step 7 done — sign-out (2026-11-14, D62): `AccountSessionManager.signOut` (logout current / all / remove)
+      keeps the accounts' queues incl. My Wave, drops their cached lists (own rows only — the shared ones hold the
+      hidden queues' track details), network clients + cache dirs (`YandexClients.forget`) and the downloads no
+      staying account likes (`SignOutPlan`); `PlaybackController.leaveAccount` replaces `resetForAccount`: stops and
+      moves to the default (else most recent) account's first queue, My Wave first, or to none (`QueueManager.leave`);
+      a re-sign-in (same uid) restores the queues with positions, no new My Wave. Removed accounts' names kept in a
+      plain prefs file (`RemovedAccounts`, via `AuthRepository.removedAccountNames`) for the dimmed marker; a tap on a
+      removed queue opens it (`RemovedQueueSheet`, canvas `ac-removed-open`), a hold opens the Delete-only menu (now
+      with marker and name). Android Auto filter as `carQueues`. 529 unit tests; new golden `accounts_removed_open`,
+      re-recorded step-6 goldens `accounts_menu_removed`, `accounts_switcher_removed` — files:
+      `data/account/{AccountSessionManager,RemovedAccounts,SignOutPlan}.kt`, `data/network/YandexClients.kt`,
+      `data/player/{PlaybackController,MediaLibraryTree}.kt`, `data/queue/QueueManager.kt`,
+      `data/repository/AuthRepositoryImpl.kt`, `domain/repository/AuthRepository.kt`,
+      `presentation/account/AccountMarks.kt`, `presentation/queues/{QueueSwitcherViewModel,QueueSwitcherSheet,
+      QueueSwitcherHost,QueueDialogs}.kt`, `res/values{,-ru}/strings.xml`; tests `PlaybackControllerTest`,
+      `QueueScreenshotsTest`, new `data/account/SignOutPlanTest`, `data/player/CarQueuesTest`; screenshots
+      `accounts_removed_open`, `accounts_menu_removed`, `accounts_switcher_removed`
+- [x] Step 8 done — on start, a restored queue of a no-longer-signed-in account gives way (`PlaybackController.leaveStrandedQueue`, same fallback as sign-out; 1 controller test); docs: `kb/decisions.md` (D22′, D56–D64; D22 marked revised), `docs/phase-2a-accounts.md` (implemented, "As built"), `docs/multi-source-player.md` (Phase 2a implemented; Phase 3 note), `kb/architecture/{as-is-data,as-is-playback}.md` (2026-11-14)
 
 ## Car skip stutter and announcements (branch `fix/car-skip-and-focus`, 2026-11-14)
 

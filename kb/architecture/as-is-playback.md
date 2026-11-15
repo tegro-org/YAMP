@@ -1,4 +1,4 @@
-# As-is: playback subsystem (upstream `fac6af7`) — and the Phase 1 / Phase 2 state
+# As-is: playback subsystem (upstream `fac6af7`) — and the Phase 1 / Phase 2 / Phase 2a state
 
 **Phase 1 (2026-11-12) changed the queue side; the engine side below still holds.** Current structure:
 
@@ -24,6 +24,16 @@ gets no requests and keeps its tracks, cursor and position. Trim: `QueueManager.
 with Keep off drops entries more than `RADIO_BEHIND = 3` behind the cursor (`QueuePolicy.radioTrim`) in the same
 mutation — so Keep off trims at the next refill, not when switched. "Start radio" = `PlaybackController.startRadio`
 → `QueueManager.startRadio(New | Replace)`; the UI picks wave vs radio in `MainViewModel.waveOrRadio` (D54).
+
+
+**Phase 2a (2026-11-14, `docs/phase-2a-accounts.md`) — queues bound to accounts.** Every queue carries its account
+(`queues.account` = `yandex:<uid>` for every kind, Room v5; permanent, D61). `AccountContext` = the active queue's
+account while it is signed in (else the active account); `followQueueAccount` makes the active account follow the
+active queue (lists and wave state reload; playback untouched). Stream links, likes, radio refills and downloads go
+through that account's client (`YandexClients`, `playbackAccount`). Each account's My Wave queue exists from sign-in
+(`ensureWaveQueue`, D63). Sign-out = `leaveAccount`: the account's queues stay hidden (D62), an active one hands over
+to the fallback account's first queue (`SignOutPlan.fallback`, My Wave first); the same fallback runs on start when the
+restored queue's account is gone (`leaveStrandedQueue`). `resetForAccount` is gone.
 
 Tests: `PlaybackControllerTest` (14, fake engine + resolver), `QueueManagerTest` (10, fake store), `RoomQueueStoreTest`,
 `CacheDatabaseMigrationTest`, `LegacySessionImportTest`, `QueuePolicyTest`. Device cases: `scripts/device-check.sh`.

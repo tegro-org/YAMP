@@ -167,7 +167,8 @@ Implemented 2026-11-13; design and as-built notes in [phase-2-radio.md](phase-2-
 
 ### Phase 2a — Accounts: every account live, queues bound to an account
 
-Planned 2026-11-14 (plan in `tasks/todo.md`; design doc `docs/phase-2a-accounts.md` before code). Why: two radios
+Implemented 2026-11-14; design and as-built notes in [phase-2a-accounts.md](phase-2a-accounts.md), decisions D22′,
+D56–D64. Why: two radios
 on one Yandex account converge — the account's listening history steers both; separate tastes need separate
 accounts, so a queue must play, refill and report under its own account.
 
@@ -204,6 +205,8 @@ accounts, so a queue must play, refill and report under its own account.
 - **Accounts** become `ProviderAccount(provider, accountId, displayName, serverUrl?)` (C5); secrets stay in
   the Keystore store. **Networking** per provider: own OkHttp client and own auth interceptor from a shared
   base — no interceptor adds credentials for a host it does not own (C6).
+  *Since Phase 2a, Yandex already has both:* `ProviderAccount` / `AccountId` (`yandex:<uid>`) and one client per
+  account (`YandexClients`, own token and HTTP cache) — Phase 3 generalises them to the other providers.
 - **Errors:** provider calls return `Outcome<T>` with a small `ProviderError`; exceptions don't cross the
   provider boundary; user-facing text comes from resources (ARCHITECTURE section D, rules D1–D2).
 - **Several providers at once** (C7, D19): Home, Library, Search and car home are composed from the sections

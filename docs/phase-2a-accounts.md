@@ -1,6 +1,6 @@
 # Phase 2a — Accounts: every account live, queues bound to an account
 
-Status: **design, awaiting approval** (branch `feature/phase-2a-accounts`). Part of
+Status: **implemented** 2026-11-14 (branch `feature/phase-2a-accounts`; design approved `3865077`, canvas `9c3289a`; see "As built" at the end). Part of
 [multi-source-player.md](multi-source-player.md) (Phase 2a); brings the account half of Phase 3 (C5
 `ProviderAccount`, C6 per-provider clients) forward for Yandex. Decisions `Dn` are in `kb/decisions.md`; the new ones
 below are proposals until approved. Code paths are relative to `android/app/src/main/java/org/tegro/yamp/`; line
@@ -64,7 +64,7 @@ is the context the rest of the app follows.
   The car queue pill shows the marker next to the queue name. **Signed-out accounts' queues are not shown in the car
   or in Android Auto at all** — the collapsed group exists only in the phone switcher.
 
-## Decisions (proposed; recorded in `kb/decisions.md` on approval)
+## Decisions (recorded in `kb/decisions.md`)
 
 | # | Decision | Why |
 |---|---|---|
@@ -308,3 +308,59 @@ Each step keeps `testDebugUnitTest verifyRoborazziDebug lintDebug` + detekt gree
 - (b) Sign-out of an account with queues — **kept, hidden in a collapsed group, restored on re-sign-in** (D62); its
   My Wave queue kept hidden too.
 - (c) Play reporting — **not in 2a**; with the feedback-400 fix.
+
+## As built (2026-11-14)
+
+Deviations from the design above, by step; everything else is as written.
+
+- **Step 2 — per-account clients.** `ProviderAccount` / `AccountId` (`"yandex:<uid>"`), `YandexClients` (one
+  Retrofit/OkHttp client per account, own token and own HTTP cache), `AccountContext`. The per-account caches live in
+  `http_cache_accounts/<id>`, not inside `http_cache`: emptying the shared cache deletes its whole folder. The shared
+  `http_cache` stays — streams used it until step 4. The auth store's `accounts`/`defaultAccount` came with step 4.
+- **Step 3 — uid keys, Room v5.** `folderName` became `legacyFolderName`, read only by `AccountKeyMigration` (one
+  run, gated in `PlaylistCacheManager` before the cache is first read): cache rows, queues and search history are
+  re-keyed; colliding folder names go to the default account, orphan folders are deleted, unbound queues go to the
+  default account, every account with a real uid gets its My Wave (D63). An orphan My Wave queue is deleted unless it
+  is the playing queue (then rebound to the default account). A `temp_`/`me` account that learns its uid takes its
+  rows, queues and history along (`adoptRealUid`). Search-history re-keying has no test.
+- **Step 4 — per-account state.** Likes and playlists are held per account: entering another account shows its
+  data, nothing is reset or evicted. Stream links are resolved and cached per account; the player names the account
+  for every stream call (`playbackAccount`). Four existing detekt baseline entries moved with their new signatures.
+- **Step 5 — queue binding.** `AccountContext` = the active queue's account while it is signed in, else the active
+  account. The active account follows the active queue (`followQueueAccount`); an `accountEntered` event loads the
+  account's lists; playback is not touched. New queues, radios, the main queue and the offline-mix queue are bound to
+  the context account; a re-seeded radio and a duplicated queue keep theirs. A radio's source and the downloads go
+  through the queue's account client. `PlayerRepositoryImpl` resolves through the context account (= the playing
+  queue's) rather than naming the queue. Upstream's "switch account" now enters that account's My Wave.
+- **Step 6 — UI.** Built from the approved boards; the startup account picker is deleted, the account dialog no
+  longer switches. No reorder control exists in the switcher (Phase 1 has `reorder` in the model only), so
+  within-group reordering is not in the UI yet. `dialog_accounts` golden re-recorded (the two-account dialog lost its
+  switch); all one-account goldens unchanged.
+- **Step 7 — sign-out.** Log out / remove / log out all keep the account's queues and its My Wave; they remove its
+  cached lists, its client and cache folder, and downloads no staying account likes. `PlaybackController.leaveAccount`
+  replaces `resetForAccount`. Removed accounts' names are kept in a small preferences file
+  (`AuthRepository.removedAccountNames`) so their queues show a dimmed marker; the marker colour comes from the key,
+  so it may differ from the signed-in colour. A tap on a removed queue opens it read-only (`RemovedQueueSheet`), a
+  hold opens the Delete-only menu. "Log out all" clears each account's own cache rows instead of the whole cache —
+  shared rows hold the hidden queues' track details. With one account, sign-out no longer deletes its queues: they
+  wait for the same account to sign in again (D62).
+- **Step 8.** A restored active queue of an account that is no longer signed in gives way on start, with the same
+  fallback as a sign-out (`leaveStrandedQueue`). Fixes from the emulator check:
+  - **Stable group order:** the auth store keeps accounts in the order they were added and lists the default account
+    first (`AuthRepositoryImpl.publish`) — never by recency, so groups don't jump on a switch; the switcher, car panel,
+    pickers and Android Auto all read that order. Accounts saved before this keep their stored order.
+  - **Settings → Accounts:** the "Сменить" chip and the "Профиль при запуске" row are gone (the profile card opens the
+    accounts list: add, remove, default star); the default account preference stays (order, sign-out fallback). The
+    sign-out note says the queues are hidden and come back on sign-in, downloads are removed (D62).
+  - **The profile shows the context account** (`AccountContext.user`: the active queue's account), and "Sign out"
+    signs out that account — not the store's last active one, which a sign-in or Unhide can set.
+  - **Dialogs resize above the keyboard** (`AppDialog` sets `SOFT_INPUT_ADJUST_RESIZE`): on the 720 px head unit the
+    "New queue" Create button stays visible while typing.
+  - **Debug "Hide (test sign-out)" / "Unhide"** (debug builds, Settings → Accounts list): the real sign-out with
+    `keepCredentials` — the record and token are stashed in the secure store, downloads stay; Unhide is the re-sign-in
+    path for the same uid.
+
+- **Fix 2026-11-15 (phone test):** a second account signed in got no My Wave queue — the sign-in screen only saves the
+  token and "authorized" was already true, so the status refresh (uid, D63 queue) never ran. The session now watches
+  for a provisional active account (`freshSignIns`, `FreshSignInTest`) and ensures every named account's My Wave queue
+  on start and whenever the account list changes (repairs accounts signed in before the fix).
