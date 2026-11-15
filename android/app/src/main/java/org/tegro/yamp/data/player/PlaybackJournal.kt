@@ -43,7 +43,11 @@ class PlaybackJournal(
         /** The sound card ran out of samples (a click or stutter, not the network); [Event.detail] has the numbers. */
         UNDERRUN,
         /** How long a start took, from the user's skip or the request to the track sounding; [Event.detail]. */
-        TIMING
+        TIMING,
+        /** The audio format of the track that just started sounding (codec, rate, channels, bitrate); [Event.detail]. */
+        FORMAT,
+        /** A player (re)configured its sound-card output (an AudioTrack: encoding, rate, buffer); [Event.detail]. */
+        OUTPUT
     }
 
     data class Event(val atMs: Long, val kind: Kind, val title: String? = null, val detail: String? = null, val valueMs: Long = 0L)

@@ -47,6 +47,11 @@ interface PlayerRepository {
 
     /** The standby holds [trackId] ready to sound at once (a skip to it needs no load). */
     fun isWarm(trackId: String): Boolean
+    /**
+     * A start was asked for, before its stream link is looked up: the journal's TIMING line counts from here,
+     * so the link lookup shows in "→link" instead of hiding in "skip→request". Diagnostics only.
+     */
+    fun noteStartRequested() {}
     fun prepareNextTrack(trackId: String, url: String, title: String?, artist: String?, coverUrl: String?)
     /** Volume multipliers by track id (1 = unchanged), for normalization; a track not listed plays as is. */
     fun setTrackGains(gains: Map<String, Float>)

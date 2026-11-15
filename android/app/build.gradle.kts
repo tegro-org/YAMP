@@ -64,7 +64,9 @@ val appVersionName = when {
     describeMatch != null && versionDistance == 0 -> versionBase
     else -> "$versionBase-dev.$versionDistance+$gitSha"
 }
-val appVersionCode = gitCount ?: 1
+// Debug builds from scripts/build-apk.sh pass -Pyamp.buildNumber=<N> (a local counter, see the script) so two
+// builds of the same commit never share a versionCode; release builds keep the commit count.
+val appVersionCode = providers.gradleProperty("yamp.buildNumber").orNull?.toIntOrNull() ?: gitCount ?: 1
 
 android {
     namespace = "org.tegro.yamp"

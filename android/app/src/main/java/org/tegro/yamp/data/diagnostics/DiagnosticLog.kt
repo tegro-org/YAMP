@@ -53,6 +53,14 @@ class DiagnosticLog @Inject constructor(
                 if (!on) writer.execute { dir.deleteRecursively() }
             }
         }
+        // Settings: what is in effect at start, then every change, wherever it was made
+        CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
+            var previous: Map<String, String>? = null
+            settings.allSettings.collect { now ->
+                settingsLines(previous, now).forEach { event("SETTINGS", it) }
+                previous = now
+            }
+        }
     }
 
     /** Appends one line; a no-op while the log is off. */
@@ -132,6 +140,26 @@ class DiagnosticLog @Inject constructor(
 
         private val signedUrlParams = Regex("""(?i)([?&](?:sign|ts|token|uid|__uid|key)=)[^&\s]+""")
         private val encrawKey = Regex("""(#encraw_key=)[0-9a-fA-F]+""")
+
+        /** Settings that change on their own as the app is used, not by the user's choice: kept out of the log. */
+        private val quietSettings = setOf("last_tab", "skipped_update_version")
+
+        /**
+         * SETTINGS lines for a change from [before] to [after]: at the first snapshot ([before] null) one line with
+         * everything stored; later one line per key that changed, "key: old → new" (a removed key → "default").
+         * Pure, unit-tested.
+         */
+        fun settingsLines(before: Map<String, String>?, after: Map<String, String>): List<String> {
+            val shown = after.filterKeys { it !in quietSettings }
+            if (before == null) {
+                return listOf("at start: " + shown.toSortedMap().entries.joinToString(", ") { "${it.key}=${it.value}" })
+            }
+            return (before.keys + after.keys).filter { it !in quietSettings }.sorted().mapNotNull { key ->
+                val old = before[key]
+                val new = after[key]
+                if (old == new) null else "$key: ${old ?: "default"} → ${new ?: "default"}"
+            }
+        }
 
         /** Tokens, signed stream URLs and account ids out; the rest as is. Pure, unit-tested. */
         fun scrub(text: String): String = CrashLog.redact(text)

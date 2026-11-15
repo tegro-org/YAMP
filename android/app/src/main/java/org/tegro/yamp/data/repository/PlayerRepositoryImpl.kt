@@ -462,9 +462,11 @@ class PlayerRepositoryImpl(
         pickAtMs: Long
     ) {
         playJob?.cancel()
-        diagnostics.requested()
+        diagnostics.requested(onlyIfUnset = true)
         playJob = scope.launch {
-            val playUri = resolvePlayUri(trackId, url)
+            // A warm standby already holds this track: its link is in hand, nothing to resolve or fetch
+            val warmUri = standbyPlayer.currentMediaItem?.localConfiguration?.uri?.toString()?.takeIf { isWarm(trackId) }
+            val playUri = warmUri ?: resolvePlayUri(trackId, url)
             if (playUri == null) {
                 Log.w(TAG, "playUri is blank for track $trackId")
                 note(org.tegro.yamp.data.player.PlaybackJournal.Kind.ERROR, title, "no stream URL")
@@ -474,6 +476,8 @@ class PlayerRepositoryImpl(
             startTransition(buildMediaItem(trackId, playUri, title, artist, coverUrl), crossfade, startPositionMs, pickAtMs)
         }
     }
+
+    override fun noteStartRequested() = diagnostics.requested()
 
     override fun isWarm(trackId: String): Boolean = standbyPlayer.let {
         preloadedTrackId == trackId && it.currentMediaItem?.mediaId == trackId && it.playbackState == Player.STATE_READY && it.playerError == null

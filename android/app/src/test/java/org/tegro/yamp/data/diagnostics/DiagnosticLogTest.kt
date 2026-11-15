@@ -22,4 +22,18 @@ class DiagnosticLogTest {
     fun plainLinesPassUnchanged() {
         assertEquals("PAUSE: audio focus lost «Echoes»", DiagnosticLog.scrub("PAUSE: audio focus lost «Echoes»"))
     }
+
+    @Test
+    fun settingsAreLoggedOnceAtStartThenOnlyWhatChanged() {
+        val start = mapOf("compatible_sound" to "false", "crossfade_seconds" to "3", "last_tab" to "home")
+        assertEquals(listOf("at start: compatible_sound=false, crossfade_seconds=3"), DiagnosticLog.settingsLines(null, start))
+
+        val changed = start + ("compatible_sound" to "true") + ("last_tab" to "library") + ("keep_both_players_running" to "true")
+        assertEquals(
+            listOf("compatible_sound: false → true", "keep_both_players_running: default → true"),
+            DiagnosticLog.settingsLines(start, changed)
+        )
+        assertEquals(emptyList<String>(), DiagnosticLog.settingsLines(changed, changed))
+        assertEquals(listOf("crossfade_seconds: 3 → default"), DiagnosticLog.settingsLines(start, start - "crossfade_seconds"))
+    }
 }

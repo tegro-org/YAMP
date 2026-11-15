@@ -6,6 +6,12 @@ import org.tegro.yamp.domain.model.AnimationMode
 import kotlinx.coroutines.flow.Flow
 
 interface SettingsRepository {
+    /**
+     * Every stored setting as text (key → value), re-emitted on each change; the diagnostic log diffs it into
+     * SETTINGS lines, so a change made anywhere is recorded in one place. Empty where nothing is stored.
+     */
+    val allSettings: Flow<Map<String, String>> get() = kotlinx.coroutines.flow.emptyFlow()
+
     val isDarkTheme: Flow<Boolean>
     val autoDownloadLikedTracks: Flow<Boolean>
     /** Crossfade between tracks in seconds; 0 turns it off. */

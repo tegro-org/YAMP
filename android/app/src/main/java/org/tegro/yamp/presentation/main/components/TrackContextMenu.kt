@@ -99,8 +99,10 @@ fun TrackContextMenu(
     onOpenArtist: (() -> Unit)? = null,
     onOpenAlbum: (() -> Unit)? = null,
     onTrackWave: (() -> Unit)? = null,
-    /** D54: on My Wave the row is "wave by track", on any other queue "Start radio". */
+    /** D54′ (D65): "wave by track" shows only on My Wave; "Start radio" ([onStartRadio]) shows on every queue. */
     waveActive: Boolean = true,
+    /** Opens the radio picker for this track (new radio or re-seed, with the account selector). */
+    onStartRadio: (() -> Unit)? = null,
     onAddToEnd: () -> Unit = {},
     onAddToQueue: () -> Unit = {}
 ) {
@@ -191,7 +193,10 @@ fun TrackContextMenu(
                     }
                 }
             } else {
-                if (onTrackWave != null && !track.isRadio) {
+                // On My Wave: "wave by track" stays inside My Wave; on any other queue the radio row below covers it.
+                // Without a radio picker (no switcher host) the old single row stays: wave by track or start radio.
+                val topWaveRow = waveActive || onStartRadio == null
+                if (onTrackWave != null && !track.isRadio && topWaveRow) {
                     ContextMenuItem(
                         if (waveActive) Icons.Rounded.Waves else Icons.Rounded.Sensors,
                         stringResource(if (waveActive) R.string.wave_by_track else R.string.radio_start)
@@ -212,6 +217,12 @@ fun TrackContextMenu(
                     ContextMenuItem(Icons.Rounded.Layers, stringResource(R.string.track_menu_add_to_queue)) {
                         onAddToQueue()
                         onDismiss()
+                    }
+                    if (onStartRadio != null) {
+                        ContextMenuItem(Icons.Rounded.Sensors, stringResource(R.string.radio_start)) {
+                            onStartRadio()
+                            onDismiss()
+                        }
                     }
                 }
                 ContextMenuItem(Icons.AutoMirrored.Filled.PlaylistAdd, stringResource(R.string.track_context_menu_dobavit_v_pleylist)) {

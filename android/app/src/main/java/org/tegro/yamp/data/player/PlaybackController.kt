@@ -1484,6 +1484,7 @@ class PlaybackController @Inject constructor(
 
     private fun resolveAndPlay(track: TrackDetailsDto, crossfade: Boolean, startPositionMs: Long, pickAt: Long = 0L) {
         currentPlayJob?.cancel()
+        playerRepository.noteStartRequested()
         val trackId = track.idString
         val title = track.title
         val artist = track.artists.firstOrNull()?.name
@@ -1527,6 +1528,17 @@ class PlaybackController @Inject constructor(
         val fastUrl = preloadManager.getResolvedUrl(trackId, account)
         if (fastUrl != null) {
             playStreamOrEqualCopy(track, fastUrl, crossfade, startPositionMs, pickAt)
+            return
+        }
+
+        // The engine's standby already holds this track (the link cache may have dropped it since): no link to
+        // fetch, it starts at once — a skip already faded the old track out for it (2026-11-15: "skip→request
+        // 1257 ms" was this fetch, heard as silence)
+        if (playerRepository.isWarm(trackId)) {
+            publishQuality(trackId)
+            streamingTrackId = trackId
+            playingCopyId = null
+            playerRepository.playTrack(trackId, "", title, artist, coverUrl, crossfade, startPositionMs, pickAt)
             return
         }
 

@@ -22,6 +22,10 @@ class SettingsRepositoryImpl @Inject constructor(
     private val context: Context
 ) : SettingsRepository {
 
+    override val allSettings: Flow<Map<String, String>> = context.dataStore.data.map { prefs ->
+        prefs.asMap().entries.associate { (key, value) -> key.name to value.toString() }
+    }
+
     private val DARK_THEME_KEY = booleanPreferencesKey("dark_theme")
     private val AUTO_DOWNLOAD_KEY = booleanPreferencesKey("auto_download_liked")
     private val ROAD_RESERVE_MB_KEY = androidx.datastore.preferences.core.intPreferencesKey("road_reserve_mb")

@@ -111,6 +111,8 @@ internal fun eventText(e: PlaybackJournal.Event): String {
         PlaybackJournal.Kind.PAUSE -> "PAUSE: ${detail.orEmpty()}"
         PlaybackJournal.Kind.UNDERRUN -> "underrun: ${detail.orEmpty()}"
         PlaybackJournal.Kind.TIMING -> "timing: ${detail.orEmpty()}"
+        PlaybackJournal.Kind.FORMAT -> "format: ${detail.orEmpty()}"
+        PlaybackJournal.Kind.OUTPUT -> "output: ${detail.orEmpty()}"
     }
     return listOfNotNull(body, title).joinToString(" ")
 }

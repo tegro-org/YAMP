@@ -316,6 +316,32 @@ class Screenshots112Test {
         snapScreen("v112_track_menu_wave")
     }
 
+    /** D65: on My Wave the menu has both "wave by track" (top) and "Start radio" (next to "Add to queue"). */
+    @Test
+    fun trackMenuWithStartRadioOnMyWave() {
+        show {
+            TrackContextMenu(
+                track = tracks[0], inPlaylist = null, playlists = playlists, isLiked = false,
+                startWithPlaylists = false, onDismiss = {}, onPlayNext = {}, onToggleLike = {}, onAddTo = {},
+                onCreatePlaylist = {}, onRemoveFromPlaylist = {}, onTrackWave = {}, waveActive = true, onStartRadio = {}
+            )
+        }
+        snapScreen("track_menu_start_radio_wave")
+    }
+
+    /** D65: on any other queue only the "Start radio" row next to "Add to queue" (no top row). */
+    @Test
+    fun trackMenuWithStartRadioOnAnotherQueue() {
+        show {
+            TrackContextMenu(
+                track = tracks[0], inPlaylist = null, playlists = playlists, isLiked = false,
+                startWithPlaylists = false, onDismiss = {}, onPlayNext = {}, onToggleLike = {}, onAddTo = {},
+                onCreatePlaylist = {}, onRemoveFromPlaylist = {}, onTrackWave = {}, waveActive = false, onStartRadio = {}
+            )
+        }
+        snapScreen("track_menu_start_radio_queue")
+    }
+
     @Test
     @Config(qualifiers = SMALL_PHONE)
     fun snackbarWithUndo() {

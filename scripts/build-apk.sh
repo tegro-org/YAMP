@@ -49,7 +49,22 @@ if [ "$RUN_TESTS" -eq 1 ]; then
 fi
 
 echo "==> Building $VARIANT APK"
-$GRADLE "assemble$Cap" --console=plain -q
+# Build number: every debug build gets a fresh versionCode from a local counter (dist/.build-number, git-ignored
+# with dist/), one above max(last counter, commit count), passed as -Pyamp.buildNumber. Two debug builds of the
+# same commit never share a number, so the journal's "(N, debug)" and the APK name tell them apart. A release APK
+# can't install over a debug one (different key), so the counter never clashes with release codes, which stay
+# the commit count (D37).
+BUILD_PROP=()
+if [ "$VARIANT" = debug ]; then
+  mkdir -p "$DIST"
+  COUNTER="$DIST/.build-number"
+  LAST=$(cat "$COUNTER" 2>/dev/null || echo 71)   # 71 = the last build shared before the counter existed
+  COMMITS=$(git -C .. rev-list --count HEAD 2>/dev/null || echo 0)
+  NEXT=$(( (LAST > COMMITS ? LAST : COMMITS) + 1 ))
+  echo "$NEXT" > "$COUNTER"
+  BUILD_PROP=(-Pyamp.buildNumber="$NEXT")
+fi
+$GRADLE "assemble$Cap" "${BUILD_PROP[@]}" --console=plain -q
 
 APK=$(ls -t "app/build/outputs/apk/$VARIANT"/*.apk | head -1)
 [ -f "$APK" ] || { echo "no APK found under app/build/outputs/apk/$VARIANT" >&2; exit 1; }

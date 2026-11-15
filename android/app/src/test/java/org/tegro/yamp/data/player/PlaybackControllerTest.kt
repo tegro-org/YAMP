@@ -314,6 +314,24 @@ class PlaybackControllerTest {
     }
 
     @Test
+    fun nextToAWarmTrackStartsAtOnceEvenWhenItsLinkIsNoLongerCached() {
+        // 2026-11-15 head-unit log: "skip→request 1257 ms" after a skip to a warm next track — the old track
+        // faded out at once, then the controller fetched the link again before handing the track to the engine
+        val controller = controller()
+        controller.playing("1", playlist("1", "2", "3"))
+        engine.warm += "2"
+        resolver.pending = CompletableDeferred() // a slow link: never answers in this test
+        resolver.fetched.clear()
+
+        controller.playNext()
+        controller.settle()
+
+        assertEquals("the engine gets the warm track without waiting for a link", listOf("2"), engine.played.map { it.trackId })
+        assertFalse("no link fetch for the warm track", "2" in resolver.fetched)
+        resolver.pending!!.complete(Unit)
+    }
+
+    @Test
     fun nextFadesTheOldTrackOutAndPreviousGoesBackOnlyWithinTheFirstThreeSeconds() {
         val controller = controller()
         controller.playing("1", playlist("1", "2", "3"))
