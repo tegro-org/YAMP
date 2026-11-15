@@ -75,6 +75,13 @@ from the local counter `dist/.build-number` (one above max(last counter, commit 
 `-Pyamp.buildNumber`), so two builds of one commit never share a number in the APK name or the journal's
 `(N, debug)`; release builds keep the commit count (a release can't install over a debug build anyway).
 
+**YAMP Diag** (`android/diag`, `docs/diag-tool.md`): a debug-only on-unit diagnostics collector, never released and
+never built by CI. `settings.gradle.kts` includes `:diag` only with `-Pyamp.diag`, so root tasks (`lintDebug`,
+`testDebugUnitTest`, `assembleRelease`) in CI and the local gates don't see it; detekt scans `app/src` only. Build
+by hand: `scripts/build-diag.sh` → `dist/YAMP-diag-<yyyyMMdd-HHmm>-debug.apk` (own fixed versionCode, no build
+counter). Its tests: `./gradlew -Pyamp.diag :diag:testDebugUnitTest`. Dependency: `dev.mobile:dadb:2.0.0`
+(Apache-2.0; on Maven Central — libadb-android is JitPack-only).
+
 ## Gotchas
 
 - JDK 21 needed (Robolectric SDK 35).
