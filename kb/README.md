@@ -10,6 +10,9 @@ Root index. Keep it a tree: this index → section docs. Add new docs under a se
 - [Design ↔ code deviations](design-deviations.md) — where the app departs from the guide or the canvas, and why.
 - [Head-unit DPI app and queue loss](head-unit-dpi-app.md) — how the per-app DPI tool force-stops apps, what
   that means for persistence and start-up, tests to run. **Read before touching queue persistence.**
+- [Audio players study](players/README.md) — how five Android players (Ultrasonic, Symfonium, Musicolet,
+  YouTube Music, Yandex Music) handle playback, buffering, retries, output and EQ; conclusions for the
+  head unit. **Start with its conclusions doc.**
 
 ## Upstream
 
