@@ -1,0 +1,81 @@
+Global session refs:
+  session   pid count
+        9  3019     1
+       41  6397     1
+       57  6397     1
+       73  6397     1
+       89  6397     1
+      105  6397     1
+      193  4451     3
+      193  7484     2
+         0     no   3019       9 F  0x000 00000001 00000003  44100  3  -inf  -inf     0  00000000   1772       0 f         0        0 F1DCE000 00000000
+  1 Effect Chains
+    3 effects for session 193
+	In buffer    Out buffer                 Active tracks:
+	0xf59f4000   0xf59f9000 -> 0xf1dc7000   0
+	Effect ID 699:
+		Session Status State Engine:
+		00193   000    003   0xf2e1a770
+		Descriptor:
+		- UUID: 1d0a1a53-7d5d-48f2-8e71-27fbd10d842c
+		- TYPE: e46b26a0-dddd-11db-8afd-0002a5d5c51b
+		- apiVersion: F220DC88
+		- flags: 00400008 (conn. mode: insert, insert pref: first, volume mgmt: none, input mode: not set, output mode: not set, offloadable)
+		- name: Visualizer
+		- implementor: The Android Open Source Project
+		- data: int16
+		- Input configuration:
+			Buffer     Frames  Smp rate Channels Format
+			0xf59f4000 00960   48000    00000003      1 (AUDIO_FORMAT_PCM_16_BIT)
+		- Output configuration:
+			Buffer     Frames  Smp rate Channels Format
+			0xf59f4000 00960   48000    00000003      1 (AUDIO_FORMAT_PCM_16_BIT)
+		- HAL buffers:
+			In(0xf59f4000) InConversion(0xf59f2000) Out(0xf59f4000) OutConversion(0xf5954000)
+		1 Clients:
+			  Pid Priority Ctrl Locked client server
+			 4451        0  yes    yes      0      0
+	Effect ID 707:
+		Session Status State Engine:
+		00193   000    003   0xf2205b10
+		Descriptor:
+		- UUID: e0e6539b-1781-7261-676f-6d7573696340
+		- TYPE: 7261676f-6d75-7369-6364-28e2fd3ac39e
+		- apiVersion: F2E8E5C8
+		- flags: 00000050 (conn. mode: insert, insert pref: last, volume mgmt: implements control, input mode: not set, output mode: not set)
+		- name: Dynamics Processing
+		- implementor: The Android Open Source Project
+		- data: float
+		- Input configuration:
+			Buffer     Frames  Smp rate Channels Format
+			0xf59f4000 00960   48000    00000003      5 (AUDIO_FORMAT_PCM_FLOAT)
+		- Output configuration:
+			Buffer     Frames  Smp rate Channels Format
+			0xf59f4000 00960   48000    00000003      5 (AUDIO_FORMAT_PCM_FLOAT)
+		- HAL buffers:
+			In(0xf59f4000) InConversion(nullptr) Out(0xf59f4000) OutConversion(nullptr)
+		1 Clients:
+			  Pid Priority Ctrl Locked client server
+			 4451     1337  yes    yes      0      0
+	Effect ID 683:
+		Session Status State Engine:
+		00193   000    000   0xf2205990
+		Descriptor:
+		- UUID: 119341a0-8469-11df-81f9-0002a5d5c51b
+		- TYPE: 09e8ede0-ddde-11db-b4f6-0002a5d5c51b
+		- apiVersion: F3AAD501
+		- flags: 00000050 (conn. mode: insert, insert pref: last, volume mgmt: implements control, input mode: not set, output mode: not set)
+		- name: Volume
+		- implementor: NXP Software Ltd.
+		- data: float
+		- Input configuration:
+			Buffer     Frames  Smp rate Channels Format
+			0xf59f4000 00960   48000    00000003      5 (AUDIO_FORMAT_PCM_FLOAT)
+		- Output configuration:
+			Buffer     Frames  Smp rate Channels Format
+			0xf59f9000 00960   48000    00000003      5 (AUDIO_FORMAT_PCM_FLOAT)
+		- HAL buffers:
+			In(0xf59f4000) InConversion(nullptr) Out(0xf59f9000 -> 0xf1dc7000) OutConversion(nullptr)
+		1 Clients:
+			  Pid Priority Ctrl Locked client server
+			 4451     1337  yes    yes      0      0

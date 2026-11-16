@@ -54,6 +54,7 @@ class AdbSession(private val filesDir: File) {
         val connection = dadb ?: error("not connected")
         val stream = connection.open("shell:${item.command}; echo $EXIT_MARKER\$?")
         val timer = watchdog.schedule({ runCatching { stream.close() } }, item.timeoutMs, TimeUnit.MILLISECONDS)
+        if (item.keepNewest) return runTail(item, stream, timer)
         val out = ByteArrayOutputStream()
         var truncated = false
         try {
@@ -71,6 +72,20 @@ class AdbSession(private val filesDir: File) {
             runCatching { stream.close() }
         }
         return parse(out.toByteArray(), truncated, item.capBytes)
+    }
+
+    /** Reads the whole output line by line and keeps the newest lines within the cap. */
+    private fun runTail(item: DiagItem, stream: dadb.AdbStream, timer: java.util.concurrent.ScheduledFuture<*>): CommandOutput {
+        val tail = LogTail(item.capBytes - TAIL_HEADROOM, item.dropContaining)
+        try {
+            stream.source.inputStream().bufferedReader(Charsets.UTF_8).useLines { lines ->
+                runCatching { lines.forEach(tail::accept) }
+            }
+        } finally {
+            timer.cancel(false)
+            runCatching { stream.close() }
+        }
+        return parse(tail.result().toByteArray(Charsets.UTF_8), cutByStream = false, cap = item.capBytes)
     }
 
     fun close() {
@@ -98,6 +113,7 @@ class AdbSession(private val filesDir: File) {
         private const val AUTH_TIMEOUT_MS = 60_000
         private const val BUFFER = 64 * 1024
         private const val MARKER_SLACK = 64
+        private const val TAIL_HEADROOM = 4096
         const val EXIT_MARKER = "___DIAG_EXIT___:"
 
         /** Splits the trailing exit-code marker off the output and applies the cap. */

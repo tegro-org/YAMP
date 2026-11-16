@@ -14,7 +14,10 @@ class DiagCommandsTest {
         assertEquals(
             listOf(
                 "audio_flinger.txt", "audio.txt", "media_session.txt", "getprop.txt", "logcat.txt",
-                "yamp_package.txt", "yamp/yamp.log", "yamp/yamp.1.log", "yamp/crashes.txt",
+                "yamp_package.txt", "yamp_pid.txt", "processes.txt",
+                "dropbox/data_app_anr.txt", "dropbox/data_app_crash.txt", "dropbox/data_app_native_crash.txt",
+                "dropbox/SYSTEM_TOMBSTONE.txt", "dropbox/system_app_anr.txt",
+                "yamp/yamp.log", "yamp/yamp.1.log", "yamp/crashes.txt",
             ),
             DiagCommands.items(now).map { it.file },
         )
@@ -41,6 +44,14 @@ class DiagCommandsTest {
     fun logcatCoversTheLastTwoHours() {
         assertEquals("11-15 16:30:00.000", DiagCommands.logcatSince(now))
         assertTrue(DiagCommands.items(now).single { it.file == "logcat.txt" }.command.endsWith("-T '11-15 16:30:00.000'"))
+    }
+
+    @Test
+    fun logcatReadsAllFourBuffersKeepsTheNewestAndDropsTheCarPlaySpam() {
+        val logcat = DiagCommands.items(now).single { it.file == "logcat.txt" }
+        listOf("main", "system", "events", "crash").forEach { assertTrue(it, "-b $it" in logcat.command) }
+        assertTrue(logcat.keepNewest)
+        assertEquals(listOf("CarPlayService not found"), logcat.dropContaining)
     }
 
     @Test

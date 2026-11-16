@@ -54,8 +54,16 @@ class DiagViewModel(app: Application) : AndroidViewModel(app) {
             zip.outputStream().buffered().use { out ->
                 val assembler = ZipAssembler(out)
                 assembler.add("audio_props.txt", audioProps().toByteArray())
-                DiagCommands.items(now).forEach { item -> runItem(assembler, item) }
-                assembler.finish(header(now))
+                val kept = mutableMapOf<String, String>()
+                DiagCommands.items(now).forEach { item ->
+                    runItem(assembler, item)?.let { if (item.file in SUMMARY_INPUTS) kept[item.file] = String(it) }
+                }
+                // Poweramp's DVC (or any effect taking over the volume) on YAMP's session: one line, read first
+                val effects = EffectSummary.line(
+                    kept[DiagCommands.AUDIO_FLINGER_FILE], kept[DiagCommands.PID_FILE], kept[DiagCommands.PROCESSES_FILE]
+                )
+                assembler.add("summary.txt", (effects + "\n").toByteArray())
+                assembler.finish(header(now) + ("effects" to effects))
             }
         }
         prune()
@@ -74,20 +82,29 @@ class DiagViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(zips = zips()) }
     }
 
-    private fun runItem(assembler: ZipAssembler, item: DiagItem) {
+    /** Runs [item] into the zip; its output, or null when it failed. */
+    private fun runItem(assembler: ZipAssembler, item: DiagItem): ByteArray? {
         if (session.connectedPort == null) {
             assembler.fail(item.file, "adb not connected")
-            return
+            return null
         }
-        runCatching { session.run(item) }.fold(
+        return runCatching { session.run(item) }.fold(
             { out ->
                 when {
-                    out.exitCode != null && out.exitCode != 0 ->
+                    out.exitCode != null && out.exitCode != 0 -> {
                         assembler.fail(item.file, "exit ${out.exitCode}: " + String(out.bytes).trim().take(REASON_CHARS))
-                    else -> assembler.add(item.file, out.bytes, out.truncated)
+                        null
+                    }
+                    else -> {
+                        assembler.add(item.file, out.bytes, out.truncated)
+                        out.bytes
+                    }
                 }
             },
-            { e -> assembler.fail(item.file, e.message ?: e.javaClass.simpleName) },
+            { e ->
+                assembler.fail(item.file, e.message ?: e.javaClass.simpleName)
+                null
+            },
         )
     }
 
@@ -137,5 +154,6 @@ class DiagViewModel(app: Application) : AndroidViewModel(app) {
     private companion object {
         const val KEEP_ZIPS = 5
         const val REASON_CHARS = 120
+        val SUMMARY_INPUTS = setOf(DiagCommands.AUDIO_FLINGER_FILE, DiagCommands.PID_FILE, DiagCommands.PROCESSES_FILE)
     }
 }
