@@ -219,6 +219,20 @@ accounts, so a queue must play, refill and report under its own account.
   the DTO, 20 of them in `presentation/`); done screen by screen behind the mappers, with screenshot tests
   kept green. `ArchitectureTest` gets an allow-list of not-yet-migrated files that may only shrink (B4).
 
+### Phase 3b — Next-track buffering and its state
+
+Planned (user, 2026-11-14; plan in `tasks/todo.md`; canvas first). Done together with Phase 3 (stage 1, after the step that moves stream resolution to the controller, D74), then a
+test checkpoint before Phase 4; built on the playback-stability engine ([playback-stability.md](playback-stability.md)). Why: the original app silently disables
+Next when the next track can't load and sometimes stays stuck until it is killed, even after the network is back.
+
+- **Preload early:** the next track is prepared a few seconds after the current one starts (not only 60 s / 15 s
+  before its end).
+- **Next is never disabled:** it shows the next track's state — ready / loading (spinner ring) / failed (greyed);
+  a tap retries at once (load first, then switch, D67).
+- **Self-recovery:** a failed next-track load retries by itself when the link comes back (`LINK NONE → GOOD`).
+- **Buffered part in the progress bar** (like YouTube Music).
+- Phone player, car screen and the car's next-track artwork; Android Auto shows what its template allows.
+
 ### Phase 4 — Jellyfin provider
 
 - **Module `:provider:jellyfin`** (D17) with its own OkHttp client and auth interceptor (C6); the Jellyfin

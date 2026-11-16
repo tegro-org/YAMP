@@ -283,7 +283,7 @@ prompt paused the music (other players keep playing).
 - [ ] Ride with the APK: compare switch 4 on/off; read UNDERRUN / TIMING lines from the log
 - [ ] Later: split `PlayerRepositoryImpl`'s transition logic out of the class (now in the detekt baseline)
 
-## Next-track buffering and its state (planned; canvas first)
+## Phase 3b — Next-track buffering and its state (planned; canvas first; roadmap: `docs/multi-source-player.md`)
 
 User, 2026-11-14 — the original app silently disables Next when the next track can't load, and sometimes stays stuck
 until the app is killed, even after the network is back.

@@ -19,6 +19,11 @@
   unrelated to it. Rule: docs, comments and commit messages describe YAMP only; where something came from
   another project of the user's, don't mention it unless the user asks for the reference.
 
+- **2026-11-16 — Don't place work in the roadmap on my own.** Asked "should the buffering idea go into
+  multi-source-player.md?", I added it as "Phase 2b" before the user had decided where it belongs. Rule: a question
+  about where something goes gets an answer (with the dependencies), not an edit; numbering and order are the
+  user's call.
+
 - **2026-11-15 — Never hand over two builds with the same build number.** Two debug APKs built from uncommitted
   changes on one commit both said "b71", so the user's log couldn't tell which one ran. Rule: every debug build
   gets a new build number (local counter); before uploading, check the number differs from the last shared APK.
