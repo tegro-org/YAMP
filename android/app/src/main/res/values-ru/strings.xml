@@ -55,9 +55,15 @@
     <string name="settings_keep_streams">Не закрывать звуковые потоки</string>
     <string name="settings_keep_streams_hint">Эксперимент для магнитолы, которая ставит музыку на паузу при старте трека: отыгравший плеер ждёт на тишине, не закрывая поток</string>
     <string name="settings_duck_announcements">Не останавливать при подсказках</string>
+    <string name="settings_poweramp_eq">Poweramp Equalizer</string>
+    <string name="settings_poweramp_eq_hint">Для чистого кроссфейда: Known Players → YAMP — «Без DVC» вкл., «Затухание» выкл. Нажмите, чтобы открыть</string>
+    <string name="settings_resume_quiet">Продолжать, если ничего не играет</string>
+    <string name="settings_resume_quiet_hint">Когда другое приложение забирает звук, но ничего не играет (так делает эквалайзер на головном устройстве), музыка продолжится через мгновение. Только если она играла, никогда с паузы</string>
     <string name="settings_duck_announcements_hint">Когда говорит навигатор или радар-детектор, музыка становится тише, а не встаёт на паузу. Телефонный звонок по-прежнему ставит паузу</string>
     <string name="settings_both_players">Оба плеера всегда играют</string>
     <string name="settings_both_players_hint">Эксперимент против заиканий при переключении: свободный плеер играет тишину, звуковые потоки не открываются и не закрываются. Главнее, чем «Не закрывать звуковые потоки»</string>
+    <string name="settings_fixed_output">Фиксированный формат вывода</string>
+    <string name="settings_fixed_output_hint">Плеер сам пересчитывает каждый трек в частоту системного микшера, и формат звукового потока не меняется между треками. Эксперимент против заиканий при смене трека; действует со следующего трека</string>
     <string name="radio_start">Запустить радио</string>
     <string name="radio_picker_title">Запустить радио</string>
     <string name="radio_new">Новое радио</string>

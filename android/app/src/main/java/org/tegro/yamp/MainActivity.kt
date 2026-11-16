@@ -89,6 +89,15 @@ class MainActivity : ComponentActivity() {
             statusBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             navigationBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
         )
+        // Back at the app's root sends the task to the background instead of finishing the activity: the player keeps
+        // its UI state, and a head unit's Back never tears the activity down mid-playback. Registered before
+        // setContent, so every Compose BackHandler (player, sheets, car screen) takes precedence over it.
+        onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                diagnosticLog.event("BACK", "root → background")
+                moveTaskToBack(true)
+            }
+        })
         setContent {
             // Scale the whole UI for screens whose reported density is wrong (dense car head units):
             // the app cannot change the system density, so it overrides its own instead.
@@ -115,7 +124,11 @@ class MainActivity : ComponentActivity() {
                         color = org.tegro.yamp.presentation.hifi.HiFi.Ground
                     ) {
                         // Skip the splash when the app is re-entered with a session already on screen
-                        AppNavigation(skipSplash = savedInstanceState != null, openPlayerSignal = openPlayerSignal)
+                        androidx.compose.runtime.CompositionLocalProvider(
+                            org.tegro.yamp.presentation.car.LocalBackLog provides { where -> diagnosticLog.event("BACK", where) }
+                        ) {
+                            AppNavigation(skipSplash = savedInstanceState != null, openPlayerSignal = openPlayerSignal)
+                        }
                     }
                 }
             }

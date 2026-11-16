@@ -191,8 +191,18 @@ fun CarScreen(
     waveActive: Boolean = true
 ) {
     var tuneOpen by rememberSaveable { mutableStateOf(initialTuneOpen) }
-    androidx.activity.compose.BackHandler(enabled = tuneOpen) { tuneOpen = false }
-    androidx.activity.compose.BackHandler(onBack = onExit)
+    // One handler: the later-registered one always wins, so two handlers made Back leave car mode even with the
+    // tune panel open. System Back = the header arrow: close the panel, else leave car mode.
+    val backLog = LocalBackLog.current
+    androidx.activity.compose.BackHandler {
+        if (tuneOpen) {
+            backLog("car → close tune panel")
+            tuneOpen = false
+        } else {
+            backLog("car → home")
+            onExit()
+        }
+    }
     val view = androidx.compose.ui.platform.LocalView.current
     DisposableEffect(Unit) {
         view.keepScreenOn = true

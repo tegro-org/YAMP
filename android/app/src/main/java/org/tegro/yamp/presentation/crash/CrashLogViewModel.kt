@@ -1,7 +1,7 @@
 package org.tegro.yamp.presentation.crash
 
 import android.content.Context
-import android.content.Intent
+import org.tegro.yamp.data.diagnostics.FileShare
 import androidx.core.content.edit
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -57,17 +57,18 @@ class CrashLogViewModel @Inject constructor(
         viewModelScope.launch { _reports.value = withContext(Dispatchers.IO) { CrashLog.reports(context) } }
     }
 
-    /** The system share sheet with the reports as text: e-mail, a messenger — whatever the user chooses. */
+    /** The system share sheet with the reports as a file (and as text for messengers): whatever the user chooses. */
     fun send() {
         viewModelScope.launch {
             val text = withContext(Dispatchers.IO) { CrashLog.fullText(context) }
             if (text.isBlank()) return@launch
-            val send = Intent(Intent.ACTION_SEND)
-                .setType("text/plain")
-                .putExtra(Intent.EXTRA_SUBJECT, context.getString(R.string.crash_log_subject, BuildConfig.VERSION_NAME))
-                .putExtra(Intent.EXTRA_TEXT, text)
-            context.startActivity(
-                Intent.createChooser(send, context.getString(R.string.crash_log_send)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            val file = withContext(Dispatchers.IO) { FileShare.writeTextFile(context, "yamp-crashes", text) }
+            FileShare.share(
+                context,
+                listOf(FileShare.uriFor(context, file)),
+                subject = context.getString(R.string.crash_log_subject, BuildConfig.VERSION_NAME),
+                text = text,
+                title = context.getString(R.string.crash_log_send),
             )
         }
     }

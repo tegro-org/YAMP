@@ -2,6 +2,7 @@ package org.tegro.yamp.presentation.main
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import org.tegro.yamp.data.diagnostics.FileShare
 import org.tegro.yamp.data.download.DownloadScheduler
 import org.tegro.yamp.data.network.TrackDownloadManager
 import org.tegro.yamp.data.player.PlaybackController
@@ -14,12 +15,14 @@ import org.tegro.yamp.domain.model.StartPage
 import org.tegro.yamp.domain.repository.SettingsRepository
 import org.tegro.yamp.presentation.main.components.SettingsUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 /**
@@ -42,23 +45,24 @@ class SettingsViewModel @Inject constructor(
 ) : ViewModel() {
 
     private data class Sound(
-        val compatible: Boolean, val crossfade: Int, val normalize: Boolean, val separateSessions: Boolean, val startMusic: StartMusic,
+        val compatible: Boolean, val crossfade: Int, val normalize: Boolean, val startMusic: StartMusic,
         val bluetooth: Boolean, val explicit: Boolean, val announce: Boolean = true, val history: Boolean = true, val keepStreams: Boolean = false,
-        val duck: Boolean = true, val bothPlayers: Boolean = false
+        val duck: Boolean = true, val bothPlayers: Boolean = false, val resumeQuiet: Boolean = true, val fixedOutput: Boolean = false
     )
     private data class Look(val startPage: StartPage, val expand: Boolean, val swipe: Boolean, val left: Boolean, val clock: Boolean)
     private data class Scale(val auto: Boolean, val manual: Float, val animations: AnimationMode)
     private data class Library(val reserveMb: Int, val reserveUsed: Long, val autoDownload: Boolean, val cacheBytes: Long, val journal: PlaybackJournal.Snapshot = PlaybackJournal.Snapshot(), val diagnosticLog: Boolean = false, val groupQueues: Boolean = true)
 
     private val sound: Flow<Sound> = combine(
-        combine(soundMode.compatible, settings.crossfadeSeconds, settings.normalizeVolume, settings.separateAudioSessions, settings.keepAudioStreams) { c, f, n, s, k -> Sound(c, f, n, s, StartMusic.OFF, false, false, keepStreams = k) },
+        combine(soundMode.compatible, settings.crossfadeSeconds, settings.normalizeVolume, settings.keepAudioStreams) { c, f, n, k -> Sound(c, f, n, StartMusic.OFF, false, false, keepStreams = k) },
         combine(settings.startMusic, settings.bluetoothAutoplay, settings.skipExplicit, settings.announceEqualizer, settings.listeningHistory) { s, b, e, a, h ->
-            Sound(false, 0, false, false, s, b, e, a, h)
+            Sound(false, 0, false, s, b, e, a, h)
         }
     ) { sound, rest -> sound.copy(startMusic = rest.startMusic, bluetooth = rest.bluetooth, explicit = rest.explicit, announce = rest.announce, history = rest.history) }
-        .combine(combine(settings.duckForAnnouncements, settings.keepBothPlayersRunning, ::Pair)) { sound, (duck, both) ->
-            sound.copy(duck = duck, bothPlayers = both)
+        .combine(combine(settings.duckForAnnouncements, settings.keepBothPlayersRunning, settings.resumeWhenQuiet, ::Triple)) { sound, (duck, both, quiet) ->
+            sound.copy(duck = duck, bothPlayers = both, resumeQuiet = quiet)
         }
+        .combine(settings.fixedOutputFormat) { sound, fixed -> sound.copy(fixedOutput = fixed) }
 
     private val look: Flow<Look> = combine(
         settings.startPage, settings.expandPlayerOnPlay, settings.swipeToCloseMiniPlayer, settings.steeringWheelOnLeft, settings.carClock, ::Look
@@ -80,12 +84,14 @@ class SettingsViewModel @Inject constructor(
             compatibleSound = s.compatible,
             crossfadeSeconds = s.crossfade,
             normalizeVolume = s.normalize,
-            separateAudioSessions = s.separateSessions,
             announceEqualizer = s.announce,
             keepAudioStreams = s.keepStreams,
             duckForAnnouncements = s.duck,
+            resumeWhenQuiet = s.resumeQuiet,
             keepBothPlayersRunning = s.bothPlayers,
+            fixedOutputFormat = s.fixedOutput,
             equalizerAvailable = equalizer.isAvailable(),
+            powerampEqualizer = equalizer.powerampEqualizerInstalled(),
             startMusic = s.startMusic,
             bluetoothAutoplay = s.bluetooth,
             skipExplicit = s.explicit,
@@ -122,13 +128,15 @@ class SettingsViewModel @Inject constructor(
 
     fun setCrossfade(seconds: Int) = save { setCrossfadeSeconds(seconds) }
     fun setNormalizeVolume(enabled: Boolean) = save { setNormalizeVolume(enabled) }
-    fun setSeparateAudioSessions(enabled: Boolean) = save { setSeparateAudioSessions(enabled) }
     fun setAnnounceEqualizer(enabled: Boolean) = save { setAnnounceEqualizer(enabled) }
     fun setKeepAudioStreams(enabled: Boolean) = save { setKeepAudioStreams(enabled) }
     fun setDuckForAnnouncements(enabled: Boolean) = save { setDuckForAnnouncements(enabled) }
+    fun setResumeWhenQuiet(enabled: Boolean) = save { setResumeWhenQuiet(enabled) }
     fun setKeepBothPlayersRunning(enabled: Boolean) = save { setKeepBothPlayersRunning(enabled) }
+    fun setFixedOutputFormat(enabled: Boolean) = save { setFixedOutputFormat(enabled) }
     fun setGroupQueues(enabled: Boolean) = save { setGroupQueuesByAccount(enabled) }
     fun openEqualizer() = equalizer.open()
+    fun openPowerampEqualizer() = equalizer.openPowerampEqualizer()
     fun clearJournal() = journal.clear()
     fun setDiagnosticLog(enabled: Boolean) = save { setDiagnosticLog(enabled) }
     fun clearDiagnosticLog() = diagnosticLog.clear()
@@ -136,12 +144,19 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { diagnosticLog.share() }
     }
 
-    /** The journal as text, to a messenger or mail of the user's choice. */
+    /** The journal as a file (and as text for messengers), to the app of the user's choice. */
     fun shareJournal(text: String) {
-        val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, text)
-        runCatching {
-            context.startActivity(android.content.Intent.createChooser(send, null).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
-        }.onFailure { android.util.Log.w("SettingsViewModel", "Journal not shared", it) }
+        viewModelScope.launch {
+            val file = withContext(Dispatchers.IO) {
+                FileShare.writeTextFile(context, "yamp-journal", text)
+            }
+            FileShare.share(
+                context,
+                listOf(FileShare.uriFor(context, file)),
+                subject = "YAMP journal",
+                text = text,
+            )
+        }
     }
     fun setStartMusic(value: StartMusic) = save { setStartMusic(value) }
     fun setBluetoothAutoplay(enabled: Boolean) = save { setBluetoothAutoplay(enabled) }

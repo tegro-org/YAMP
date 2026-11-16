@@ -21,6 +21,8 @@
         <intent>
             <action android:name="android.media.action.DISPLAY_AUDIO_EFFECT_CONTROL_PANEL" />
         </intent>
+        <!-- Poweramp Equalizer: a hint for its per-app settings, and a way to open it, in Settings → Playback -->
+        <package android:name="com.maxmpz.equalizer" />
     </queries>
 
     <application

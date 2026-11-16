@@ -49,6 +49,7 @@ import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.Login
 import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.rounded.Animation
+import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.Timeline
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.DeleteOutline
@@ -62,6 +63,7 @@ import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Equalizer
 import androidx.compose.material.icons.rounded.RecordVoiceOver
 import androidx.compose.material.icons.rounded.SpeakerGroup
+import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Explicit
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Home
@@ -488,15 +490,19 @@ private fun ColumnScope.PlaybackPage(state: SettingsUiState, actions: SettingsAc
     SettingsGroup(stringResource(R.string.settings_g_sound)) {
         SoundQualityRow(state.compatibleSound, actions.onCompatibleSoundChange)
         CrossfadeRow(state.crossfadeSeconds, actions.onCrossfadeChange)
+        if (state.powerampEqualizer) {
+            SettingsRow(icon = Icons.Rounded.Equalizer, title = stringResource(R.string.settings_poweramp_eq), subtitle = stringResource(R.string.settings_poweramp_eq_hint), onClick = actions.onOpenPowerampEqualizer)
+        }
         SwitchRow(Icons.AutoMirrored.Rounded.VolumeUp, stringResource(R.string.settings_normalize), stringResource(R.string.settings_normalize_hint), state.normalizeVolume, actions.onNormalizeVolumeChange)
         if (state.equalizerAvailable) {
             SettingsRow(icon = Icons.Rounded.Equalizer, title = stringResource(R.string.settings_equalizer), subtitle = stringResource(R.string.settings_equalizer_hint), onClick = actions.onOpenEqualizer)
         }
         SwitchRow(Icons.Rounded.RecordVoiceOver, stringResource(R.string.settings_duck_announcements), stringResource(R.string.settings_duck_announcements_hint), state.duckForAnnouncements, actions.onDuckForAnnouncementsChange)
-        SwitchRow(Icons.Rounded.SpeakerGroup, stringResource(R.string.settings_audio_sessions), stringResource(R.string.settings_audio_sessions_hint), state.separateAudioSessions, actions.onSeparateAudioSessionsChange)
+        SwitchRow(Icons.Rounded.PlayCircle, stringResource(R.string.settings_resume_quiet), stringResource(R.string.settings_resume_quiet_hint), state.resumeWhenQuiet, actions.onResumeWhenQuietChange)
         SwitchRow(Icons.Rounded.Equalizer, stringResource(R.string.settings_eq_announce), stringResource(R.string.settings_eq_announce_hint), state.announceEqualizer, actions.onAnnounceEqualizerChange)
         SwitchRow(Icons.Rounded.SpeakerGroup, stringResource(R.string.settings_keep_streams), stringResource(R.string.settings_keep_streams_hint), state.keepAudioStreams, actions.onKeepAudioStreamsChange)
         SwitchRow(Icons.Rounded.SpeakerGroup, stringResource(R.string.settings_both_players), stringResource(R.string.settings_both_players_hint), state.keepBothPlayersRunning, actions.onKeepBothPlayersRunningChange)
+        SwitchRow(Icons.Rounded.GraphicEq, stringResource(R.string.settings_fixed_output), stringResource(R.string.settings_fixed_output_hint), state.fixedOutputFormat, actions.onFixedOutputFormatChange)
     }
     SettingsGroup(stringResource(R.string.settings_g_start)) {
         SegmentedRow(Icons.Rounded.PowerSettingsNew, stringResource(R.string.settings_start_music)) {

@@ -104,7 +104,7 @@ internal fun eventText(e: PlaybackJournal.Event): String {
         PlaybackJournal.Kind.STALL -> "stall ${seconds(e.valueMs)} s"
         PlaybackJournal.Kind.CROSSFADE -> "crossfade, ready after ${seconds(e.valueMs)} s"
         PlaybackJournal.Kind.CROSSFADE_LATE -> "crossfade LATE: previous ended, fade-in after ${seconds(e.valueMs)} s"
-        PlaybackJournal.Kind.HOLD_TIMEOUT -> "next track not ready in 8 s"
+        PlaybackJournal.Kind.HOLD_TIMEOUT -> "next track brought no data in 20 s"
         PlaybackJournal.Kind.SKIP -> "skip (${detail.orEmpty()})"
         PlaybackJournal.Kind.ERROR -> "error: ${detail.orEmpty()}"
         PlaybackJournal.Kind.FOCUS -> "audio focus ${detail.orEmpty()}"
@@ -113,6 +113,8 @@ internal fun eventText(e: PlaybackJournal.Event): String {
         PlaybackJournal.Kind.TIMING -> "timing: ${detail.orEmpty()}"
         PlaybackJournal.Kind.FORMAT -> "format: ${detail.orEmpty()}"
         PlaybackJournal.Kind.OUTPUT -> "output: ${detail.orEmpty()}"
+        PlaybackJournal.Kind.TAP -> "tap ${detail.orEmpty()}"
+        PlaybackJournal.Kind.AUDIO -> "audio: ${detail.orEmpty()}"
     }
     return listOfNotNull(body, title).joinToString(" ")
 }

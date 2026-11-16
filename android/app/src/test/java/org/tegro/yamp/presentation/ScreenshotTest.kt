@@ -353,6 +353,15 @@ class ScreenshotTest {
     @Config(qualifiers = "w411dp-h2400dp")
     fun settingsPlayback() = settings("settings_playback", org.tegro.yamp.presentation.main.components.SettingsPage.PLAYBACK)
 
+    /** Poweramp Equalizer installed: the hint for its per-app settings shows under the crossfade. */
+    @Test
+    @Config(qualifiers = "w411dp-h2400dp")
+    fun settingsPlaybackPoweramp() = settings(
+        "settings_playback_poweramp",
+        org.tegro.yamp.presentation.main.components.SettingsPage.PLAYBACK,
+        settingsState.copy(powerampEqualizer = true)
+    )
+
     @Test
     @Config(qualifiers = "w411dp-h1800dp")
     fun settingsInterface() = settings("settings_interface", org.tegro.yamp.presentation.main.components.SettingsPage.INTERFACE)
