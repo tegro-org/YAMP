@@ -309,3 +309,64 @@ From the 2026-11-15 head-unit ride (b71) and the user's notes.
       controller's request, so a link lookup shows as "→link"
 - [x] "Запустить радио" in the track menu on every queue, next to "Добавить в очередь" (D65, revises D54)
 - [ ] Ride: read FORMAT / OUTPUT / SETTINGS lines against the stutters and auto-pauses
+
+## Playback stability (`docs/playback-stability.md`, plan 2026-11-16, branch `fix/playback-stability`)
+
+From the 2026-11-16 rides: every auto-pause was Poweramp Equalizer's "Fade" (focus grab when an equalized session closes).
+Workaround now: Poweramp Equalizer → Known Players → YAMP → "Fade" off.
+- [x] F2 stale crossfade job (play icon while playing, silence after Prev)
+- [x] F9 one stable audio session id, one OPEN/CLOSE pair; retire "Separate audio sessions" (D70)
+- F2+F9 done — files: `data/repository/PlayerRepositoryImpl.kt`, `data/player/SystemEqualizer.kt`,
+  `data/player/MusicService.kt`, `data/player/EngineDiagnostics.kt`, `di/PlayerModule.kt`,
+  `domain/repository/SettingsRepository.kt`, `data/repository/SettingsRepositoryImpl.kt`,
+  `presentation/main/{MainTabs,SettingsViewModel}.kt`, `presentation/main/components/{SettingsModel,SettingsSheet}.kt`,
+  `res/values/strings.xml`; tests `PlayerEngineTest` (new, 3), `EqualizerAnnounceTest` (rewritten, 5),
+  `fakes/{ScriptedExoPlayer.kt,NoErrorExoPlayer.java}` (new), `FakeSettingsRepository`; goldens `settings_playback`,
+  `settings_playback_narrow`; `gradle/libs.versions.toml` + `app/build.gradle.kts` (`media3-test-utils`, tests only)
+- F7+F6+F8 done — files: new `data/diagnostics/FileShare.kt`, `data/diagnostics/DiagnosticLog.kt`,
+  `presentation/crash/CrashLogViewModel.kt`, `presentation/main/SettingsViewModel.kt`, `data/player/PlaybackJournal.kt`,
+  `data/player/PlaybackController.kt`, `data/player/MusicService.kt`, `presentation/main/components/PlaybackJournalDialog.kt`;
+  tests `FileShareTest` (4), `PlaybackControllerTest` (+1); Diag: new `LogTail.kt`, `DiagCommands.kt`, `AdbSession.kt`,
+  tests `LogTailTest` (4), `DiagCommandsTest` (+1); `kb/decisions.md` (D45 retired by D70); this doc's As built.
+- [x] F7 journal / crash log shared as files (LocalSend); F6 journal taps + mixer rate; F8 Diag logcat buffers
+- [x] F1 resume after a focus loss when nothing else plays (D66)
+- [x] F3 keep loading until the user stops (D67)
+- F1+F3 done — files: new `data/player/FocusResumer.kt`, `data/player/LoadProgress.kt`; `data/player/AudioFocusPolicy.kt`,
+  `data/player/MusicService.kt`, `data/player/PlaybackController.kt`, `data/player/PlaybackQueue.kt`,
+  `data/repository/PlayerRepositoryImpl.kt`, `domain/repository/PlayerRepository.kt`, `domain/repository/SettingsRepository.kt`,
+  `data/repository/SettingsRepositoryImpl.kt`, `presentation/main/SettingsViewModel.kt`, `presentation/main/MainTabs.kt`,
+  `presentation/main/components/{SettingsModel,SettingsSheet,PlaybackJournalDialog}.kt`, both `strings.xml`; tests
+  new `FocusResumerTest` (6), `LoadProgressTest` (2), `AudioFocusPolicyTest` (+5), `RoadLogicTest` (+1),
+  `PlayerEngineTest` (+2), `PlaybackControllerTest` (+4), fakes `FakePlayerRepository`, `FakeSettingsRepository`,
+  `ScriptedExoPlayer`; goldens `settings_playback`, `settings_playback_narrow` re-recorded (new switch row).
+- [x] F4 fewer AudioTrack rebuilds: one player for normal playback, second only for crossfade/pick (D68)
+- F4 done — files: `data/repository/PlayerRepositoryImpl.kt`, `data/repository/SilentIdler.kt`,
+  `data/player/EngineDiagnostics.kt`, `data/player/PlaybackController.kt`, `data/player/SleepTimer.kt`; tests
+  `PlayerEngineTest` (+5), fake `ScriptedExoPlayer` (playlist, gapless move, AudioTracks opened); 573 unit tests.
+- [x] F5 fixed output format at the mixer's rate, behind a switch (D69)
+- F5 done — files: new `data/player/FixedOutputRate.kt`; `di/PlayerModule.kt`, `data/player/MusicService.kt`,
+  `domain/repository/SettingsRepository.kt`, `data/repository/SettingsRepositoryImpl.kt`,
+  `presentation/main/{MainTabs,SettingsViewModel}.kt`, `presentation/main/components/{SettingsModel,SettingsSheet}.kt`,
+  both `strings.xml`; tests new `FixedOutputRateTest` (5), `FakeSettingsRepository`; goldens `settings_playback`,
+  `settings_playback_narrow` re-recorded (new switch row); 578 unit tests. Debug build b82.
+- b84 fixes after the b83 ride done — files: `data/repository/PlayerRepositoryImpl.kt` (no overlap on skip/pick,
+  150 ms skip fade, handover timeout loads the track), `data/player/PlaybackBuffering.kt` (`giveUpOnLink`, timeouts),
+  `data/player/EncrawDataSourceFactory.kt` (4 s / 6 s), `data/player/PlaybackController.kt` (`RETRY new link`),
+  `data/player/SystemEqualizer.kt` + Settings (Poweramp hint), `AndroidManifest.xml`, both `strings.xml`; Diag
+  `EffectSummary.kt`, `DiagCommands.kt`, `DiagViewModel.kt`; tests `PlayerEngineTest` (+4), new `PlaybackBufferingTest`
+  (4), Diag `EffectSummaryTest` (4) + fixture; golden new `settings_playback_poweramp`. Debug build b84.
+- [ ] User check: one ride with Poweramp Equalizer disabled
+
+## Player screen modes (KIV — user will describe the ideas later, 2026-11-16)
+
+- [ ] Phone player and car screen are both reachable from the UI → confusing which to open. User's direction: redesign
+      both and choose the mode in Settings instead of offering both in the UI. Open: auto vs manual choice, whether
+      the other mode stays reachable, what to change in each, the phone UI on the head unit when parked.
+
+## Home-screen shortcut per queue (idea, 2026-11-16)
+
+- [ ] "Add to home screen" on a queue (switcher ⋮): a pinned launcher shortcut (`ShortcutManager.requestPinShortcut`,
+      intent with the queue id) that opens YAMP on that queue. Maybe also dynamic shortcuts (long-press on the app
+      icon) for the most used queues. Open: open only, or open and start playing; a deleted / removed-account queue
+      (shortcut disabled with a message); the queue's icon (cover / account marker); whether the head unit's launcher
+      supports pinned shortcuts at all — check on the unit first.
