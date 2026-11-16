@@ -395,11 +395,26 @@ class PlaybackController @Inject constructor(
                         val track = currentTrackNow()
                         if (isBuffering.value && track != null && track.idString == trackId && !track.isRadio) onStreamStalled(track)
                     }
+                    // Slowness never skips (D67): the load goes on while data arrives; only no data at all for
+                    // NO_DATA_TIMEOUT_MS pauses playback, so the user hears and sees that it stopped
                     bufferingWatchdog = scope.launch {
-                        delay(BUFFERING_TIMEOUT_MS)
-                        if (isBuffering.value && currentTrackNow()?.idString == trackId && trackId != null) {
-                            Log.w(TAG, "Buffering watchdog fired for $trackId")
-                            onPlaybackFailure(PlaybackFailure(trackId, progress.value, "BUFFERING_TIMEOUT"))
+                        var stillFor = 0L
+                        var lastBuffered = playerRepository.bufferedPositionMs()
+                        while (true) {
+                            delay(NO_DATA_CHECK_MS)
+                            if (!isBuffering.value || trackId == null || currentTrackNow()?.idString != trackId) return@launch
+                            val buffered = playerRepository.bufferedPositionMs()
+                            if (buffered > lastBuffered) {
+                                lastBuffered = buffered
+                                stillFor = 0L
+                            } else {
+                                stillFor += NO_DATA_CHECK_MS
+                            }
+                            if (stillFor >= org.tegro.yamp.data.repository.PlayerRepositoryImpl.NO_DATA_TIMEOUT_MS) {
+                                Log.w(TAG, "No data for $trackId in ${stillFor / 1000} s: pausing")
+                                pauseForNoData()
+                                return@launch
+                            }
                         }
                     }
                 }
@@ -450,7 +465,7 @@ class PlaybackController @Inject constructor(
         if (playlist.none { it.idString == trackId }) return
         // A context chosen on purpose: there is nothing to go back to any more
         if (source != null) returnPoint = null
-        pickOp {
+        pickOp(playlist.firstOrNull { it.idString == trackId }?.title) {
             val queue = active
             if (queue != null && queue.tracks.map { it.idString } == playlist.map { it.idString }) {
                 val entry = queue.entries.firstOrNull { it.ref.id == trackId } ?: return@pickOp
@@ -465,7 +480,7 @@ class PlaybackController @Inject constructor(
     fun playFrom(tracks: List<TrackDetailsDto>, source: PlaylistSource, startId: String?) {
         if (tracks.isEmpty()) return
         returnPoint = null
-        pickOp {
+        pickOp((tracks.firstOrNull { it.idString == startId } ?: tracks.first()).title) {
             playFromNow(tracks, source.name, startId, crossfade = true, startPositionMs = 0L)
         }
     }
@@ -473,7 +488,7 @@ class PlaybackController @Inject constructor(
     /** Moves the cursor to [entryId] of the active queue and plays it: the queue sheet's row, duplicates included. */
     fun playEntry(entryId: Long) {
         returnPoint = null
-        pickOp {
+        pickOp(active?.let { q -> q.tracks.getOrNull(q.entries.indexOfFirst { it.entryId == entryId })?.title }) {
             startEntry(entryId, crossfade = true, startPositionMs = 0L)
         }
     }
@@ -484,7 +499,7 @@ class PlaybackController @Inject constructor(
      */
     fun playNowKeepQueue(track: TrackDetailsDto) {
         returnPoint = null
-        pickOp {
+        pickOp(track.title) {
             val queue = active
             if (queue == null) {
                 playFromNow(listOf(track), PlaylistSource.LIBRARY.name, track.idString, crossfade = true, startPositionMs = 0L)
@@ -503,7 +518,7 @@ class PlaybackController @Inject constructor(
             return
         }
         returnPoint = null
-        pickOp {
+        pickOp(wave.tracks.value.firstOrNull { it.idString == trackId }?.title) {
             playWaveFromNow(trackId)
         }
     }
@@ -524,7 +539,7 @@ class PlaybackController @Inject constructor(
 
     fun playMyVibe() {
         returnPoint = null
-        pickOp {
+        pickOp("My Wave") {
             playMyVibeNow()
         }
     }
@@ -544,7 +559,7 @@ class PlaybackController @Inject constructor(
     /** A station goes on air beside the active queue, which stays as it is; anything played from a queue ends it. */
     fun playRadioStation(station: RadioStation) {
         returnPoint = null
-        pickOp {
+        pickOp(station.name) {
             val radioTrack = radioTrackFor(station)
             liveStation.value = radioTrack
             restoredPositionMs.value = 0L
@@ -655,11 +670,20 @@ class PlaybackController @Inject constructor(
 
     // endregion
 
+    /**
+     * Changes with every play, pause or stop the controller carries out. A resume after a focus loss (D66) only
+     * happens while it still holds the value it had right after that loss's own pause: the user acted otherwise.
+     */
+    @Volatile
+    var userIntentEpoch = 0L
+        private set
+
     fun togglePlayPause() {
         if (isPlaying.value) pause() else play()
     }
 
     fun play() {
+        userIntentEpoch++
         val current = currentTrackNow()
         if (current == null) {
             // A queue with entries but no cursor starts from its first one. An empty queue of the user's own stays
@@ -681,6 +705,7 @@ class PlaybackController @Inject constructor(
     }
 
     fun pause(reason: String = "user") {
+        userIntentEpoch++
         journal.record(PlaybackJournal.Kind.PAUSE, currentTrackNow()?.title, reason)
         waitingForConnection = false
         // A start that hasn't produced sound yet is cancelled, also one still waiting for its queue operation
@@ -689,6 +714,12 @@ class PlaybackController @Inject constructor(
         _isStarting.value = false
         playerRepository.pause()
         persistNow()
+    }
+
+    /** No data for a long while (D67): pause once, with the reason in the journal. Play continues the same load. */
+    private fun pauseForNoData() {
+        if (!playerRepository.isPlaying.value && !_isStarting.value) return
+        pause(reason = "no data ${org.tegro.yamp.data.repository.PlayerRepositoryImpl.NO_DATA_TIMEOUT_MS / 1000} s")
     }
 
     fun seekTo(positionMs: Long) {
@@ -701,6 +732,7 @@ class PlaybackController @Inject constructor(
 
     fun playNext(isAuto: Boolean = false) {
         val tapAt = android.os.SystemClock.elapsedRealtime()
+        if (!isAuto) journal.record(PlaybackJournal.Kind.TAP, currentTrackNow()?.title, "next")
         queueOp {
             try {
                 playNextNow(isAuto, tapAt)
@@ -710,7 +742,10 @@ class PlaybackController @Inject constructor(
         }
     }
 
-    fun playPrev() = queueOp { playPrevNow() }
+    fun playPrev() {
+        journal.record(PlaybackJournal.Kind.TAP, currentTrackNow()?.title, "prev")
+        queueOp { playPrevNow() }
+    }
 
     fun loadMoreQueue() {
         when (active?.queue?.kind) {
@@ -787,6 +822,7 @@ class PlaybackController @Inject constructor(
 
     /** Stops the engine; the queue stays, its position goes back to the start (nothing is deleted, D35). */
     fun stopAndClear() {
+        userIntentEpoch++
         startRequestId++
         currentPlayJob?.cancel()
         _isStarting.value = false
@@ -1139,7 +1175,11 @@ class PlaybackController @Inject constructor(
 
     fun setSleepTimer(minutes: Int) = sleep.start(minutes)
 
-    fun setSleepAtEndOfTrack() = sleep.atEndOfTrack()
+    fun setSleepAtEndOfTrack() {
+        sleep.atEndOfTrack()
+        // A next track already readied would play on (gapless, F4) before the timer stops: it goes
+        playerRepository.dropStandby()
+    }
 
     fun cancelSleepTimer() = sleep.cancel()
 
@@ -1203,8 +1243,9 @@ class PlaybackController @Inject constructor(
     private fun takePick(): Long = userPickAt.also { userPickAt = 0L }.takeIf { playerRepository.isPlaying.value } ?: 0L
 
     /** A start the user asked for by picking a track: see [userPickAt]. */
-    private fun pickOp(block: suspend () -> Unit) {
+    private fun pickOp(title: String? = null, block: suspend () -> Unit) {
         val tapAt = android.os.SystemClock.elapsedRealtime()
+        journal.record(PlaybackJournal.Kind.TAP, title, "pick")
         playOp {
             userPickAt = tapAt
             pickFromEntryId = active?.cursorEntry?.entryId
@@ -1687,6 +1728,12 @@ class PlaybackController @Inject constructor(
      * after a long pause). Repeated failure: skip. Several broken tracks in a row: stop and tell the user.
      */
     private fun onPlaybackFailure(failure: PlaybackFailure) {
+        if (failure.reason == PlaybackFailure.NO_DATA) {
+            // A start that brought no data (D67): pause, never go back or skip — the user sees why it stopped.
+            // The engine only reports it for the transition it still runs, so it is never stale.
+            pauseForNoData()
+            return
+        }
         val current = currentTrackNow() ?: return
         if (failure.trackId != current.idString) return // stale event from a track we already left
         if (failure.reason == PlaybackFailure.PICK_FAILED) {
@@ -1709,9 +1756,10 @@ class PlaybackController @Inject constructor(
             alreadyRetried = retriedTrackId == failure.trackId,
             failedTracksInARow = consecutiveFailedTracks + 1,
             hasCopy = !copyFailed && reserve.has(failure.trackId),
-            weakLink = _linkState.value == LinkState.WEAK
+            weakLink = _linkState.value == LinkState.WEAK,
+            slowness = PlaybackQueue.isSlowness(failure.reason)
         )
-        journal.record(PlaybackJournal.Kind.ERROR, current.title, "${failure.reason} at ${failure.positionMs / 1000} s → $action")
+        journal.record(PlaybackJournal.Kind.ERROR, current.title, "${failure.reason} at ${failure.positionMs / 1000} s → $action" + if (action == Recovery.RETRY) " new link" else "")
         when (action) {
             Recovery.RESUME_FROM_COPY -> {
                 retriedTrackId = null
@@ -1742,6 +1790,10 @@ class PlaybackController @Inject constructor(
                 consecutiveFailedTracks++
                 retriedTrackId = null
                 playNext()
+            }
+            Recovery.PAUSE -> {
+                retriedTrackId = null
+                pause(reason = "${failure.reason}, too slow")
             }
         }
     }
@@ -1869,7 +1921,8 @@ class PlaybackController @Inject constructor(
     }
 
     private fun prepareStandby(track: TrackDetailsDto) {
-        if (track.isRadio) return
+        // The sleep timer ends playback with this track: nothing to ready (a gapless next track would sound, F4)
+        if (track.isRadio || sleep.endsWithTrack) return
         scope.launch {
             val nextId = track.idString
             val url = when {
@@ -2138,8 +2191,8 @@ class PlaybackController @Inject constructor(
         private const val URL_RETRY_DELAY_MS = 700L
         private const val SNAPSHOT_INTERVAL_MS = 15_000L
         private const val RESUMPTION_START_TIMEOUT_MS = 4_000L
-        /** Longest a stream may keep buffering before we treat the stall as a failure and recover. */
-        private const val BUFFERING_TIMEOUT_MS = 15_000L
+        /** How often a stalled load is checked for new data (D67). */
+        private const val NO_DATA_CHECK_MS = 1_000L
         /** The player's buffer is empty and the music stands: the moment to look at the link. */
         private const val LINK_STALL_MS = 6_000L
         private const val SERVER_CHECK_INTERVAL_MS = 30_000L

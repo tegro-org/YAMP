@@ -8,6 +8,9 @@ data class PlaybackFailure(val trackId: String, val positionMs: Long, val reason
     companion object {
         /** A track the user picked never got ready; the engine went back to the one that plays on. */
         const val PICK_FAILED = "PICK_FAILED"
+
+        /** A track brought no data for a long while (D67): playback pauses — slowness never skips or goes back. */
+        const val NO_DATA = "NO_DATA"
     }
 }
 
@@ -18,6 +21,9 @@ interface PlayerRepository {
     /** True while playback is requested but audio is not yet rendering. */
     val isBuffering: StateFlow<Boolean>
     val progress: StateFlow<Long>
+
+    /** How far the current track is loaded (ms into it): the controller tells a slow load from a dead one (D67). */
+    fun bufferedPositionMs(): Long
     val trackEndedEvent: Flow<Unit>
     val prepareNextTrackEvent: Flow<Unit>
     val skipNextEvent: Flow<Unit>

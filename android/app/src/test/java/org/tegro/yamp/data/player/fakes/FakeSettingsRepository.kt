@@ -29,7 +29,6 @@ class FakeSettingsRepository : SettingsRepository {
     override val bluetoothAutoplay = MutableStateFlow(false)
     override val skipExplicit = MutableStateFlow(false)
     override val downloadsOnSdCard = MutableStateFlow(false)
-    override val separateAudioSessions = MutableStateFlow(false)
     override val diagnosticLog = MutableStateFlow(false)
     override val announceEqualizer = MutableStateFlow(true)
     override val keepAudioStreams = MutableStateFlow(false)
@@ -58,12 +57,15 @@ class FakeSettingsRepository : SettingsRepository {
     override suspend fun setBluetoothAutoplay(enabled: Boolean) { bluetoothAutoplay.value = enabled }
     override suspend fun setSkipExplicit(enabled: Boolean) { skipExplicit.value = enabled }
     override suspend fun setDownloadsOnSdCard(enabled: Boolean) { downloadsOnSdCard.value = enabled }
-    override suspend fun setSeparateAudioSessions(enabled: Boolean) { separateAudioSessions.value = enabled }
     override suspend fun setDiagnosticLog(enabled: Boolean) { diagnosticLog.value = enabled }
     override suspend fun setAnnounceEqualizer(enabled: Boolean) { announceEqualizer.value = enabled }
     override suspend fun setKeepAudioStreams(enabled: Boolean) { keepAudioStreams.value = enabled }
     override suspend fun setDuckForAnnouncements(enabled: Boolean) { duckForAnnouncements.value = enabled }
+    override val resumeWhenQuiet = MutableStateFlow(true)
+    override suspend fun setResumeWhenQuiet(enabled: Boolean) { resumeWhenQuiet.value = enabled }
     override suspend fun setKeepBothPlayersRunning(enabled: Boolean) { keepBothPlayersRunning.value = enabled }
+    override val fixedOutputFormat = MutableStateFlow(false)
+    override suspend fun setFixedOutputFormat(enabled: Boolean) { fixedOutputFormat.value = enabled }
     override suspend fun setGroupQueuesByAccount(enabled: Boolean) { groupQueuesByAccount.value = enabled }
     override suspend fun setListeningHistory(enabled: Boolean) { listeningHistory.value = enabled }
 }

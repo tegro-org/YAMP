@@ -84,13 +84,6 @@ interface SettingsRepository {
     val downloadsOnSdCard: Flow<Boolean>
     suspend fun setDownloadsOnSdCard(enabled: Boolean)
 
-    /**
-     * Each of the two players in its own audio session instead of one shared session. Off = shared (the
-     * system equalizer shapes both tracks of a crossfade as one). On = separate: for a head unit whose sound
-     * chain applies one volume per session and blurs the crossfade.
-     */
-    val separateAudioSessions: Flow<Boolean>
-    suspend fun setSeparateAudioSessions(enabled: Boolean)
 
     /**
      * Tell equalizer apps about our audio sessions (the OPEN_AUDIO_EFFECT_CONTROL_SESSION broadcast). Off for a
@@ -117,12 +110,28 @@ interface SettingsRepository {
     suspend fun setDuckForAnnouncements(enabled: Boolean)
 
     /**
+     * After a permanent focus loss, play on a moment later when nothing else plays (D66) — only if YAMP was
+     * playing at the loss; a paused or idle app never starts by itself. Default on (2026-11-16): an equalizer app
+     * on the head unit took the focus whenever a session closed, with nothing else playing.
+     */
+    val resumeWhenQuiet: Flow<Boolean>
+    suspend fun setResumeWhenQuiet(enabled: Boolean)
+
+    /**
      * Experimental (2026-11-14): the player that is not needed loops a silent clip instead of stopping, so both
      * audio streams stay open all the time; the next track is queued behind the silence. Wins over
      * [keepAudioStreams] when both are on.
      */
     val keepBothPlayersRunning: Flow<Boolean>
     suspend fun setKeepBothPlayersRunning(enabled: Boolean)
+
+    /**
+     * "Fixed output format" (D69, F5): both players resample every track to the device mixer's native rate, so the
+     * system no longer resamples and the audio output's format is the same for every track. Default off until
+     * compared on the head unit; applies from the next track.
+     */
+    val fixedOutputFormat: Flow<Boolean>
+    suspend fun setFixedOutputFormat(enabled: Boolean)
 
     /**
      * "Group" in Settings → Accounts (D64): with more than one account the queue lists show a section per account

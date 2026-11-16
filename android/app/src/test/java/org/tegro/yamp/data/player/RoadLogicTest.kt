@@ -133,8 +133,19 @@ class RoadLogicTest {
         hasCopy: Boolean = false,
         weak: Boolean = false,
         radio: Boolean = false,
-        downloaded: Boolean = false
-    ) = PlaybackQueue.recoveryFor(offline, radio, downloaded, retried, 1, hasCopy, weak)
+        downloaded: Boolean = false,
+        slowness: Boolean = false
+    ) = PlaybackQueue.recoveryFor(offline, radio, downloaded, retried, 1, hasCopy, weak, slowness)
+
+    @Test
+    fun aSlowTrackPausesAfterItsRetryABrokenOneSkips() {
+        assertEquals("first a fresh link", Recovery.RETRY, recovery(slowness = true))
+        assertEquals("slowness never skips (D67)", Recovery.PAUSE, recovery(retried = true, slowness = true))
+        assertEquals(Recovery.PAUSE, recovery(retried = true, slowness = true, weak = true))
+        assertEquals("a broken track still skips", Recovery.SKIP, recovery(retried = true))
+        assertTrue(PlaybackQueue.isSlowness("ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT"))
+        assertFalse(PlaybackQueue.isSlowness("ERROR_CODE_IO_BAD_HTTP_STATUS"))
+    }
 
     @Test
     fun noConnectionGoesOnFromTheCopyOfTheSameTrack() {

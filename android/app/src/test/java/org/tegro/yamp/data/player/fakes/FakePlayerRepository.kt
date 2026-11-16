@@ -28,6 +28,11 @@ class FakePlayerRepository(private val context: Context) : PlayerRepository {
     override val isBuffering = MutableStateFlow(false)
     override val soundingTrackId = MutableStateFlow<String?>(null)
     override val progress = MutableStateFlow(0L)
+
+    /** How far the loaded track is loaded: a test moves it to show a slow load still bringing data. */
+    @Volatile
+    var buffered = 0L
+    override fun bufferedPositionMs(): Long = buffered
     override val trackEndedEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
     override val prepareNextTrackEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
     override val skipNextEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 8)

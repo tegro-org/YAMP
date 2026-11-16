@@ -116,10 +116,20 @@ internal class SilentIdler(private val silenceUri: String?) {
     fun setRunning(standby: ExoPlayer, running: Boolean, outgoing: ExoPlayer?) {
         if (standby === outgoing) return
         val parked = standby.currentMediaItem?.mediaId == PlayerRepositoryImpl.PARKED_ID
-        val looping = parked && standby.repeatMode == Player.REPEAT_MODE_ONE
+        val warmingUp = parked && standby.mediaItemCount > 1 // the next track queued behind the silence
         val empty = standby.mediaItemCount == 0 || parked
-        // A loop left from before the setting was switched off is paused as well
-        if (!running && looping) standby.playWhenReady = false
-        else if (running && enabled && empty) idle(standby)
+        if (!running) {
+            // Every pause silences the clip, looping or playing out into a warm-up, and whether or not the setting is
+            // still on: a silent clip left playing counts as "music active" and would keep the resume after a focus
+            // loss from happening (F1, F4)
+            if (parked && standby.playWhenReady) standby.playWhenReady = false
+        } else if (enabled && warmingUp) {
+            // Plays out into the queued track, which holds when it arrives (a pause dropped the handover)
+            handover = standby
+            holdOnArrival = true
+            standby.playWhenReady = true
+        } else if (enabled && empty) {
+            idle(standby)
+        }
     }
 }

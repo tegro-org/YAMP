@@ -47,9 +47,25 @@ object PlaybackBuffering {
             if (refusedByServer(info.exception)) return C.TIME_UNSET
             // Broken files and the like stay fatal, as by default
             if (super.getRetryDelayMsFor(info) == C.TIME_UNSET) return C.TIME_UNSET
+            if (giveUpOnLink(info.loadEventInfo.dataSpec.position, info.loadEventInfo.bytesLoaded, info.errorCount)) return C.TIME_UNSET
             return retryDelayMs(info.errorCount)
         }
     }
+
+    /**
+     * A track's start that brought no bytes at all: the link (or the CDN connection behind it) is dead, and trying
+     * the same URL again only waits out more timeouts (the b83 ride: 34 s, then 22 s more on a FLAC start). It fails
+     * after [START_RETRIES] tries so the controller asks for a fresh link (its RETRY). Mid-track — something was
+     * loaded already, the download resumes from a later position — the patient retries stay. Pure.
+     */
+    fun giveUpOnLink(openedAt: Long, bytesLoaded: Long, errorCount: Int): Boolean =
+        openedAt == 0L && bytesLoaded == 0L && errorCount >= START_RETRIES
+
+    /** Same-URL tries for a track start that brought no bytes, before a fresh link is asked for. */
+    const val START_RETRIES = 1
+
+    const val CONNECT_TIMEOUT_MS = 4_000
+    const val READ_TIMEOUT_MS = 6_000
 
     /** Tries before a broken download counts as an error: about a minute of pauses. */
     const val RETRIES = 14

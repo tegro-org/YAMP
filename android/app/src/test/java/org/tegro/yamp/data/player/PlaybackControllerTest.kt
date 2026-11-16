@@ -140,7 +140,14 @@ class PlaybackControllerTest {
 
     // The controller's scope is Dispatchers.Main.immediate: here the test thread, so every call runs to its end
     // at once, and whatever resumes on another thread comes back to it ([TestThreadMain])
-    private val dispatcher = TestThreadMain(UnconfinedTestDispatcher())
+    private val time = UnconfinedTestDispatcher()
+    private val dispatcher = TestThreadMain(time)
+
+    /** Moves the controller's clock (its delays run on [time]). */
+    private fun passes(ms: Long) {
+        time.scheduler.advanceTimeBy(ms)
+        time.scheduler.runCurrent()
+    }
     private val dispatchers = object : DispatcherProvider {
         override val main get() = dispatcher
         override val io get() = dispatcher
@@ -188,7 +195,8 @@ class PlaybackControllerTest {
     private fun controller(
         engine: FakePlayerRepository = this.engine,
         queueManager: QueueManager = manager(),
-        clients: org.tegro.yamp.data.network.YandexClients = FixedYandexClients(api)
+        clients: org.tegro.yamp.data.network.YandexClients = FixedYandexClients(api),
+        journal: PlaybackJournal = PlaybackJournal(now = { 0L })
     ): PlaybackController {
         val legacyImport = LegacySessionImport(store, cacheManager, RoomQueueStore(db.queueDao(), db.dao()), QueueTrackBridge(db.dao(), json))
         val controller = PlaybackController(
@@ -196,7 +204,7 @@ class PlaybackControllerTest {
             TrackDownloadManager(context, client), resolver, cacheManager, RadioRepository(context),
             queueManager, legacyImport, db.dao(),
             settings, NetworkMonitor(context), RoadReserve(context, client, json),
-            PlaybackJournal(now = { 0L }), DiagnosticLog(context, settings), history,
+            journal, DiagnosticLog(context, settings), history,
             org.tegro.yamp.data.account.AccountContext(auth, queueManager)
         )
         controllers += controller
@@ -262,6 +270,91 @@ class PlaybackControllerTest {
         // The playing track and the one standing by
         assertEquals(listOf("1", "2"), resolver.fetched)
         assertEquals(List(2) { org.tegro.yamp.domain.account.AccountId.yandex("1001") }, resolver.fetchedFor)
+    }
+
+    /** F6: the user's next / prev / pick taps are journal lines, so a dropout can be tied to a tap. */
+    @Test
+    fun nextPrevAndPickTapsAreJournalled() {
+        val journal = PlaybackJournal(now = { 0L })
+        val controller = controller(journal = journal)
+        val queue = playlist("1", "2", "3")
+        controller.playTrack("2", queue, PlaylistSource.LIBRARY)
+        controller.settle()
+        engine.sounds()
+        controller.playNext()
+        controller.settle()
+        controller.playPrev()
+        controller.settle()
+        controller.playNext(isAuto = true)
+        controller.settle()
+
+        val taps = journal.state.value.events.filter { it.kind == PlaybackJournal.Kind.TAP }.map { it.detail to it.title }
+        assertEquals(listOf("pick" to "Track 2", "next" to "Track 2", "prev" to "Track 3"), taps)
+    }
+
+    /** D67: a start that brings no data at all for 20 s pauses — it is not skipped, and the track stays. */
+    @Test
+    fun aLoadWithNoDataPausesAfter20sAndNeverSkips() {
+        val journal = PlaybackJournal(now = { 0L })
+        val controller = controller(journal = journal)
+        controller.playTrack("1", playlist("1", "2"), PlaylistSource.LIBRARY)
+        controller.settle()
+        engine.calls.clear()
+
+        passes(19_000)
+        assertFalse("still loading at 19 s", "pause" in engine.names)
+        passes(2_000)
+
+        assertTrue("paused", "pause" in engine.names)
+        assertEquals("not skipped", emptyList<Call>(), engine.played)
+        assertEquals("1", controller.currentTrack.value?.idString)
+        val pause = journal.state.value.events.last { it.kind == PlaybackJournal.Kind.PAUSE }
+        assertEquals("no data 20 s", pause.detail)
+    }
+
+    /** D67: slowness never gives up — a trickle of data keeps the load going well past any old limit. */
+    @Test
+    fun aSlowLoadThatStillBringsDataKeepsLoading() {
+        val controller = controller()
+        controller.playTrack("1", playlist("1", "2"), PlaylistSource.LIBRARY)
+        controller.settle()
+        engine.calls.clear()
+
+        repeat(40) {
+            engine.buffered += 100
+            passes(1_000)
+        }
+
+        assertFalse("never paused", "pause" in engine.names)
+        assertEquals(emptyList<Call>(), engine.played)
+        assertTrue(controller.isPlaying.value)
+    }
+
+    /** D67: the engine's "no data" for a transition pauses on the new track — no going back, no skip. */
+    @Test
+    fun theEnginesNoDataReportPausesWithoutSkipping() {
+        val controller = controller()
+        controller.playing("1", playlist("1", "2"))
+        check(engine.playbackErrorEvent.tryEmit(PlaybackFailure("1", 0L, PlaybackFailure.NO_DATA)))
+        controller.settle()
+
+        assertEquals(listOf("pause"), engine.names.filter { it == "pause" || it == "playTrack" })
+        assertEquals("1", controller.currentTrack.value?.idString)
+    }
+
+    /** D67: a network timeout after its retry pauses; a broken track (HTTP error) still skips. */
+    @Test
+    fun aNetworkTimeoutPausesAfterItsRetryInsteadOfSkipping() {
+        val controller = controller()
+        controller.playing("1", playlist("1", "2"))
+        engine.fail("1", 5_000L, "ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT")
+        controller.settle()
+        // The fresh link times out too, before any sound
+        engine.fail("1", 5_000L, "ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT")
+        controller.settle()
+
+        assertEquals("one retry of the same track, no skip", listOf("1"), engine.played.map { it.trackId })
+        assertEquals("pause", engine.names.last())
     }
 
     /** History's tap: the track goes right after the cursor and plays; the queue goes on after it (D35). */

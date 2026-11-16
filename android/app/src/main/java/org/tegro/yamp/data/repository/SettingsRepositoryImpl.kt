@@ -22,8 +22,16 @@ class SettingsRepositoryImpl @Inject constructor(
     private val context: Context
 ) : SettingsRepository {
 
+    /** Defaults of the settings declared through [bool] / [choice] and the keys below: the journal lists them too. */
+    private val defaults = linkedMapOf(
+        "dark_theme" to "true",
+        "auto_download_liked" to "false",
+        "road_reserve_mb" to SettingsRepository.DEFAULT_ROAD_RESERVE_MB.toString(),
+        "crossfade_seconds" to SettingsRepository.DEFAULT_CROSSFADE_SECONDS.toString(),
+    )
+
     override val allSettings: Flow<Map<String, String>> = context.dataStore.data.map { prefs ->
-        prefs.asMap().entries.associate { (key, value) -> key.name to value.toString() }
+        defaults + prefs.asMap().entries.associate { (key, value) -> key.name to value.toString() }
     }
 
     private val DARK_THEME_KEY = booleanPreferencesKey("dark_theme")
@@ -119,11 +127,13 @@ class SettingsRepositoryImpl @Inject constructor(
 
     private fun bool(name: String, default: Boolean): Pair<Flow<Boolean>, suspend (Boolean) -> Unit> {
         val key = booleanPreferencesKey(name)
+        defaults[name] = default.toString()
         return context.dataStore.data.map { it[key] ?: default } to { value -> context.dataStore.edit { it[key] = value } }
     }
 
     private inline fun <reified E : Enum<E>> choice(name: String, default: E): Pair<Flow<E>, suspend (E) -> Unit> {
         val key = stringPreferencesKey(name)
+        defaults[name] = default.name
         return context.dataStore.data.map { prefs -> enumValues<E>().firstOrNull { it.name == prefs[key] } ?: default } to
             { value -> context.dataStore.edit { it[key] = value.name } }
     }
@@ -174,9 +184,7 @@ class SettingsRepositoryImpl @Inject constructor(
     override val downloadsOnSdCard = sdCardPref.first
     override suspend fun setDownloadsOnSdCard(enabled: Boolean) = sdCardPref.second(enabled)
 
-    private val audioSessionsPref = bool("separate_audio_sessions", false)
-    override val separateAudioSessions = audioSessionsPref.first
-    override suspend fun setSeparateAudioSessions(enabled: Boolean) = audioSessionsPref.second(enabled)
+    // "separate_audio_sessions" (D45) is retired by D70: a stored value is simply never read again
 
     private val announcePref = bool("announce_equalizer", true)
     override val announceEqualizer = announcePref.first
@@ -190,9 +198,17 @@ class SettingsRepositoryImpl @Inject constructor(
     override val duckForAnnouncements = duckAnnouncementsPref.first
     override suspend fun setDuckForAnnouncements(enabled: Boolean) = duckAnnouncementsPref.second(enabled)
 
+    private val resumeWhenQuietPref = bool("resume_when_quiet", true)
+    override val resumeWhenQuiet = resumeWhenQuietPref.first
+    override suspend fun setResumeWhenQuiet(enabled: Boolean) = resumeWhenQuietPref.second(enabled)
+
     private val bothPlayersPref = bool("keep_both_players_running", false)
     override val keepBothPlayersRunning = bothPlayersPref.first
     override suspend fun setKeepBothPlayersRunning(enabled: Boolean) = bothPlayersPref.second(enabled)
+
+    private val fixedOutputPref = bool("fixed_output_format", false)
+    override val fixedOutputFormat = fixedOutputPref.first
+    override suspend fun setFixedOutputFormat(enabled: Boolean) = fixedOutputPref.second(enabled)
 
     private val groupQueuesPref = bool("group_queues_by_account", true)
     override val groupQueuesByAccount = groupQueuesPref.first

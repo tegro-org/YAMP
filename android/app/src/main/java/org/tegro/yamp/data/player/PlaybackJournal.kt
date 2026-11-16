@@ -47,7 +47,11 @@ class PlaybackJournal(
         /** The audio format of the track that just started sounding (codec, rate, channels, bitrate); [Event.detail]. */
         FORMAT,
         /** A player (re)configured its sound-card output (an AudioTrack: encoding, rate, buffer); [Event.detail]. */
-        OUTPUT
+        OUTPUT,
+        /** A user action: next / prev / pick; [Event.title] is the track it aimed at (or the current one). */
+        TAP,
+        /** The device's mixer: native output rate and frames per buffer; [Event.detail]. */
+        AUDIO
     }
 
     data class Event(val atMs: Long, val kind: Kind, val title: String? = null, val detail: String? = null, val valueMs: Long = 0L)

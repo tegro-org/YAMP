@@ -1,10 +1,8 @@
 package org.tegro.yamp.data.diagnostics
 
 import android.content.Context
-import android.content.Intent
 import android.os.Build
 import android.util.Log
-import androidx.core.content.FileProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -115,16 +113,8 @@ class DiagnosticLog @Inject constructor(
     suspend fun share() {
         // Everything queued so far lands first
         writer.submit {}.get()
-        val uris = files().map { FileProvider.getUriForFile(context, context.packageName + AUTHORITY_SUFFIX, it) }
-        if (uris.isEmpty()) return
-        val send = Intent(Intent.ACTION_SEND_MULTIPLE)
-            .setType("text/plain")
-            .putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(uris))
-            .putExtra(Intent.EXTRA_SUBJECT, "YAMP diagnostic log")
-            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        runCatching {
-            context.startActivity(Intent.createChooser(send, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION))
-        }.onFailure { Log.w(TAG, "Diagnostic log not shared", it) }
+        val uris = files().map { FileShare.uriFor(context, it) }
+        FileShare.share(context, uris, subject = "YAMP diagnostic log")
     }
 
     /** The enabled state as persisted (the flag above may lag the DataStore by a moment). */
@@ -135,7 +125,6 @@ class DiagnosticLog @Inject constructor(
         private const val DIR = "logs"
         private const val FILE = "yamp.log"
         private const val OLDER = "yamp.1.log"
-        private const val AUTHORITY_SUFFIX = ".update_provider"
         const val MAX_BYTES = 1024L * 1024L
 
         private val signedUrlParams = Regex("""(?i)([?&](?:sign|ts|token|uid|__uid|key)=)[^&\s]+""")

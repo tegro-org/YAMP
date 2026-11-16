@@ -22,6 +22,19 @@ class EngineDiagnostics(
     private val inputFormats = arrayOfNulls<androidx.media3.common.Format>(2)
     private val players = arrayOfNulls<ExoPlayer>(2)
 
+    /** AudioTracks opened since the engine was created (one per playback-service lifetime). */
+    private var outputsOpened = 0
+
+    private val lastCause = arrayOfNulls<String>(2)
+    private val releasedAt = arrayOfNulls<Long>(2)
+
+    private fun stateName(state: Int) = when (state) {
+        androidx.media3.common.Player.STATE_IDLE -> "idle"
+        androidx.media3.common.Player.STATE_BUFFERING -> "buffering"
+        androidx.media3.common.Player.STATE_READY -> "ready"
+        else -> "ended"
+    }
+
     /** Listens to [player]'s underruns and its start ([playerIdx]: 0 for A, 1 for B). */
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     fun attach(player: ExoPlayer, playerIdx: Int) {
@@ -45,7 +58,26 @@ class EngineDiagnostics(
                 format: androidx.media3.common.Format,
                 decoderReuseEvaluation: androidx.media3.exoplayer.DecoderReuseEvaluation?
             ) {
+                val before = inputFormats[playerIdx]
+                val changed = before != null &&
+                    Triple(before.sampleRate, before.channelCount, before.sampleMimeType) !=
+                    Triple(format.sampleRate, format.channelCount, format.sampleMimeType)
+                if (before != null && changed) {
+                    lastCause[playerIdx] = "input ${before.sampleMimeType?.substringAfter('/')} ${before.sampleRate}→" +
+                        "${format.sampleMimeType?.substringAfter('/')} ${format.sampleRate}"
+                }
                 inputFormats[playerIdx] = format
+            }
+
+            override fun onAudioSinkError(eventTime: AnalyticsListener.EventTime, audioSinkError: Exception) {
+                lastCause[playerIdx] = "sink error ${audioSinkError.javaClass.simpleName}: ${audioSinkError.message?.take(80)}"
+            }
+
+            override fun onAudioTrackReleased(
+                eventTime: AnalyticsListener.EventTime,
+                audioTrackConfig: androidx.media3.exoplayer.audio.AudioSink.AudioTrackConfig
+            ) {
+                releasedAt[playerIdx] = android.os.SystemClock.elapsedRealtime()
             }
 
             override fun onAudioTrackInitialized(
@@ -64,15 +96,27 @@ class EngineDiagnostics(
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     private fun output(player: ExoPlayer, playerIdx: Int, config: androidx.media3.exoplayer.audio.AudioSink.AudioTrackConfig) {
         val name = if (playerIdx == 0) "A" else "B"
+        outputsOpened++
         val parts = listOfNotNull(
+            // How many AudioTracks this service opened so far: F4 measures the rebuilds per skip with it
+            "#$outputsOpened",
             "player $name ${roleOf(player)}",
             encodingName(config.encoding),
             "${config.sampleRate} Hz",
             channelsName(config.channelConfig),
             "buf ${config.bufferSize} B",
+            // One session for the whole service lifetime (D70): a different number here means it was lost
+            "session ${player.audioSessionId}",
             "offload".takeIf { config.offload },
-            "tunneling".takeIf { config.tunneling }
+            "tunneling".takeIf { config.tunneling },
+            // Why this AudioTrack: the player's state and position, a format change or sink error seen since the last
+            // one, and how long after its previous AudioTrack was released (mid-track rebuilds, 2026-11-16)
+            "why: ${stateName(player.playbackState)} pos ${player.currentPosition / 1000} s" +
+                (lastCause[playerIdx]?.let { ", $it" } ?: "") +
+                (releasedAt[playerIdx]?.let { ", prev released ${android.os.SystemClock.elapsedRealtime() - it} ms ago" } ?: "")
         )
+        lastCause[playerIdx] = null
+        releasedAt[playerIdx] = null
         journal?.record(PlaybackJournal.Kind.OUTPUT, player.mediaMetadata.title?.toString()?.takeUnless { isSilence(player) }, parts.joinToString(" "))
     }
 

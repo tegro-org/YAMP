@@ -21,6 +21,49 @@ object AudioFocusPolicy {
     fun onTransientLoss(keepPlayingUnderAnnouncements: Boolean, audioMode: Int): TransientLoss =
         if (keepPlayingUnderAnnouncements && !isCall(audioMode)) TransientLoss.DUCK else TransientLoss.PAUSE
 
+    /** What happens a moment after a permanent focus loss (D66). */
+    enum class AfterLoss {
+        /** Nothing else plays: take the focus back and play on. */
+        RESUME,
+        /** The setting "Resume when nothing else plays" is off. */
+        STAY_DISABLED,
+        /** YAMP was not playing at the loss: it never starts by itself. */
+        STAY_WAS_PAUSED,
+        /** The user paused, played or stopped since the loss: their word stands. */
+        STAY_USER_ACTED,
+        /** A call or a ringing phone. */
+        STAY_CALL,
+        /** Another app plays music: it took the sound for real. */
+        STAY_OTHER_PLAYS,
+        /** Resumed [MAX_RESUMES_PER_MINUTE] times within a minute already: something keeps taking it. */
+        STAY_TOO_OFTEN
+    }
+
+    const val MAX_RESUMES_PER_MINUTE = 3
+
+    /**
+     * A permanent loss is not always another player: on the head unit an equalizer app asks for the focus for a
+     * moment when a session closes and the unit turns that into a full loss for us (2026-11-16). So after a short
+     * wait YAMP plays on — but only if it was playing at the loss ([wasPlayingAtLoss]), the user has not acted
+     * since, no call is on and no other app plays music. Pure; unit-tested.
+     */
+    fun afterLoss(
+        enabled: Boolean,
+        wasPlayingAtLoss: Boolean,
+        userActedSince: Boolean,
+        audioMode: Int,
+        otherMusicActive: Boolean,
+        resumesInLastMinute: Int
+    ): AfterLoss = when {
+        !enabled -> AfterLoss.STAY_DISABLED
+        !wasPlayingAtLoss -> AfterLoss.STAY_WAS_PAUSED
+        userActedSince -> AfterLoss.STAY_USER_ACTED
+        isCall(audioMode) -> AfterLoss.STAY_CALL
+        otherMusicActive -> AfterLoss.STAY_OTHER_PLAYS
+        resumesInLastMinute >= MAX_RESUMES_PER_MINUTE -> AfterLoss.STAY_TOO_OFTEN
+        else -> AfterLoss.RESUME
+    }
+
     fun isCall(audioMode: Int): Boolean =
         audioMode == AudioManager.MODE_RINGTONE || audioMode == AudioManager.MODE_IN_CALL || audioMode == AudioManager.MODE_IN_COMMUNICATION
 }

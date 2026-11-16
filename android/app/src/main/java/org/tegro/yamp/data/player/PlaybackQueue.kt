@@ -19,7 +19,9 @@ enum class Recovery {
     /** A station, or several tracks in a row: stop and tell the user. */
     STOP,
     /** This track is broken: the next one. */
-    SKIP
+    SKIP,
+    /** The track is only slow (a network timeout, D67): pause on it, never skip — Play loads it again. */
+    PAUSE
 }
 
 /** What "next" should do for a queue position. Pure logic, unit-tested in PlaybackQueueTest. */
@@ -94,6 +96,18 @@ object PlaybackQueue {
         return null
     }
 
+    /**
+     * Player errors that mean "too slow", not "broken" (D67): a network that did not answer in time. Hard errors
+     * — HTTP 403/404/410, a decoder failure, no link at all — still retry once and then skip.
+     */
+    fun isSlowness(reason: String): Boolean = reason in SLOWNESS_ERRORS
+
+    private val SLOWNESS_ERRORS = setOf(
+        "ERROR_CODE_IO_NETWORK_CONNECTION_FAILED",
+        "ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT",
+        "ERROR_CODE_TIMEOUT"
+    )
+
     /** Broken tracks in a row after which playback stops instead of skipping on. */
     const val MAX_FAILED_TRACKS = 3
 
@@ -105,12 +119,15 @@ object PlaybackQueue {
         alreadyRetried: Boolean,
         failedTracksInARow: Int,
         hasCopy: Boolean = false,
-        weakLink: Boolean = false
+        weakLink: Boolean = false,
+        slowness: Boolean = false
     ): Recovery = when {
         offline && !isRadio && !isDownloaded -> if (hasCopy) Recovery.RESUME_FROM_COPY else Recovery.CONTINUE_OFFLINE
         !alreadyRetried -> Recovery.RETRY
         // A fresh link did not help, and this is not the track's fault when the link is weak
         hasCopy && !isRadio && !isDownloaded -> Recovery.RESUME_FROM_COPY
+        // Slowness never skips (D67): the track waits, paused, for the user
+        slowness && !isRadio -> Recovery.PAUSE
         weakLink && !isRadio && !isDownloaded -> Recovery.CONTINUE_OFFLINE
         isRadio || failedTracksInARow >= MAX_FAILED_TRACKS -> Recovery.STOP
         else -> Recovery.SKIP

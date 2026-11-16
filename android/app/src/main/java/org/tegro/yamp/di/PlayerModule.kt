@@ -5,7 +5,9 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
+import org.tegro.yamp.data.player.FixedOutputRate
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -18,10 +20,19 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object PlayerModule {
 
-    private fun createConfiguredExoPlayer(context: Context, audioSessionId: Int, card: org.tegro.yamp.data.download.CardStorage): ExoPlayer =
-        createConfiguredExoPlayer(context, card).apply { if (audioSessionId > 0) setAudioSessionId(audioSessionId) }
+    private fun createConfiguredExoPlayer(
+        context: Context,
+        audioSessionId: Int,
+        card: org.tegro.yamp.data.download.CardStorage,
+        fixedOutput: FixedOutputRate
+    ): ExoPlayer =
+        createConfiguredExoPlayer(context, card, fixedOutput).apply { if (audioSessionId > 0) setAudioSessionId(audioSessionId) }
 
-    private fun createConfiguredExoPlayer(context: Context, card: org.tegro.yamp.data.download.CardStorage): ExoPlayer {
+    private fun createConfiguredExoPlayer(
+        context: Context,
+        card: org.tegro.yamp.data.download.CardStorage,
+        fixedOutput: FixedOutputRate
+    ): ExoPlayer {
         val audioAttributes = AudioAttributes.Builder()
             .setUsage(C.USAGE_MEDIA)
             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
@@ -40,7 +51,14 @@ object PlayerModule {
             }
         }
 
-        val renderersFactory = DefaultRenderersFactory(context)
+        // Each player's sink resamples to the mixer's rate while "Fixed output format" is on (D69)
+        val renderersFactory = object : DefaultRenderersFactory(context) {
+            override fun buildAudioSink(
+                context: Context,
+                enableFloatOutput: Boolean,
+                enableAudioTrackPlaybackParams: Boolean
+            ): AudioSink = fixedOutput.buildSink(context, enableFloatOutput, enableAudioTrackPlaybackParams)
+        }
             .setMediaCodecSelector(audioSoftwareCodecSelector)
             .setEnableDecoderFallback(true)
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF)
@@ -72,8 +90,14 @@ object PlayerModule {
 
     @Provides
     @Singleton
+    fun provideFixedOutputRate(@ApplicationContext context: Context): FixedOutputRate =
+        FixedOutputRate(FixedOutputRate.mixerRate(context))
+
+    @Provides
+    @Singleton
     fun providePlayerRepository(
         @ApplicationContext context: Context,
+        fixedOutput: FixedOutputRate,
         downloadManager: org.tegro.yamp.data.network.TrackDownloadManager,
         preloadManager: org.tegro.yamp.data.network.TrackUrlResolver,
         wakeLockHelper: org.tegro.yamp.data.player.PlaybackWakeLockHelper,
@@ -82,24 +106,17 @@ object PlayerModule {
         settings: org.tegro.yamp.domain.repository.SettingsRepository,
         journal: org.tegro.yamp.data.player.PlaybackJournal
     ): org.tegro.yamp.domain.repository.PlayerRepository {
-        // Both players start in the shared session; the engine moves player B to its own one when the
-        // "separate audio sessions" setting says so (read asynchronously, applied while B is idle).
-        val playerA = createConfiguredExoPlayer(context, equalizer.audioSessionId, card)
-        val playerB = createConfiguredExoPlayer(context, equalizer.audioSessionId, card)
-        // The sessions are announced by the service when the sound starts (SystemEqualizer.keepAnnounced)
-        val sessions = org.tegro.yamp.data.repository.PlayerRepositoryImpl.AudioSessionPolicy(
-            shared = equalizer.audioSessionId,
-            own = equalizer.secondAudioSessionId,
-            separate = settings.separateAudioSessions,
-            onSeparateChanged = equalizer::useSecondSession
-        )
+        // Both players share one audio session for the whole process (D70): every AudioTrack they open, rebuild
+        // or swap keeps it, so an equalizer app never sees the session close. The service announces it once.
+        val playerA = createConfiguredExoPlayer(context, equalizer.audioSessionId, card, fixedOutput)
+        val playerB = createConfiguredExoPlayer(context, equalizer.audioSessionId, card, fixedOutput)
         val parking = org.tegro.yamp.data.repository.PlayerRepositoryImpl.ParkingPolicy(
             keep = settings.keepAudioStreams,
             silenceUri = "android.resource://${context.packageName}/${org.tegro.yamp.R.raw.silence}",
             bothRunning = settings.keepBothPlayersRunning
         )
         return org.tegro.yamp.data.repository.PlayerRepositoryImpl(
-            playerA, playerB, downloadManager, preloadManager, wakeLockHelper, sessions, journal, parking
+            playerA, playerB, downloadManager, preloadManager, wakeLockHelper, journal, parking
         )
     }
 

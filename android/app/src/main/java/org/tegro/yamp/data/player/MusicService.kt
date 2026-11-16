@@ -63,6 +63,9 @@ class MusicService : MediaLibraryService() {
     @Inject
     lateinit var settings: org.tegro.yamp.domain.repository.SettingsRepository
 
+    @Inject
+    lateinit var fixedOutput: FixedOutputRate
+
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var mediaLibrarySession: MediaLibrarySession? = null
     private var audioManager: AudioManager? = null
@@ -73,6 +76,24 @@ class MusicService : MediaLibraryService() {
     /** "Keep playing under announcements" (Settings → Playback). */
     @Volatile
     private var duckForAnnouncements = true
+
+    /** "Resume when nothing else plays" (Settings → Playback, D66). */
+    @Volatile
+    private var resumeWhenQuiet = true
+
+    /** After a permanent loss: plays on once nothing else plays — only if YAMP was playing at the loss (D66). */
+    private val focusResumer by lazy {
+        FocusResumer(
+            scope = serviceScope,
+            nowMs = android.os.SystemClock::elapsedRealtime,
+            audioMode = { audioManager?.mode ?: AudioManager.MODE_NORMAL },
+            otherMusicActive = { audioManager?.isMusicActive == true },
+            intentEpoch = { playbackController.userIntentEpoch },
+            playingNow = { playbackController.isPlaying.value },
+            resume = { playbackController.play() },
+            log = { journal.record(PlaybackJournal.Kind.FOCUS, detail = it) }
+        )
+    }
 
     /**
      * Ducked for a transient loss instead of pausing. A call that starts while another app holds the focus is not
@@ -89,10 +110,12 @@ class MusicService : MediaLibraryService() {
                 transientDuckJob?.cancel()
                 transientDuckJob = null
                 hasAudioFocus = false
+                // Playing at the loss: sounding, or loading to play. Read before the pause below changes it
+                val wasPlaying = playbackController.isPlaying.value || wasPlayingBeforeTransientLoss
                 wasPlayingBeforeTransientLoss = false
                 playerRepository.setDucked(false)
-                journal.record(PlaybackJournal.Kind.FOCUS, detail = "lost")
                 playbackController.pause(reason = "audio focus lost")
+                focusResumer.onLoss(resumeWhenQuiet, wasPlaying, playbackController.userIntentEpoch)
             }
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
                 val mode = audioManager?.mode ?: AudioManager.MODE_NORMAL
@@ -117,13 +140,13 @@ class MusicService : MediaLibraryService() {
                 playerRepository.setDucked(true)
             }
             AudioManager.AUDIOFOCUS_GAIN -> {
+                focusResumer.cancel()
                 transientDuckJob?.cancel()
                 transientDuckJob = null
                 hasAudioFocus = true
                 playerRepository.setDucked(false)
                 journal.record(PlaybackJournal.Kind.FOCUS, detail = "regained" + (if (wasPlayingBeforeTransientLoss) ", resuming" else ""))
-                // The alert or the call is over: an equalizer that lost the session gets it back now
-                equalizer.announce()
+                // No re-announce to equalizer apps here: the session never closed (D70)
                 if (wasPlayingBeforeTransientLoss) {
                     wasPlayingBeforeTransientLoss = false
                     playbackController.play()
@@ -148,15 +171,36 @@ class MusicService : MediaLibraryService() {
         }
     }
 
+    /** "mixer 48000 Hz, 960 frames" from the platform's output properties; "unknown" where they are missing. */
+    private fun mixerLine(am: AudioManager?): String {
+        val rate = am?.getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE) ?: "unknown"
+        val frames = am?.getProperty(AudioManager.PROPERTY_OUTPUT_FRAMES_PER_BUFFER) ?: "unknown"
+        return "mixer $rate Hz, $frames frames"
+    }
+
     override fun onCreate() {
         super.onCreate()
         AppPresence.playerServiceRunning = true
         audioManager = getSystemService(AUDIO_SERVICE) as? AudioManager
         diagnosticLog.event("SERVICE", "created")
+        // The device mixer's native output: a track at another rate is resampled by the system (F6) — or by the
+        // players themselves while "Fixed output format" is on (D69); applies from the next track
+        serviceScope.launch {
+            var first = true
+            settings.fixedOutputFormat.collect { on ->
+                fixedOutput.setEnabled(on)
+                if (first) {
+                    first = false
+                    val mode = if (on) "fixed output ${fixedOutput.mixerRateHz} Hz" else "fixed output off"
+                    journal.record(PlaybackJournal.Kind.AUDIO, detail = "${mixerLine(audioManager)}, $mode")
+                }
+            }
+        }
         serviceScope.launch { settings.announceEqualizer.collect { equalizer.announcing = it } }
         serviceScope.launch { settings.duckForAnnouncements.collect { duckForAnnouncements = it } }
-        // Equalizer apps hear about the sessions when the sound starts and after a real pause, never per track
-        equalizer.keepAnnounced(serviceScope, playerRepository.isPlaying)
+        serviceScope.launch { settings.resumeWhenQuiet.collect { resumeWhenQuiet = it } }
+        // Equalizer apps hear about the one session once, when the sound first starts; closed in onDestroy (D70)
+        equalizer.openWhenTheSoundStarts(serviceScope, playerRepository.isPlaying)
 
         run {
             val channel = NotificationChannel(

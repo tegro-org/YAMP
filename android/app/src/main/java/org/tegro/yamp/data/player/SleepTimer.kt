@@ -46,6 +46,9 @@ internal class SleepTimer(
         _state.value = null
     }
 
+    /** The timer stops playback when the current track ends: no next track is readied (a gapless one would sound). */
+    val endsWithTrack: Boolean get() = _state.value?.atEndOfTrack == true
+
     /**
      * The track ended: if the timer waits for that, fade out over [tailMs] (the crossfade tail, when the
      * end is announced early) and return true — the caller must not move on.

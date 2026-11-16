@@ -20,7 +20,18 @@ class EncrawDataSourceFactory(
     context: Context
 ) : DataSource.Factory {
 
-    private val defaultFactory = DefaultDataSource.Factory(context)
+    /**
+     * Streams over HTTP with shorter timeouts than the 8 s defaults: a dead connection to the stream host is noticed
+     * in 4 s (connect) / 6 s (read) rather than 8 + 8. On a weak 4G link a live server still answers well within
+     * that; a track that already has bytes buffered rides out the retries anyway (see [PlaybackBuffering]).
+     */
+    private val defaultFactory = DefaultDataSource.Factory(
+        context,
+        androidx.media3.datasource.DefaultHttpDataSource.Factory()
+            .setConnectTimeoutMs(PlaybackBuffering.CONNECT_TIMEOUT_MS)
+            .setReadTimeoutMs(PlaybackBuffering.READ_TIMEOUT_MS)
+            .setAllowCrossProtocolRedirects(true)
+    )
 
     override fun createDataSource(): DataSource {
         return EncrawDataSource(defaultFactory.createDataSource())
