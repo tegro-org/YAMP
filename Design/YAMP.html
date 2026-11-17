@@ -40,6 +40,7 @@
   <script src="yamp/folders.jsx" type="text/babel"></script>
   <script src="yamp/split.jsx" type="text/babel"></script>
   <script src="yamp/signin.jsx" type="text/babel"></script>
+  <script src="yamp/jellyfin.jsx" type="text/babel"></script>
   <script src="yamp/search.jsx" type="text/babel"></script>
   <script src="yamp/home.jsx" type="text/babel"></script>
   <script src="yamp/mix.jsx" type="text/babel"></script>
@@ -57,7 +58,7 @@
     function buildSections() {
       const signin = optional('signinSections');   // [sources + sign-in (9), list states (13)]
       const shots = (list) => list.map(([file, label, w, h]) => ({ id: 'ref-' + file, label, w, h, el: <Shot file={file} w={w} h={h} /> }));
-      return [
+      return withExtras([
         { id: 'foundations', title: '1 · Foundations',
           subtitle: 'Hi-Fi tokens and components as they exist in the app (presentation/hifi). New screens are built only from these. DESIGN_GUIDE §2–§3.',
           boards: [
@@ -146,7 +147,24 @@
           ] },
         // Sections defined in their own files (yamp/<name>.jsx → <name>Sections()).
         ...signin.slice(0, 1), ...optional('searchSections'), ...optional('homeSections'), ...optional('mixSections'), ...signin.slice(1),
-      ];
+      ], optionalMap('jellyfinBoards'));
+    }
+    // Variants defined in another file join an existing section right after a given board (Phase 4, jellyfin.jsx):
+    // { sectionId: [{ after: boardId, boards: [...] }] }. An unknown section or board appends at the end.
+    function withExtras(sections, extras) {
+      return sections.map((s) => {
+        const adds = extras[s.id]; if (!adds) return s;
+        const boards = [...s.boards];
+        adds.forEach(({ after, boards: more }) => {
+          const i = boards.findIndex((b) => b.id === after);
+          boards.splice(i < 0 ? boards.length : i + 1, 0, ...more);
+        });
+        return { ...s, boards };
+      });
+    }
+    function optionalMap(name) {
+      try { return typeof window[name] === 'function' ? window[name]() : {}; }
+      catch (e) { console.error(name + '() failed', e); return {}; }
     }
     function sz(f) { return { w: f.w, h: f.h }; }
     // A section file that failed to load or throws must not take the whole canvas down.

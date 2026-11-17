@@ -304,8 +304,12 @@ function CarTileRow({ count = 5, active = 'folders', style }) {
 // `pillLead` (Phase 2a, accounts.jsx): the account marker inside the active-queue pill (> 1 account).
 // `nextState` / `played` / `buffered` (Phase 3b, buffering.jsx): Next knob state, buffered part of the slider, the
 // first next-track artwork's state. Omitted = the boards as before.
-function CarHome({ dim, w = 1920, far, weak, activeTile, pillLead, nextState, played = 0.3, buffered }) {
+// `pillName` / `track` / `queueLine` (Phase 4, jellyfin.jsx): another queue in the pill, its playing track [title, artist, hue]
+// and its position line.
+function CarHome({ dim, w = 1920, far, weak, activeTile, pillLead, nextState, played = 0.3, buffered, pillName, track, queueLine }) {
   const t = useT();
+  const queueName = pillName || t('With family', 'С семьёй');
+  const [nowTitle, nowArtist, nowHue] = track || ['Wish You Were Here', 'Pink Floyd', 'amber'];
   const wide = w >= 1900, panel = wide ? 760 : 700;
   return (
     <React.Fragment>
@@ -314,7 +318,7 @@ function CarHome({ dim, w = 1920, far, weak, activeTile, pillLead, nextState, pl
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <GlassCircle icon="arrow_back" size={60} />
           <CarPill icon="stacks" active trailing={<Icon name="expand_more" size={28} color={HF.text2} />}>
-            {pillLead ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>{pillLead}{t('With family', 'С семьёй')}</span> : t('With family', 'С семьёй')}
+            {pillLead ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>{pillLead}{queueName}</span> : queueName}
           </CarPill>
           {weak
             ? <CarPill icon="wifi_off" trailing={<Icon name="play_arrow" size={28} />}>{t('Weak signal · downloaded', 'Слабая связь · скачанное')}</CarPill>
@@ -322,9 +326,9 @@ function CarHome({ dim, w = 1920, far, weak, activeTile, pillLead, nextState, pl
           {/* Search is one tap away; it opens the normal landscape search (car mode itself never needs typing). */}
           <GlassCircle icon="search" size={60} />
         </div>
-        <div style={{ ...HFType.sectionCaps, fontSize: 15, color: HF.text2, marginTop: 30 }}>{t('Queue · 12 of 48', 'Очередь · 12 из 48')}</div>
-        <div className="hf-ellipsis" style={{ fontSize: 56, lineHeight: '66px', fontWeight: 800 }}>Wish You Were Here</div>
-        <div style={{ fontSize: 30, color: HF.text2 }}>Pink Floyd</div>
+        <div style={{ ...HFType.sectionCaps, fontSize: 15, color: HF.text2, marginTop: 30 }}>{queueLine || t('Queue · 12 of 48', 'Очередь · 12 из 48')}</div>
+        <div className="hf-ellipsis" style={{ fontSize: 56, lineHeight: '66px', fontWeight: 800 }}>{nowTitle}</div>
+        <div style={{ fontSize: 30, color: HF.text2 }}>{nowArtist}</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: wide ? 26 : 18, marginTop: 26 }}>
           <GlassCircle icon="heart_broken" size={76} iconSize={34} />
           <Knob icon="skip_previous" size={100} />
@@ -345,7 +349,7 @@ function CarHome({ dim, w = 1920, far, weak, activeTile, pillLead, nextState, pl
       {far || (
         <React.Fragment>
           <div style={{ position: 'absolute', left: wide ? 980 : 860, top: wide ? 96 : 120 }}>
-            <Cover size={wide ? 320 : 300} hue="amber" radius={36} style={{ boxShadow: '0 0 90px rgba(224,160,80,0.45)' }} />
+            <Cover size={wide ? 320 : 300} hue={nowHue} radius={36} style={{ boxShadow: '0 0 90px rgba(224,160,80,0.45)' }} />
           </div>
           {wide && <CarNext firstState={nextState} style={{ position: 'absolute', left: 1360, top: 110, width: 500 }} />}
           {!wide && <CarNext rows={2} compact firstState={nextState} style={{ position: 'absolute', left: 860, top: 452, width: 380 }} />}
