@@ -219,7 +219,9 @@ data class AlbumDto(
     @SerialName("year") val year: Int? = null,
     @SerialName("trackCount") val trackCount: Int = 0,
     @SerialName("artists") val artists: List<ArtistDto> = emptyList(),
-    @SerialName("volumes") val volumes: List<List<TrackDetailsDto>> = emptyList()
+    @SerialName("volumes") val volumes: List<List<TrackDetailsDto>> = emptyList(),
+    /** "single", "compilation", "podcast"…; absent for an ordinary album. */
+    @SerialName("type") val type: String? = null
 ) {
     val idString: String?
         get() = (id as? kotlinx.serialization.json.JsonPrimitive)?.content
@@ -233,7 +235,9 @@ data class AlbumDto(
 data class ArtistBriefDto(
     @SerialName("artist") val artist: ArtistDto? = null,
     @SerialName("popularTracks") val popularTracks: List<TrackDetailsDto> = emptyList(),
-    @SerialName("albums") val albums: List<AlbumDto> = emptyList()
+    @SerialName("albums") val albums: List<AlbumDto> = emptyList(),
+    /** Compilations the artist appears on (not listed on the artist page). */
+    @SerialName("alsoAlbums") val alsoAlbums: List<AlbumDto> = emptyList()
 )
 
 @Serializable

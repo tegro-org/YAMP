@@ -56,6 +56,10 @@ class AccountContext @Inject constructor(
         return jellyfin?.accounts?.value?.firstOrNull { it.serverId == ref.instance }?.id
     }
 
+    /** The signed-in Jellyfin accounts in sign-in order, with the name their default queue gets (D83). */
+    fun jellyfinAccounts(): List<Pair<AccountId, String>> =
+        jellyfin?.accounts?.value.orEmpty().map { it.id to it.serverName.ifBlank { "Jellyfin" } }
+
     /** [account] when it is a signed-in account; a queue of a signed-out one gives no context (D62). */
     fun signedIn(account: String?): AccountId? =
         account?.let { key -> authRepository.getAllAccounts().firstOrNull { it.accountId().value == key }?.accountId() }

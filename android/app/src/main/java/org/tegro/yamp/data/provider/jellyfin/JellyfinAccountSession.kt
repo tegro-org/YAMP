@@ -2,7 +2,6 @@ package org.tegro.yamp.data.provider.jellyfin
 
 import org.tegro.yamp.data.provider.ProviderRegistry
 import org.tegro.yamp.data.provider.jellyfin.cache.JellyfinDatabases
-import org.tegro.yamp.data.account.SignOutPlan
 import org.tegro.yamp.data.player.PlaybackController
 import org.tegro.yamp.domain.account.AccountId
 import org.tegro.yamp.domain.repository.AuthRepository
@@ -51,11 +50,12 @@ class JellyfinAccountSession @Inject constructor(
 
     /**
      * Sign-out (D62): the account's queues stay, hidden under "Removed accounts" with its name; when one of them is
-     * active, playback leaves it for the default Yandex account. The token, the HTTP cache and its database go.
+     * active, playback leaves it for a staying account (Yandex first, else another Jellyfin one). The token, the HTTP
+     * cache and its database go.
      */
     fun signOut(id: AccountId) {
         val account = store.account(id) ?: return
-        playbackController.leaveAccount(id, SignOutPlan.fallback(authRepository.getAllAccounts(), authRepository.getDefaultAccountUid()))
+        playbackController.leaveAccount(id, playbackController.fallbackAccount(setOf(id)))
         authRepository.rememberRemovedAccount(id.value, account.label)
         store.remove(id)
         registry.forget(id)

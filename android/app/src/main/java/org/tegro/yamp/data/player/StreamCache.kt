@@ -73,6 +73,20 @@ class StreamCache internal constructor(
     override fun completeStreamFor(keyPrefix: String): ResolvedStream? =
         streams.entries.firstOrNull { it.key.startsWith(keyPrefix) && isComplete(it.key) }?.value
 
+    /**
+     * What is on disk of a track, whatever link it came by ([keyPrefix] = "account|track|"): all of it, its start
+     * ([START_BYTES] or more from byte 0 — a skip to it sounds at once), or nothing usable.
+     */
+    fun cachedState(keyPrefix: String): CachedState {
+        if (!enabled) return CachedState.NONE
+        val keys = runCatching { cache.keys.filter { it.startsWith(keyPrefix) } }.getOrDefault(emptyList())
+        if (keys.any { isComplete(it) }) return CachedState.COMPLETE
+        val start = keys.maxOfOrNull { runCatching { cache.getCachedLength(it, 0L, Long.MAX_VALUE) }.getOrDefault(0L) } ?: 0L
+        return if (start >= START_BYTES) CachedState.START else CachedState.NONE
+    }
+
+    enum class CachedState { NONE, START, COMPLETE }
+
     fun clear() {
         streams.clear()
         cache.keys.toList().forEach { runCatching { cache.removeResource(it) } }
@@ -189,6 +203,9 @@ class StreamCache internal constructor(
 
         /** The start of every key of [trackId] of [account], whatever the quality. */
         fun keyPrefix(account: String?, trackId: String): String = "${account ?: "none"}|$trackId|"
+
+        /** About 15 s of a 256 kbps stream: enough on disk for a skip to the track to start at once. */
+        const val START_BYTES = 512L * 1024L
 
         private fun String?.isNetwork(): Boolean = this == "http" || this == "https"
     }

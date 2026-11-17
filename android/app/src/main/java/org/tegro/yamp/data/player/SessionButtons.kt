@@ -1,5 +1,6 @@
 package org.tegro.yamp.data.player
 
+import org.tegro.yamp.domain.queue.service
 import android.content.Context
 import android.os.Bundle
 import androidx.media3.common.util.UnstableApi
@@ -23,6 +24,8 @@ internal object SessionButtons {
     /** Which buttons to show, left to right. Pure; unit-tested. */
     fun kindsFor(track: org.tegro.yamp.domain.media.Track?, liked: Boolean): List<Kind> = when {
         track == null -> emptyList()
+        // A Jellyfin track has no likes yet (P5): no buttons that would go to a Yandex account
+        track.ref.service == org.tegro.yamp.domain.account.Provider.JELLYFIN -> emptyList()
         track.isRadio -> listOf(if (liked) Kind.UNLIKE else Kind.LIKE)
         else -> listOf(Kind.DISLIKE, if (liked) Kind.UNLIKE else Kind.LIKE)
     }

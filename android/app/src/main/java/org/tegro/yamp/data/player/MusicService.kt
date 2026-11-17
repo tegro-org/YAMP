@@ -1,5 +1,6 @@
 package org.tegro.yamp.data.player
 
+import org.tegro.yamp.domain.queue.service
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.combine
 import androidx.media3.session.SessionResult
@@ -418,6 +419,10 @@ class MusicService : MediaLibraryService() {
             ): ListenableFuture<SessionResult> {
                 val track = playbackController.currentTrack.value
                     ?: return Futures.immediateFuture(SessionResult(SessionError.ERROR_INVALID_STATE))
+                // A Jellyfin track has no likes yet (P5): a stale button never reaches the Yandex account
+                if (track.ref.service == org.tegro.yamp.domain.account.Provider.JELLYFIN) {
+                    return Futures.immediateFuture(SessionResult(SessionError.ERROR_NOT_SUPPORTED))
+                }
                 when (customCommand.customAction) {
                     SessionButtons.LIKE.customAction -> reactions.toggleLike(track)
                     SessionButtons.DISLIKE.customAction -> reactions.dislike(track)
@@ -509,7 +514,7 @@ class MusicService : MediaLibraryService() {
             }
             override fun pause() {
                 pendingStart = null
-                playbackController.pause(reason = "media session (notification, headset, car)")
+                playbackController.pause(reason = "media session (notification, headset, car)", smooth = true)
             }
             override fun setPlayWhenReady(playWhenReady: Boolean) {
                 if (playWhenReady) startPendingOrPlay() else pause()

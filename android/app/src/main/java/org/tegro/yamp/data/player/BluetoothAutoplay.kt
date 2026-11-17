@@ -7,7 +7,6 @@ import android.media.AudioManager
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import org.tegro.yamp.domain.repository.AuthRepository
 import org.tegro.yamp.domain.repository.SettingsRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -38,7 +37,7 @@ object AppPresence {
 class BluetoothAutoplay @Inject constructor(
     @ApplicationContext private val context: Context,
     private val settings: SettingsRepository,
-    private val auth: AuthRepository,
+    private val accounts: org.tegro.yamp.data.account.SignedInAccounts,
     private val playback: PlaybackController
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -71,7 +70,8 @@ class BluetoothAutoplay @Inject constructor(
     private fun onConnected() {
         scope.launch {
             if (!settings.bluetoothAutoplay.first()) return@launch
-            if (auth.getToken().isNullOrEmpty() || playback.isPlaying.value) return@launch
+            // Any provider's account will do: with Jellyfin only its queue plays
+            if (accounts.current().isEmpty() || playback.isPlaying.value) return@launch
             if (!AppPresence.canStartPlayback) {
                 Log.i(TAG, "Car connected while the app is in the background: Android does not let it start the music")
                 return@launch

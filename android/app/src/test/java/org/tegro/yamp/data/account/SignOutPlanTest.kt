@@ -30,6 +30,20 @@ class SignOutPlanTest {
     }
 
     @Test
+    fun withNoYandexAccountLeftAJellyfinAccountTakesOver() {
+        val jellyfin = listOf(org.tegro.yamp.domain.account.AccountId.jellyfin("srv1", "u1"))
+        assertEquals(jellyfin.first(), SignOutPlan.fallbackAny(emptyList(), defaultUid = null, jellyfinStaying = jellyfin))
+        assertNull(SignOutPlan.fallbackAny(emptyList(), defaultUid = null, jellyfinStaying = emptyList()))
+    }
+
+    @Test
+    fun aStayingYandexAccountGoesBeforeJellyfin() {
+        val yandex = org.tegro.yamp.domain.model.UserAccount(uid = "1001", login = "a", token = "t")
+        val jellyfin = listOf(org.tegro.yamp.domain.account.AccountId.jellyfin("srv1", "u1"))
+        assertEquals(org.tegro.yamp.domain.account.AccountId.yandex("1001"), SignOutPlan.fallbackAny(listOf(yandex), defaultUid = null, jellyfinStaying = jellyfin))
+    }
+
+    @Test
     fun aDownloadStaysWhileAnotherAccountLikesIt() {
         assertEquals(
             listOf("1", "3"),

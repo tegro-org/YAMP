@@ -457,6 +457,163 @@ class PlayerEngineTest {
 
     private val collectors = mutableListOf<kotlinx.coroutines.Job>()
 
+    // Smooth pause / play / seek, tied to the crossfade length X (3 s by default)
+
+    @Test
+    fun aPauseFadesOutOverHalfTheCrossfadeAndSaysPausedAtOnce() {
+        firstTrackSounds()
+        engine.pauseSmoothly()
+        looper.idle()
+        assertFalse("the screen says paused at once", engine.isPlaying.value)
+        assertTrue("the sound still fades", b.isPlaying)
+        advance(750)
+        assertTrue("half way down (dB curve: -30 dB at half time)", b.volume in 0.02f..0.05f)
+        advance(1_000)
+        assertFalse("paused after X/2", b.isPlaying)
+        assertEquals(0f, b.volume)
+        assertFalse(engine.isPlaying.value)
+    }
+
+    @Test
+    fun aPlayDuringThePauseFadeRisesFromWhereTheSoundIs() {
+        firstTrackSounds()
+        engine.pauseSmoothly()
+        advance(750)
+        val level = b.volume
+        assertTrue(engine.resumeSmoothly())
+        looper.idle()
+        assertTrue("playing again at once", engine.isPlaying.value)
+        assertTrue("never stopped", b.isPlaying)
+        advance(40)
+        assertTrue("goes up from the level it had, no restart from silence", b.volume >= level)
+        advance(2_000)
+        assertEquals(1f, b.volume)
+        assertTrue(b.isPlaying)
+    }
+
+    @Test
+    fun aResumeRisesFromSilenceOverHalfTheCrossfade() {
+        firstTrackSounds()
+        engine.pauseSmoothly()
+        advance(2_000)
+        assertFalse(b.isPlaying)
+        assertTrue(engine.resumeSmoothly())
+        looper.idle()
+        assertTrue(b.isPlaying)
+        assertTrue("starts silent", b.volume < 0.1f)
+        advance(750)
+        assertTrue("half way up (dB curve: -30 dB at half time)", b.volume in 0.02f..0.05f)
+        advance(1_000)
+        assertEquals(1f, b.volume)
+    }
+
+    @Test
+    fun aSeekFadesOutAThirdJumpsAndRisesTwoThirds() {
+        firstTrackSounds()
+        engine.seekSmoothly(60_000L)
+        looper.idle()
+        assertEquals("the bar jumps at once", 60_000L, engine.progress.value)
+        advance(500)
+        assertTrue("fading out (dB curve: -30 dB at half time)", b.volume in 0.02f..0.05f)
+        assertEquals("no jump yet", emptyList<Long>(), b.seeks)
+        advance(600)
+        assertEquals("jumped after X/3", listOf(60_000L), b.seeks)
+        advance(1_000)
+        assertTrue("rising (dB curve, about -27 dB just past half)", b.volume in 0.02f..0.08f)
+        advance(1_200)
+        assertEquals(1f, b.volume)
+        assertTrue(b.isPlaying)
+    }
+
+    @Test
+    fun aSecondSeekWhileFadingOutJumpsOnceToTheNewestPosition() {
+        firstTrackSounds()
+        engine.seekSmoothly(60_000L)
+        advance(300)
+        engine.seekSmoothly(90_000L)
+        advance(1_000)
+        assertEquals("one jump, to the newest position", listOf(90_000L), b.seeks)
+        advance(2_500)
+        assertEquals(1f, b.volume)
+    }
+
+    @Test
+    fun theBarStaysOnTheSeekTargetWhileTheOldPositionFadesOut() {
+        firstTrackSounds()
+        b.playedTo(5_000L)
+        engine.seekSmoothly(60_000L)
+        advance(900) // past the old 600 ms stale-position window, before the jump at X/3
+        assertEquals("no jump yet", emptyList<Long>(), b.seeks)
+        assertEquals("the bar stays on the target, not on the old position", 60_000L, engine.progress.value)
+        advance(300)
+        assertEquals(listOf(60_000L), b.seeks)
+        assertEquals(60_000L, engine.progress.value)
+    }
+
+    @Test
+    fun aSecondSeekWhileFadingOutMovesTheBarToTheNewTarget() {
+        firstTrackSounds()
+        b.playedTo(5_000L)
+        engine.seekSmoothly(60_000L)
+        advance(300)
+        engine.seekSmoothly(90_000L)
+        advance(500)
+        assertEquals(90_000L, engine.progress.value)
+    }
+
+    @Test
+    fun aSkipDuringTheSeekFadeDropsThePendingJump() {
+        firstTrackSounds()
+        engine.seekSmoothly(60_000L)
+        advance(300)
+        engine.fadeOutForSkip()
+        advance(2_000)
+        assertEquals("the skipped track never jumps", emptyList<Long>(), b.seeks)
+    }
+
+    @Test
+    fun aPauseDuringTheSeekFadeKeepsTheSeek() {
+        firstTrackSounds()
+        engine.seekSmoothly(60_000L)
+        advance(300)
+        engine.pauseSmoothly()
+        looper.idle()
+        assertEquals("the jump happens now instead of being lost", listOf(60_000L), b.seeks)
+        advance(2_000)
+        assertFalse(b.isPlaying)
+    }
+
+    @Test
+    fun withCrossfadeOffNothingFades() {
+        engine.setCrossfadeDuration(0L)
+        firstTrackSounds()
+        engine.pauseSmoothly()
+        looper.idle()
+        assertFalse("paused at once", b.isPlaying)
+        assertTrue(engine.resumeSmoothly())
+        looper.idle()
+        assertEquals("full volume at once", 1f, b.volume)
+        engine.seekSmoothly(30_000L)
+        looper.idle()
+        assertEquals("jumped at once", listOf(30_000L), b.seeks)
+        assertEquals(1f, b.volume)
+    }
+
+    @Test
+    fun aFocusLossPausesAtOnceEvenDuringARise() {
+        firstTrackSounds()
+        engine.pauseSmoothly()
+        advance(2_000)
+        engine.resumeSmoothly()
+        advance(300) // rising
+        engine.pause() // a focus loss or a call: the plain pause
+        looper.idle()
+        assertFalse("stopped at once", b.isPlaying)
+        val after = b.volume
+        advance(2_000)
+        assertEquals("the rise did not go on", after, b.volume)
+    }
+
     private companion object {
         const val SESSION = 77
     }

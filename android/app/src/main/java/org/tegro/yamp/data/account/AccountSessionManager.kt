@@ -216,7 +216,8 @@ class AccountSessionManager @Inject constructor(
         // Signing in again refreshes it again (D62: its queues come back there)
         leaving.forEach { refreshGate.forget(it.uid) }
         val staying = authRepository.getAllAccounts().filter { it.accountId() !in leavingIds }
-        val fallback = SignOutPlan.fallback(staying, authRepository.getDefaultAccountUid())
+        // The last Yandex account leaving while Jellyfin stays: its default queue takes over
+        val fallback = playbackController.fallbackAccount(leavingIds)
         leavingIds.forEach { playbackController.leaveAccount(it, fallback) }
         withContext(Dispatchers.IO) {
             // The clearMusicCache rule: a track another account likes stays downloaded

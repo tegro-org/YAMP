@@ -69,7 +69,13 @@ class YandexProvider(
         override suspend fun artist(artist: MediaRef): Outcome<ArtistPage> = outcome {
             val brief = catalogRepository.artist(artist.id, account)
             val who = brief.artist?.toArtist() ?: return Outcome.Err(ProviderError.NotFound)
-            ArtistPage(who, brief.popularTracks.map { it.toTrack() }, brief.albums.mapNotNull { it.toAlbum() })
+            ArtistPage(
+                who,
+                brief.popularTracks.map { it.toTrack() },
+                brief.albums.mapNotNull { it.toAlbum() },
+                // Compilations the artist is on: "add the artist" with singles and compilations takes them too
+                brief.alsoAlbums.mapNotNull { it.toAlbum()?.copy(kind = org.tegro.yamp.domain.media.AlbumKind.COMPILATION) }
+            )
         }
     }
 }

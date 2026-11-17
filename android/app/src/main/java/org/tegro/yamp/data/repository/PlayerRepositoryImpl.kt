@@ -3,6 +3,7 @@ package org.tegro.yamp.data.repository
 import androidx.core.net.toUri
 import android.os.SystemClock
 import android.util.Log
+import org.tegro.yamp.data.player.FadeCurve
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
@@ -261,6 +262,12 @@ class PlayerRepositoryImpl(
     private fun updateProgress(player: ExoPlayer) {
         val position = player.currentPosition
         _bufferedProgress.value = player.bufferedPosition
+        if (rampKind == Ramp.SEEK_OUT && seekTarget >= 0L) {
+            // A smooth seek is still fading out the old position: the bar stays where the user put it, the jump
+            // follows (the player's own position would snap the bar back until then)
+            _progress.value = seekTarget
+            return
+        }
         if (SystemClock.elapsedRealtime() - lastSeekTimestamp < 600L && pendingSeekPosition >= 0L) {
             // Ignore stale positions reported right after a seek until the player catches up.
             if (abs(position - pendingSeekPosition) < 400L) {
@@ -420,7 +427,7 @@ class PlayerRepositoryImpl(
             p.playerError == null &&
             p.mediaItemCount > 0 && !isParked(p) &&
             p.playbackState != Player.STATE_ENDED
-        _isPlaying.value = wantsToPlay
+        _isPlaying.value = wantsToPlay && !pausing
         // Only a real STATE_BUFFERING counts as loading: a paused-but-wants-to-play limbo (focus loss) is not a
         // spinner, otherwise the indicator sticks when playback is interrupted mid-start. While a crossfade's
         // previous track still sounds, the next one loading is not a stall either (upstream 1.14.3).
@@ -592,6 +599,10 @@ class PlayerRepositoryImpl(
             continueGapless(item)
             return
         }
+        // A new track ends any pause / play / seek ramp of the old one
+        val rise = riseNextStart
+        riseNextStart = false
+        endRamp()
         // Any other start: a track queued behind the current one must not play on after it
         dropQueuedOnActive()
         lastStartAt = SystemClock.elapsedRealtime()
@@ -671,8 +682,15 @@ class PlayerRepositoryImpl(
             // A cut: the old track is silent before the new one sounds (no overlap, see above)
             if (current.playWhenReady) current.pause()
             setVolume(current, 1f)
-            setVolume(incoming, 1f)
-            incoming.playWhenReady = true
+            val riseMs = crossfadeDurationMs / 2
+            if (rise && !isCurrentAudible && riseMs > 0L) {
+                setVolume(incoming, 0f)
+                incoming.playWhenReady = true
+                riseTo(incoming, from = 0f, durationMs = riseMs, what = "play")
+            } else {
+                setVolume(incoming, 1f)
+                incoming.playWhenReady = true
+            }
             clearPlayer(current) // after the new one plays: with both players running, the old one idles
         }
         refreshPlaybackState()
@@ -837,7 +855,7 @@ class PlayerRepositoryImpl(
     }
 
     private suspend fun fade(player: ExoPlayer, from: Float, to: Float, durationMs: Long) {
-        alongTheClock(durationMs) { part -> setVolume(player, (from + (to - from) * part).toFloat()) }
+        alongTheClock(durationMs) { part -> setVolume(player, FadeCurve.level(from, to, part)) }
     }
 
     /**
@@ -897,6 +915,7 @@ class PlayerRepositoryImpl(
     override fun fadeOutForSkip() {
         val player = activePlayer
         if (skipFading === player) return // skipped again while the fade runs: nothing new to do
+        endRamp()
         diagnostics.skipRequested()
         fadeJob?.cancel()
         lastStartAt = SystemClock.elapsedRealtime()
@@ -1006,10 +1025,13 @@ class PlayerRepositoryImpl(
     }
 
     override fun pause() {
+        // Mid-ramp the level stays where it is (no jump up just before the pause); a resume sets it again
+        val ramping = rampKind != null
+        endRamp()
         fadeJob?.cancel()
         skipTargetArrived()
         cancelSkipFade()
-        finishCrossfadeNow(restoreActiveVolume = true)
+        if (ramping) finishCrossfadeNow(restoreActiveVolume = false) else finishCrossfadeNow(restoreActiveVolume = true)
         idler.handover = null
         activePlayer.pause()
         idler.setRunning(standbyPlayer, false, outgoingPlayer)
@@ -1022,6 +1044,7 @@ class PlayerRepositoryImpl(
     private var skipFading: ExoPlayer? = null
 
     override fun fadeOutAndPause(durationMs: Long) {
+        endRamp()
         fadeJob?.cancel()
         fadeJob = scope.launch {
             finishCrossfadeNow(restoreActiveVolume = false)
@@ -1060,6 +1083,7 @@ class PlayerRepositoryImpl(
     }
 
     override fun stop() {
+        endRamp()
         playJob?.cancel()
         skipTargetArrived()
         cancelSkipFade()
@@ -1086,15 +1110,22 @@ class PlayerRepositoryImpl(
         skipFadeJob?.cancel()
         skipWaitJob?.cancel()
         playJob?.cancel()
+        rampJob?.cancel()
         wakeLockHelper.releaseTransitionLock()
         playerA.release()
         playerB.release()
     }
 
     override fun seekTo(position: Long) {
+        endRamp()
         skipTargetArrived()
         cancelSkipFade()
         finishCrossfadeNow(restoreActiveVolume = true)
+        seekNow(position)
+    }
+
+    /** The jump itself; the caller has ended a crossfade and a skip fade (a ramp keeps its level). */
+    private fun seekNow(position: Long) {
         val p = activePlayer
         lastSeekTimestamp = SystemClock.elapsedRealtime()
         pendingSeekPosition = position
@@ -1104,6 +1135,162 @@ class PlayerRepositoryImpl(
         val duration = p.duration
         if (duration > 0L && duration - position > crossfadeDurationMs) hasEmittedTrackEndedForCurrent = false
         if (duration > 0L && duration - position > PREPARE_STANDBY_THRESHOLD_MS) hasEmittedPrepareForCurrent = false
+    }
+
+    /** Running smooth pause / play / seek ramp (tied to the crossfade length) and what it does. */
+    private var rampJob: Job? = null
+    private var rampKind: Ramp? = null
+    private enum class Ramp { PAUSE, PLAY, SEEK_OUT, SEEK_IN }
+    /** A pause is fading out: the engine already reports "paused", the sound follows. */
+    private var pausing = false
+    private var seekTarget = -1L
+    private var riseNextStart = false
+
+    private fun endRamp() {
+        rampJob?.cancel()
+        rampJob = null
+        rampKind = null
+        pausing = false
+    }
+
+    private fun level(player: ExoPlayer) = logicalVolume[indexOf(player)]
+
+    private fun fadeNote(what: String, ms: Long) =
+        note(org.tegro.yamp.data.player.PlaybackJournal.Kind.FADE, activePlayer.currentMediaItem?.mediaMetadata?.title, "$what $ms ms")
+
+    /** Waits (bounded) until [player] actually sounds, then raises it from [from] to full over [durationMs]. */
+    private fun riseTo(player: ExoPlayer, from: Float, durationMs: Long, what: String, kind: Ramp = Ramp.PLAY) {
+        fadeNote(what, durationMs)
+        rampKind = kind
+        rampJob = scope.launch {
+            var waited = 0L
+            while (!player.isPlaying && waited < RISE_WAIT_MAX_MS) {
+                delay(CROSSFADE_STEP_MS)
+                waited += CROSSFADE_STEP_MS
+            }
+            fade(player, from, 1f, durationMs.coerceAtLeast(1L))
+            rampKind = null
+        }
+    }
+
+    override fun pauseSmoothly() {
+        val x = crossfadeDurationMs
+        val p = activePlayer
+        if (pausing) return
+        if (x <= 0L || !p.isPlaying || isParked(p)) {
+            pause()
+            return
+        }
+        val wasRamping = rampKind != null
+        // A pause during a smooth seek's fade-out keeps the seek: the jump happens now instead of being lost
+        val pendingJump = seekTarget.takeIf { rampKind == Ramp.SEEK_OUT && it >= 0L }
+        rampJob?.cancel()
+        pendingJump?.let { seekNow(it) }
+        skipTargetArrived()
+        cancelSkipFade()
+        // A ramp's level stays where it is: the fade starts from what one hears, without a jump
+        finishCrossfadeNow(restoreActiveVolume = !wasRamping)
+        pausing = true
+        refreshPlaybackState()
+        val from = level(p)
+        val ms = (x / 2 * from).toLong().coerceAtLeast(1L)
+        fadeNote("pause", x / 2)
+        rampKind = Ramp.PAUSE
+        rampJob = scope.launch {
+            fade(p, from, 0f, ms)
+            rampKind = null
+            rampJob = null
+            pausing = false
+            if (p !== activePlayer) return@launch
+            idler.handover = null
+            p.pause() // stays at 0: a resume rises from silence, a plain one sets full volume first
+            idler.setRunning(standbyPlayer, false, outgoingPlayer)
+            refreshPlaybackState()
+        }
+    }
+
+    override fun resumeSmoothly(): Boolean {
+        val x = crossfadeDurationMs
+        val p = activePlayer
+        if (x <= 0L) return resume()
+        if (pausing && rampKind == Ramp.PAUSE) {
+            // Play during the pause fade: back up from where the sound is, no restart
+            rampJob?.cancel()
+            pausing = false
+            val from = level(p)
+            riseTo(p, from, (x / 2 * (1f - from)).toLong(), "play")
+            refreshPlaybackState()
+            return true
+        }
+        if (p.mediaItemCount == 0 || isParked(p)) return false
+        if (p.playerError != null || p.playbackState == Player.STATE_IDLE || p.playbackState == Player.STATE_ENDED) {
+            riseNextStart = true // the restart the controller makes rises too
+            return resume()
+        }
+        endRamp()
+        setVolume(p, 0f)
+        p.play()
+        idler.setRunning(standbyPlayer, true, outgoingPlayer)
+        refreshPlaybackState()
+        riseTo(p, from = 0f, durationMs = x / 2, what = "play")
+        return true
+    }
+
+    override fun seekSmoothly(position: Long) {
+        val x = crossfadeDurationMs
+        val p = activePlayer
+        if (pausing) { // the pause fade goes on; the position moves now
+            seekNow(position)
+            return
+        }
+        if (x <= 0L || !p.isPlaying) {
+            seekTo(position)
+            return
+        }
+        when (rampKind) {
+            Ramp.SEEK_OUT -> { // still fading out: the jump goes to the newest position
+                seekTarget = position
+                _progress.value = position
+                return
+            }
+            Ramp.SEEK_IN -> { // rising after a jump: jump again, the rise goes on from the current level
+                rampJob?.cancel()
+                seekNow(position)
+                val from = level(p)
+                riseTo(p, from, (x * 2 / 3 * (1f - from)).toLong(), "seek", Ramp.SEEK_IN)
+                return
+            }
+            else -> Unit
+        }
+        val wasRamping = rampKind != null
+        rampJob?.cancel()
+        skipTargetArrived()
+        cancelSkipFade()
+        finishCrossfadeNow(restoreActiveVolume = !wasRamping)
+        seekTarget = position
+        _progress.value = position
+        pendingSeekPosition = position
+        lastSeekTimestamp = SystemClock.elapsedRealtime()
+        val from = level(p)
+        fadeNote("seek", x)
+        rampKind = Ramp.SEEK_OUT
+        rampJob = scope.launch {
+            fade(p, from, 0f, (x / 3 * from).toLong().coerceAtLeast(1L))
+            if (p !== activePlayer) return@launch
+            seekNow(seekTarget)
+            rampKind = Ramp.SEEK_IN
+            var waited = 0L
+            while (!p.isPlaying && waited < RISE_WAIT_MAX_MS) {
+                delay(CROSSFADE_STEP_MS)
+                waited += CROSSFADE_STEP_MS
+            }
+            fade(p, 0f, 1f, (x * 2 / 3).coerceAtLeast(1L))
+            rampKind = null
+        }
+    }
+
+    override fun riseOnNextStart() {
+        riseNextStart = true
     }
 
     override fun setDucked(ducked: Boolean) {
@@ -1197,6 +1384,8 @@ class PlayerRepositoryImpl(
         /** No track change for this long counts as calm: a player set aside may idle or park on the silent clip (F4). */
         const val SETTLE_MS = 3_000L
         private const val FADE_STEP_MS = 50L
+        /** A play / seek rise waits this long at most for the player to sound (it may still be loading). */
+        const val RISE_WAIT_MAX_MS = 10_000L
         private const val PROGRESS_INTERVAL_MS = 100L
         private const val IDLE_INTERVAL_MS = 500L
         private const val EVENT_BUFFER = 16

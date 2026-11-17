@@ -128,6 +128,29 @@ class FakePlayerRepository(private val context: Context) : PlayerRepository, org
         progress.value = position
     }
 
+    /** Which of the smooth variants the controller used (the plain call is still logged in [calls]). */
+    val smoothCalls = java.util.concurrent.CopyOnWriteArrayList<String>()
+    var riseOnNextStartCalls = 0
+
+    override fun pauseSmoothly() {
+        smoothCalls += "pause"
+        pause()
+    }
+
+    override fun resumeSmoothly(): Boolean {
+        smoothCalls += "resume"
+        return resume()
+    }
+
+    override fun seekSmoothly(position: Long) {
+        smoothCalls += "seek"
+        seekTo(position)
+    }
+
+    override fun riseOnNextStart() {
+        riseOnNextStartCalls++
+    }
+
     override fun setDucked(ducked: Boolean) {
         calls += Call("setDucked")
     }

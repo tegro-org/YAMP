@@ -61,8 +61,16 @@ interface Search {
     suspend fun search(text: String): Outcome<SearchResult>
 }
 
-/** An artist's page: who, their popular tracks and their albums. */
-data class ArtistPage(val artist: Artist, val popularTracks: List<Track>, val albums: List<Album>)
+/**
+ * An artist's page: who, their popular tracks and their albums. [alsoAlbums]: compilations they appear on, not
+ * listed on the page (a provider without them leaves it empty).
+ */
+data class ArtistPage(
+    val artist: Artist,
+    val popularTracks: List<Track>,
+    val albums: List<Album>,
+    val alsoAlbums: List<Album> = emptyList()
+)
 
 /** Pages of the service's catalog, readable by any account. */
 interface Catalog {

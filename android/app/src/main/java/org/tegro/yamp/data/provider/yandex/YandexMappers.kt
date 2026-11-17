@@ -9,6 +9,7 @@ import org.tegro.yamp.data.dto.TrackAlbumDto
 import org.tegro.yamp.data.dto.TrackDetailsDto
 import org.tegro.yamp.data.dto.UserPlaylistDto
 import org.tegro.yamp.domain.media.Album
+import org.tegro.yamp.domain.media.AlbumKind
 import org.tegro.yamp.domain.media.AlbumBrief
 import org.tegro.yamp.domain.media.Artist
 import org.tegro.yamp.domain.media.ArtistBrief
@@ -97,7 +98,12 @@ fun AlbumDto.toAlbum(): Album? = ref(KIND_ALBUM, idString)?.let {
         cover = YandexCover.of(coverUri),
         year = year,
         trackCount = trackCount,
-        tracks = tracks.map { track -> track.toTrack() }
+        tracks = tracks.map { track -> track.toTrack() },
+        kind = when (type) {
+            "single" -> AlbumKind.SINGLE
+            "compilation" -> AlbumKind.COMPILATION
+            else -> AlbumKind.ALBUM
+        }
     )
 }
 

@@ -33,6 +33,9 @@ interface NextTrackFetch {
     /** Every byte of [stream] is on disk. */
     fun isOnDisk(stream: ResolvedStream): Boolean
 
+    /** What of [trackId] (played under [account]) is on disk already, whatever link it came by. */
+    fun cachedState(account: String?, trackId: String): StreamCache.CachedState = StreamCache.CachedState.NONE
+
     /** The track being written now, or null. */
     val writingTrackId: String?
 
@@ -75,6 +78,9 @@ class NextTrackCacher(
         private set
 
     override fun isOnDisk(stream: ResolvedStream): Boolean = stream.cacheKey?.let { streamCache.isComplete(it) } == true
+
+    override fun cachedState(account: String?, trackId: String): StreamCache.CachedState =
+        streamCache.cachedState(StreamCache.keyPrefix(account, trackId))
 
     override fun prefetch(trackId: String, stream: ResolvedStream) {
         val key = stream.cacheKey ?: return

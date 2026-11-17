@@ -105,6 +105,16 @@ interface PlayerRepository {
     /** Resumes the loaded item. Returns false when nothing is loaded and the caller must start the track itself. */
     fun resume(): Boolean
     fun seekTo(position: Long)
+    /**
+     * Smooth variants, tied to the crossfade length X (crossfade off: same as the plain ones). Pause fades out
+     * over X/2 and reports "paused" at once; resume rises over X/2 (a pause still fading is taken back from its
+     * current level); seek fades out over X/3, jumps, rises over 2X/3.
+     */
+    fun pauseSmoothly() = pause()
+    fun resumeSmoothly(): Boolean = resume()
+    fun seekSmoothly(position: Long) = seekTo(position)
+    /** The next track started from silence (a play with nothing loaded) rises over X/2 instead of starting at full. */
+    fun riseOnNextStart() {}
     fun setDucked(ducked: Boolean)
     /** 0 disables crossfading: tracks switch immediately and play to their natural end. */
     fun setCrossfadeDuration(durationMs: Long)

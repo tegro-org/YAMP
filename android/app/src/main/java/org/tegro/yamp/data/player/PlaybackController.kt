@@ -811,12 +811,18 @@ class PlaybackController @Inject internal constructor(
         }
         // A start is already in flight (e.g. a second Play from a headset): don't restart it
         if (_isStarting.value) return
-        if (playerRepository.currentTrackId.value == current.idString && playerRepository.resume()) return
+        // Play rises over half the crossfade length (crossfade off: at once)
+        if (playerRepository.currentTrackId.value == current.idString && playerRepository.resumeSmoothly()) return
         // Nothing loaded (restored session or stopped player): start the current track where it was left.
+        playerRepository.riseOnNextStart()
         resolveAndPlay(current, crossfade = false, startPositionMs = restoredPositionMs.value)
     }
 
-    fun pause(reason: String = "user") {
+    /**
+     * [smooth]: a pause the user asked for (the app, a media button) fades out over half the crossfade length;
+     * a focus loss, a call or "no data" pauses at once.
+     */
+    fun pause(reason: String = "user", smooth: Boolean = reason == "user") {
         userIntentEpoch++
         journal.record(PlaybackJournal.Kind.PAUSE, currentTrackNow()?.title, reason)
         waitingForConnection = false
@@ -824,7 +830,7 @@ class PlaybackController @Inject internal constructor(
         startRequestId++
         currentPlayJob?.cancel()
         _isStarting.value = false
-        playerRepository.pause()
+        if (smooth) playerRepository.pauseSmoothly() else playerRepository.pause()
         persistNow()
     }
 
@@ -838,7 +844,7 @@ class PlaybackController @Inject internal constructor(
         if (playerRepository.currentTrackId.value == null) {
             restoredPositionMs.value = positionMs
         } else {
-            playerRepository.seekTo(positionMs)
+            playerRepository.seekSmoothly(positionMs)
         }
     }
 
@@ -978,8 +984,27 @@ class PlaybackController @Inject internal constructor(
         if (active?.queue?.account == account.value) followQueueAccount(account.value) else switchQueueNow(waveId, play = false)
     }
 
-    /** A Jellyfin account's default queue exists from sign-in on (D83); an account with queues already keeps them. */
-    fun ensureDefaultQueue(account: AccountId, name: String) = queueOp { queueManager.defaultQueue(account.value, name) }
+    /**
+     * A Jellyfin account's default queue exists from sign-in on (D83); an account with queues already keeps them.
+     * With no active queue yet (the first account of a fresh install, or Jellyfin only), it becomes the active one.
+     */
+    fun ensureDefaultQueue(account: AccountId, name: String) = queueOp {
+        val queue = queueManager.defaultQueue(account.value, name)
+        if (active == null || !accountContext.signedInAnyProvider(active?.queue?.account)) {
+            queueManager.switchTo(queue.id, null)
+            restoredPositionMs.value = active?.queue?.positionMs ?: 0L
+        }
+    }
+
+    /**
+     * Where playback goes when the accounts [leaving] go (D62): a staying Yandex account (the default one, else the
+     * most recently used), else the first staying Jellyfin account; null when none stays.
+     */
+    fun fallbackAccount(leaving: Set<AccountId> = emptySet()): AccountId? = SignOutPlan.fallbackAny(
+        staying = authRepository.getAllAccounts().filter { it.accountId() !in leaving },
+        defaultUid = authRepository.getDefaultAccountUid(),
+        jellyfinStaying = accountContext.jellyfinAccounts().map { it.first }.filter { it !in leaving }
+    )
 
     /** The account's My Wave queue exists from sign-in on (D63); an existing one (same uid) is kept. */
     fun ensureWaveQueue(account: AccountId) = queueOp { queueManager.waveQueue(account.value, waveName) }
@@ -1047,11 +1072,13 @@ class PlaybackController @Inject internal constructor(
             restoredPositionMs.value = 0L
             return
         }
+        // A Jellyfin account has no My Wave: its default queue is its way in (D83)
+        val jellyfinName = accountContext.jellyfinAccounts().firstOrNull { it.first == fallback }?.second
         val target = queueManager.queues.value
             .filter { it.queue.account == fallback.value }
             .sortedWith(compareBy<QueueSummary>({ it.queue.kind != QueueKind.WAVE }, { it.queue.sortOrder }))
             .firstOrNull()?.queue?.id
-            ?: queueManager.waveQueue(fallback.value, waveName).id
+            ?: (if (jellyfinName != null) queueManager.defaultQueue(fallback.value, jellyfinName) else queueManager.waveQueue(fallback.value, waveName)).id
         queueManager.switchTo(target, position)
         val now = active ?: return
         restoredPositionMs.value = now.queue.positionMs
@@ -1063,10 +1090,14 @@ class PlaybackController @Inject internal constructor(
      * the same fallback as a sign-out, so a removed account's queue never comes back as the playing one.
      */
     private suspend fun leaveStrandedQueue() {
-        val account = active?.queue?.account ?: return
+        val account = active?.queue?.account
+        if (account == null) {
+            // No active queue: with Jellyfin only nothing else makes one active (a Yandex sign-in enters My Wave)
+            if (authRepository.getAllAccounts().isEmpty()) fallbackAccount()?.let { enterFallback(it, position = null) }
+            return
+        }
         if (accountContext.signedInAnyProvider(account)) return
-        val fallback = SignOutPlan.fallback(authRepository.getAllAccounts(), authRepository.getDefaultAccountUid())
-        enterFallback(fallback, position = null)
+        enterFallback(fallbackAccount(), position = null)
     }
 
     /** A queue as stored, without making it active: a removed account's queue looked at (D62). */
@@ -2062,6 +2093,9 @@ class PlaybackController @Inject internal constructor(
      */
     private fun prepareStandbyWhenSettled(track: Track) {
         standbyJob?.cancel()
+        // A track already on disk (one just left by a skip back, one played before) is ready at once: Next doesn't
+        // wait for the calm window and the 20 s buffer to say so (b85 checkpoint). The warm player still waits.
+        nextReadyFromDisk(track)
         val current = currentTrackNow()?.idString
         standbyJob = scope.launch {
             // A burst of skips is not over until the engine is settled (F4): nothing is fetched for a passing track
@@ -2103,6 +2137,22 @@ class PlaybackController @Inject internal constructor(
             }
             playerRepository.prepareNextTrack(nextId, stream, track.title, track.artists.firstOrNull()?.name, coverUrlFor(track))
         }
+    }
+
+    /**
+     * [track]'s bytes on disk decide its Next state before anything is fetched: all of them → ready (on disk); its
+     * start → ready, the rest is filled in by the preload; none → nothing changes here.
+     */
+    private fun nextReadyFromDisk(track: Track) {
+        if (track.isRadio || sleep.endsWithTrack) return
+        val nextId = track.idString
+        val ready = when (nextFetch.cachedState(playbackAccount?.value, nextId)) {
+            StreamCache.CachedState.COMPLETE -> NextTrack.Ready(nextId, onDisk = true)
+            StreamCache.CachedState.START -> NextTrack.Ready(nextId, onDisk = false)
+            StreamCache.CachedState.NONE -> return
+        }
+        nextTitle = track.title
+        setNext(ready)
     }
 
     /** The next track no longer holds (the queue changed): its warm player, its disk write and its state go. */

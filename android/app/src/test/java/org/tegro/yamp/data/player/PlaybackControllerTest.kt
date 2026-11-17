@@ -404,6 +404,97 @@ class PlaybackControllerTest {
         assertEquals(org.tegro.yamp.domain.player.NextTrack.Ready("2", onDisk = true), controller.nextTrack.value)
     }
 
+    /**
+     * b85 checkpoint: a next track already on disk (the one just left by a skip back) is ready at once — even while the
+     * engine is still settling, when the preload itself waits; its start on disk is ready too, the rest fills in.
+     */
+    @Test
+    fun aNextTrackAlreadyOnDiskIsReadyAtOnceAfterASkipBack() {
+        val controller = controller()
+        val tracks = playlist("1", "2", "3")
+        controller.playing("2", tracks)
+        nextFetch.cached["2"] = org.tegro.yamp.data.player.StreamCache.CachedState.COMPLETE
+        engine.unsettled = true
+
+        controller.playPrev()
+        controller.settle()
+
+        assertEquals("1", controller.currentTrack.value?.idString)
+        assertEquals(org.tegro.yamp.domain.player.NextTrack.Ready("2", onDisk = true), controller.nextTrack.value)
+
+        nextFetch.cached["3"] = org.tegro.yamp.data.player.StreamCache.CachedState.START
+        controller.playTrack("2", tracks, PlaylistSource.LIBRARY)
+        controller.settle()
+        assertEquals("its start on disk: a skip to it sounds at once", org.tegro.yamp.domain.player.NextTrack.Ready("3", onDisk = false), controller.nextTrack.value)
+    }
+
+    /** Startup paths (first start, Jellyfin only): which queue is active once the saved session is restored. */
+    @Test
+    fun withNoAccountNoQueueIsActive() {
+        auth.activeAccount.value = null
+        auth.allAccounts.value = emptyList()
+        val controller = controller()
+        assertNull(controller.activeQueue.value)
+    }
+
+    @Test
+    fun withJellyfinOnlyItsDefaultQueueIsActiveAtStart() {
+        auth.activeAccount.value = null
+        auth.allAccounts.value = emptyList()
+        val home = org.tegro.yamp.data.provider.jellyfin.JellyfinAccount(
+            serverUrl = "http://10.0.2.2:8096", serverId = "srv1", serverName = "Home Media",
+            userId = "u1", userName = "alex", token = "t0k"
+        )
+        val store = org.tegro.yamp.data.provider.jellyfin.JellyfinAccountStore {
+            context.getSharedPreferences("startup_jellyfin_only", android.content.Context.MODE_PRIVATE)
+        }.apply { add(home) }
+
+        val controller = controller(jellyfin = store)
+        controller.settle()
+
+        val active = controller.activeQueue.value
+        assertEquals("no My Wave: the Jellyfin default queue is the way in (D83)", home.id.value, active?.queue?.account)
+        assertEquals(org.tegro.yamp.domain.queue.QueueKind.STATIC, active?.queue?.kind)
+        assertEquals("Home Media", active?.queue?.name)
+        assertTrue(active?.entries.orEmpty().isEmpty())
+    }
+
+    @Test
+    fun withYandexOnlyOrBothNothingIsMadeActiveBeforeTheSignInEntersMyWave() {
+        assertNull("Yandex only: as before, the status refresh enters My Wave", controller().activeQueue.value)
+
+        val home = org.tegro.yamp.data.provider.jellyfin.JellyfinAccount(
+            serverUrl = "http://10.0.2.2:8096", serverId = "srv1", serverName = "Home Media",
+            userId = "u1", userName = "alex", token = "t0k"
+        )
+        val store = org.tegro.yamp.data.provider.jellyfin.JellyfinAccountStore {
+            context.getSharedPreferences("startup_both", android.content.Context.MODE_PRIVATE)
+        }.apply { add(home) }
+        assertNull("both: Yandex's first start is unchanged", controller(jellyfin = store).activeQueue.value)
+    }
+
+    /** The last Yandex account leaving while Jellyfin stays: playback falls back to the Jellyfin default queue. */
+    @Test
+    fun signingOutTheLastYandexAccountFallsBackToJellyfin() {
+        val home = org.tegro.yamp.data.provider.jellyfin.JellyfinAccount(
+            serverUrl = "http://10.0.2.2:8096", serverId = "srv1", serverName = "Home Media",
+            userId = "u1", userName = "alex", token = "t0k"
+        )
+        val store = org.tegro.yamp.data.provider.jellyfin.JellyfinAccountStore {
+            context.getSharedPreferences("fallback_jellyfin", android.content.Context.MODE_PRIVATE)
+        }.apply { add(home) }
+        val controller = controller(jellyfin = store)
+        controller.playing("1", playlist("1", "2"))
+        val yandex = org.tegro.yamp.domain.account.AccountId.yandex("1001")
+
+        val fallback = controller.fallbackAccount(setOf(yandex))
+        assertEquals(home.id, fallback)
+        controller.leaveAccount(yandex, fallback)
+        controller.settle()
+
+        assertEquals(home.id.value, controller.activeQueue.value?.queue?.account)
+    }
+
     /** D80: a warm standby makes the next track ready even before its file is all on disk. */
     @Test
     fun aWarmStandbyMakesTheNextTrackReady() {
@@ -892,6 +983,21 @@ class PlaybackControllerTest {
     }
 
     @Test
+    fun anAlbumPlayedNextGoesRightAfterTheCurrentTrackInOrderAndAddedToEndGoesLast() {
+        // Album / artist actions: "Play next" and "Add to end" take the whole list in one queue operation
+        val controller = controller()
+        controller.playing("1", playlist("1", "2", "3"))
+
+        controller.playNextTracks(listOf(track("7"), track("8")))
+        controller.settle()
+        assertEquals(listOf("1", "7", "8", "2", "3"), controller.currentPlaylist.value.ids)
+
+        controller.addToEnd(listOf(track("20"), track("21")))
+        controller.settle()
+        assertEquals(listOf("1", "7", "8", "2", "3", "20", "21"), controller.currentPlaylist.value.ids)
+    }
+
+    @Test
     fun movingATrackToTheNextSlotPreparesIt() {
         val controller = controller()
         controller.playing("1", playlist("1", "2", "3", "4"))
@@ -926,6 +1032,39 @@ class PlaybackControllerTest {
         controller.settle()
 
         assertEquals("next after the second \"a\" is \"c\"", listOf("c"), engine.played.map { it.trackId })
+    }
+
+    /** The user's pause, play and seek are the smooth ones; a focus loss, a call and "no data" pause at once. */
+    @Test
+    fun theUsersPausePlayAndSeekAreSmoothAFocusLossIsNot() {
+        val controller = controller()
+        controller.playing("1", playlist("1", "2"))
+        controller.settle()
+        engine.smoothCalls.clear()
+
+        controller.pause()
+        controller.play()
+        controller.seekTo(42_000L)
+        controller.pause(reason = "audio focus lost")
+        controller.settle()
+
+        assertEquals(listOf("pause", "resume", "seek"), engine.smoothCalls.toList())
+        assertEquals("the focus loss used the plain pause", 2, engine.names.count { it == "pause" })
+    }
+
+    /** Play with nothing loaded (a restored session) starts the track rising, not at full volume. */
+    @Test
+    fun playWithNothingLoadedAsksTheStartToRise() {
+        val controller = controller()
+        controller.playing("1", playlist("1", "2"))
+        controller.settle()
+        engine.currentTrackId.value = null
+        engine.riseOnNextStartCalls = 0
+
+        controller.play()
+        controller.settle()
+
+        assertEquals(1, engine.riseOnNextStartCalls)
     }
 
     /** The user's empty queue is never swapped for My Wave by a Play or Next (found on the head unit). */

@@ -38,4 +38,15 @@ class QueueFitTest {
         assertEquals(Provider.JELLYFIN, homeTrack.service)
         assertNull(TrackRef.of(MediaRef.PROVIDER_RADIO, "fm").service)
     }
+
+    @Test
+    fun `an album or an artist fits the same queues as its tracks (D84)`() {
+        val yandexAlbum = MediaRef(MediaRef.PROVIDER_YANDEX, "album", "7")
+        val homeArtist = MediaRef("jellyfin@srv1", "artist", "a1")
+        assertTrue(yandexAlbum.fitsQueueOf(yandexA))
+        assertFalse(yandexAlbum.fitsQueueOf(home))
+        assertTrue(homeArtist.fitsQueueOf(home))
+        assertFalse(homeArtist.fitsQueueOf(office))
+        assertFalse(homeArtist.fitsQueueOf(yandexA))
+    }
 }

@@ -9,8 +9,11 @@ import org.tegro.yamp.domain.account.Provider
  * D57); a Jellyfin track fits only an account on its own server (item ids are per server, D78). A queue without an
  * account (from before Phase 2a) is a Yandex one.
  */
-fun TrackRef.fitsQueueOf(account: AccountId?): Boolean {
-    val ref = MediaRef.parse(value) ?: return false
+fun TrackRef.fitsQueueOf(account: AccountId?): Boolean = MediaRef.parse(value)?.fitsQueueOf(account) ?: false
+
+/** The same rule for an album or an artist: whether its tracks may go into a queue of [account] (D84). */
+fun MediaRef.fitsQueueOf(account: AccountId?): Boolean {
+    val ref = this
     return when (ref.providerType) {
         MediaRef.PROVIDER_YANDEX -> account == null || account.provider == Provider.YANDEX
         Provider.JELLYFIN.key -> account?.provider == Provider.JELLYFIN && ref.instance != null &&

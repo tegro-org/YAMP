@@ -154,6 +154,7 @@ class ScriptedExoPlayer(sessionId: Int) : NoErrorExoPlayer() {
     override fun seekTo(mediaItemIndex: Int, positionMs: Long, seekCommand: Int, isRepeatingCurrentItem: Boolean) {
         flush()
         position = positionMs
+        seeks += positionMs
     }
 
     override fun getDuration(): Long = if (items.isEmpty()) C.TIME_UNSET else TRACK_MS
@@ -165,7 +166,14 @@ class ScriptedExoPlayer(sessionId: Int) : NoErrorExoPlayer() {
     override fun isLoading(): Boolean = state == Player.STATE_BUFFERING
 
     override fun getVolume(): Float = vol
-    override fun setVolume(volume: Float) { vol = volume }
+    /** Every volume the engine set, in order (smooth pause / play / seek ramps). */
+    val volumes = mutableListOf<Float>()
+    override fun setVolume(volume: Float) {
+        vol = volume
+        volumes += volume
+    }
+    /** Every position the engine sought to. */
+    val seeks = mutableListOf<Long>()
 
     override fun getAudioSessionId(): Int = session
     override fun setAudioSessionId(audioSessionId: Int) {

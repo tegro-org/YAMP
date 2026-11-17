@@ -50,8 +50,13 @@ data class Album(
     val year: Int?,
     val trackCount: Int,
     /** In play order, discs one after another; empty when the list did not include them. */
-    val tracks: List<Track> = emptyList()
+    val tracks: List<Track> = emptyList(),
+    /** A proper album, a single or a compilation; a provider that doesn't say gives [AlbumKind.ALBUM]. */
+    val kind: AlbumKind = AlbumKind.ALBUM
 )
+
+/** What kind of release an [Album] is — "add the artist" leaves singles and compilations out unless asked. */
+enum class AlbumKind { ALBUM, SINGLE, COMPILATION }
 
 data class Playlist(
     val ref: MediaRef,

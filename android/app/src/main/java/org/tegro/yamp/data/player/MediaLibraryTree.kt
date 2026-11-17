@@ -60,18 +60,22 @@ class MediaLibraryTree @Inject constructor(
                 .map { queueItem(it, null) }
         }
         return when (parentId) {
-            ROOT_ID -> listOf(
-                playable(
-                    WAVE_ID, context.getString(R.string.auto_my_wave), context.getString(R.string.auto_my_wave_subtitle),
-                    artwork = resourceUri(R.drawable.ic_notification), mediaType = MediaMetadata.MEDIA_TYPE_RADIO_STATION
-                ),
-                folder(LIKED_ID, context.getString(R.string.auto_liked), MediaMetadata.MEDIA_TYPE_PLAYLIST),
-                folder(DOWNLOADED_ID, context.getString(R.string.auto_downloaded), MediaMetadata.MEDIA_TYPE_PLAYLIST),
-                folder(PLAYLISTS_ID, context.getString(R.string.auto_playlists), MediaMetadata.MEDIA_TYPE_FOLDER_PLAYLISTS),
-                folder(RADIO_ID, context.getString(R.string.auto_radio), MediaMetadata.MEDIA_TYPE_FOLDER_RADIO_STATIONS)
-                    .withExtras(Bundle().apply { putInt(CONTENT_STYLE_PLAYABLE_HINT, CONTENT_STYLE_GRID) }),
-                folder(QUEUES_ID, context.getString(R.string.queue_switcher_title), MediaMetadata.MEDIA_TYPE_FOLDER_PLAYLISTS)
-            )
+            ROOT_ID -> {
+                // My Wave, likes, downloads and playlists are Yandex's: with Jellyfin only, radio and the queues stay
+                val yandex = signedInAccounts.current().any { it.provider == org.tegro.yamp.domain.account.Provider.YANDEX }
+                listOfNotNull(
+                    playable(
+                        WAVE_ID, context.getString(R.string.auto_my_wave), context.getString(R.string.auto_my_wave_subtitle),
+                        artwork = resourceUri(R.drawable.ic_notification), mediaType = MediaMetadata.MEDIA_TYPE_RADIO_STATION
+                    ).takeIf { yandex },
+                    folder(LIKED_ID, context.getString(R.string.auto_liked), MediaMetadata.MEDIA_TYPE_PLAYLIST).takeIf { yandex },
+                    folder(DOWNLOADED_ID, context.getString(R.string.auto_downloaded), MediaMetadata.MEDIA_TYPE_PLAYLIST).takeIf { yandex },
+                    folder(PLAYLISTS_ID, context.getString(R.string.auto_playlists), MediaMetadata.MEDIA_TYPE_FOLDER_PLAYLISTS).takeIf { yandex },
+                    folder(RADIO_ID, context.getString(R.string.auto_radio), MediaMetadata.MEDIA_TYPE_FOLDER_RADIO_STATIONS)
+                        .withExtras(Bundle().apply { putInt(CONTENT_STYLE_PLAYABLE_HINT, CONTENT_STYLE_GRID) }),
+                    folder(QUEUES_ID, context.getString(R.string.queue_switcher_title), MediaMetadata.MEDIA_TYPE_FOLDER_PLAYLISTS)
+                )
+            }
             LIKED_ID -> liked().map { trackItem(LIKED_PREFIX, it) }
             DOWNLOADED_ID -> downloaded().map { trackItem(DOWNLOADED_PREFIX, it) }
             PLAYLISTS_ID -> playlistsRepository.playlists.value.map { playlist ->
