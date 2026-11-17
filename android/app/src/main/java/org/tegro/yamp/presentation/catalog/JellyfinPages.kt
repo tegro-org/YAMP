@@ -124,11 +124,24 @@ fun BrowsePageScreen(state: CatalogPageState, contentBottom: Dp, actions: Catalo
     }
 }
 
+/** A long press on an album or an artist: its actions (canvas am-search-album-jf); null for playlists and genres. */
+@Composable
+private fun mediaHold(item: BrowseItem): (() -> Unit)? {
+    val menu = org.tegro.yamp.presentation.media.LocalMediaMenu.current ?: return null
+    val target = when (item) {
+        is BrowseItem.OfAlbum -> org.tegro.yamp.presentation.media.MediaTarget.of(item.album, stringResource(R.string.media_album_word))
+        is BrowseItem.OfArtist -> org.tegro.yamp.presentation.media.MediaTarget.of(item.artist, stringResource(R.string.media_artist_word))
+        else -> return null
+    }
+    return { menu.open(target) }
+}
+
 /** An album tile of a browse list. */
 @Composable
 private fun BrowseTile(item: BrowseItem, page: CatalogPage.Browse, actions: CatalogActions) {
     val album = (item as? BrowseItem.OfAlbum)?.album ?: return
-    Column(Modifier.fillMaxWidth().hifiPress({ actions.onOpen(CatalogPage.Album(album.ref.id, album.title, page.account)) })) {
+    val hold = mediaHold(item)
+    Column(Modifier.fillMaxWidth().hifiPress({ actions.onOpen(CatalogPage.Album(album.ref.id, album.title, page.account)) }, onLongClick = hold)) {
         Box(Modifier.fillMaxWidth()) { Cover(album.cover?.key, Icons.Rounded.Album, RoundedCornerShape(14.dp), TILE) }
         Spacer(Modifier.height(6.dp))
         Text(album.title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -154,8 +167,9 @@ private fun BrowseRow(item: BrowseItem, page: CatalogPage.Browse, actions: Catal
         }
         is BrowseItem.OfAlbum -> Triple(item.album.title, null) { actions.onOpen(CatalogPage.Album(item.album.ref.id, item.album.title, account)) }
     }
+    val hold = mediaHold(item)
     Row(
-        Modifier.fillMaxWidth().height(64.dp).hifiPress(open),
+        Modifier.fillMaxWidth().height(64.dp).hifiPress(open, onLongClick = hold),
         verticalAlignment = Alignment.CenterVertically
     ) {
         when (item) {

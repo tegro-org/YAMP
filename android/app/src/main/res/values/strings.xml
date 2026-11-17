@@ -579,6 +579,12 @@
     <string name="add_account_yandex_sub">Another Yandex account — its own My Wave and likes</string>
     <string name="add_account_jellyfin_sub">Your own music server — address, then a code or a password</string>
     <string name="add_account_note">Every account works at the same time and gets its own queue to start from.</string>
+    <string name="welcome_line">Where is your music?</string>
+    <string name="welcome_yandex_sub">Sign in with your Yandex account — My Wave, likes, playlists</string>
+    <string name="welcome_jellyfin_sub">Your own music server — its address, then a code or a password</string>
+    <string name="welcome_later">More accounts can be added later in Settings → Accounts.</string>
+    <string name="queue_empty_title">The queue is empty</string>
+    <string name="queue_empty_hint">Add music from Library or Search</string>
     <string name="jellyfin_intro">Your own music server. Enter its address, then confirm a code in Jellyfin or sign in with your account on it.</string>
     <string name="jellyfin_server">Server address</string>
     <string name="jellyfin_check">Check</string>
@@ -613,4 +619,32 @@
     <string name="jellyfin_lib_genres">Genres</string>
     <string name="jellyfin_page_offline">%1$s isn’t reachable. Shown from the last visit; retrying by itself.</string>
     <string name="jellyfin_list_empty">Nothing here yet</string>
+    <!-- Album / artist actions (canvas am-*) -->
+    <string name="tab_home">Home</string>
+    <string name="media_play_now">Play now</string>
+    <string name="media_play_now_sub">Replaces the current queue</string>
+    <string name="media_album_word">Album</string>
+    <string name="media_artist_word">Artist</string>
+    <string name="media_artist_asks">Adding an artist asks first: all albums or the popular tracks.</string>
+    <string name="media_artist_add_title">Add «%1$s»</string>
+    <string name="media_artist_play_title">Play «%1$s»</string>
+    <string name="media_target_play">Replaces the current queue.</string>
+    <string name="media_target_next">Plays right after the current track.</string>
+    <string name="media_target_end">Goes to the end of the current queue.</string>
+    <string name="media_target_queue">Then choose the queue.</string>
+    <string name="media_all_albums">All albums · release order</string>
+    <string name="media_with_extras">Include singles and compilations</string>
+    <string name="media_popular">Popular tracks</string>
+    <string name="media_add">Add</string>
+    <string name="media_play">Play</string>
+    <string name="media_loading">Loading…</string>
+    <string name="media_load_failed">Couldn’t load the tracks</string>
+    <string name="media_added">Added: %1$s</string>
+    <string name="media_albums_one" tools:ignore="PluralsCandidate">%d album</string>
+    <string name="media_albums_few" tools:ignore="PluralsCandidate">%d albums</string>
+    <string name="media_albums_many" tools:ignore="PluralsCandidate">%d albums</string>
+    <string name="media_releases_one" tools:ignore="PluralsCandidate">%d release</string>
+    <string name="media_releases_few" tools:ignore="PluralsCandidate">%d releases</string>
+    <string name="media_releases_many" tools:ignore="PluralsCandidate">%d releases</string>
+    <string name="cd_media_menu">Album or artist actions</string>
 </resources>

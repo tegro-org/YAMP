@@ -121,6 +121,12 @@ class InteractionLogicTest {
         assertEquals(listOf(SessionButtons.Kind.DISLIKE, SessionButtons.Kind.LIKE), SessionButtons.kindsFor(track("1").toTrack(), liked = false))
         assertEquals(listOf(SessionButtons.Kind.DISLIKE, SessionButtons.Kind.UNLIKE), SessionButtons.kindsFor(track("1").toTrack(), liked = true))
         assertEquals(listOf(SessionButtons.Kind.UNLIKE), SessionButtons.kindsFor(track("radio_x").copy(isRadio = true).toTrack(), liked = true))
+        // A Jellyfin track has no likes yet (P5): no reaction buttons in the notification or the car
+        val jellyfinTrack = org.tegro.yamp.domain.media.Track(
+            ref = org.tegro.yamp.provider.jellyfin.JellyfinRefs("srv1").track("j1"), title = "Song", artists = emptyList(),
+            album = null, durationMs = 180_000L, cover = null, explicit = false
+        )
+        assertEquals(emptyList<SessionButtons.Kind>(), SessionButtons.kindsFor(jellyfinTrack, liked = false))
         assertTrue("nothing plays", SessionButtons.kindsFor(null, liked = false).isEmpty())
     }
 

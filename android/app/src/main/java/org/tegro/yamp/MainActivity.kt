@@ -175,17 +175,18 @@ class MainActivity : ComponentActivity() {
 fun AppNavigation(skipSplash: Boolean = false, openPlayerSignal: Int = 0) {
     val navController = rememberNavController()
     val mainViewModel: MainViewModel = hiltViewModel()
-    val isAuthorized by mainViewModel.isAuthorized.collectAsStateWithLifecycle()
+    // Any provider's account opens the app; with none the first start asks where the music is (Yandex isn't required)
+    val hasAccount by mainViewModel.hasAnyAccount.collectAsStateWithLifecycle()
     // Music is playing or a session was restored: open straight to the player UI, like Apple Music.
     val startDestination = remember {
         val hasSession = mainViewModel.currentTrack.value != null
-        if (isAuthorized && (skipSplash || hasSession)) "main" else "splash"
+        if (hasAccount && (skipSplash || hasSession)) "main" else "splash"
     }
 
-    androidx.compose.runtime.LaunchedEffect(isAuthorized) {
+    androidx.compose.runtime.LaunchedEffect(hasAccount) {
         val currentRoute = navController.currentBackStackEntry?.destination?.route
-        if (!isAuthorized && currentRoute != "splash" && currentRoute != "auth") {
-            navController.navigate("auth") {
+        if (!hasAccount && currentRoute !in setOf("splash", "welcome", "auth")) {
+            navController.navigate("welcome") {
                 popUpTo(0) { inclusive = true }
             }
         }
@@ -198,18 +199,37 @@ fun AppNavigation(skipSplash: Boolean = false, openPlayerSignal: Int = 0) {
         composable("splash") {
             org.tegro.yamp.presentation.splash.SplashScreen(
                 onSplashFinished = {
-                    val destination = if (isAuthorized) "main" else "auth"
+                    val destination = if (hasAccount) "main" else "welcome"
                     navController.navigate(destination) {
                         popUpTo("splash") { inclusive = true }
                     }
                 }
             )
         }
+        composable("welcome") {
+            var signingInJellyfin by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+            // A Jellyfin sign-in completes here: the account exists, so the app opens
+            androidx.compose.runtime.LaunchedEffect(hasAccount) {
+                if (hasAccount) navController.navigate("main") { popUpTo(0) { inclusive = true } }
+            }
+            org.tegro.yamp.presentation.auth.WelcomeScreen(
+                onYandex = { navController.navigate("auth") },
+                onJellyfin = { signingInJellyfin = true }
+            )
+            if (signingInJellyfin) {
+                org.tegro.yamp.presentation.account.JellyfinSignInHost(onDismiss = { signingInJellyfin = false })
+            }
+        }
         composable("auth") {
             AuthScreen(
                 onAuthSuccess = {
+                    // From the first start the chooser goes too; from Settings → Accounts only the sign-in
                     navController.navigate("main") {
-                        popUpTo("auth") { inclusive = true }
+                        if (navController.previousBackStackEntry?.destination?.route == "welcome") {
+                            popUpTo(0) { inclusive = true }
+                        } else {
+                            popUpTo("auth") { inclusive = true }
+                        }
                     }
                 }
             )

@@ -138,7 +138,7 @@ internal fun SettingsRow(
 }
 
 @Composable
-internal fun AccountCard(name: String, avatarUrl: String?, hasPlus: Boolean, onClick: (() -> Unit)? = null) {
+internal fun AccountCard(name: String, avatarUrl: String?, hasPlus: Boolean, onClick: (() -> Unit)? = null, subtitle: String? = null) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -165,7 +165,7 @@ internal fun AccountCard(name: String, avatarUrl: String?, hasPlus: Boolean, onC
         Column(Modifier.weight(1f)) {
             Text(name.ifEmpty { "—" }, color = Color.White, fontSize = 19.sp, lineHeight = 23.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(
-                stringResource(if (hasPlus) R.string.settings_account_plus else R.string.settings_account_no_plus),
+                subtitle ?: stringResource(if (hasPlus) R.string.settings_account_plus else R.string.settings_account_no_plus),
                 color = HiFi.TextSecondary,
                 fontSize = 14.sp,
                 maxLines = 1,

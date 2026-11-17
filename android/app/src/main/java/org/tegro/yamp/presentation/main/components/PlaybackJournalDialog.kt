@@ -118,6 +118,7 @@ internal fun eventText(e: PlaybackJournal.Event): String {
         PlaybackJournal.Kind.NEXT -> "next ${detail.orEmpty()}"
         PlaybackJournal.Kind.CACHE -> "cache ${detail.orEmpty()}"
         PlaybackJournal.Kind.REPORT -> "report ${detail.orEmpty()}"
+        PlaybackJournal.Kind.FADE -> "fade ${detail.orEmpty()}"
     }
     return listOfNotNull(body, title).joinToString(" ")
 }

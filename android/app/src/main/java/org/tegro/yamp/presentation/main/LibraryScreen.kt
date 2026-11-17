@@ -159,6 +159,8 @@ fun LibraryScreen(
     historyPage: @Composable (modifier: Modifier, contentBottom: androidx.compose.ui.unit.Dp, onBack: () -> Unit) -> Unit = { _, _, _ -> },
     /** Each signed-in Jellyfin account's library (step 22): its rows open the catalog stack's browse pages. */
     jellyfinLibraries: List<org.tegro.yamp.presentation.catalog.JellyfinLibraryRow> = emptyList(),
+    /** A Yandex account is signed in: its likes, downloads and playlists rows show (`wl-jf-library`: none without). */
+    yandex: Boolean = true,
     onOpenJellyfin: (org.tegro.yamp.presentation.catalog.CatalogPage.Browse) -> Unit = {}
 ) {
     var showSettings by remember { mutableStateOf(false) }
@@ -219,24 +221,31 @@ fun LibraryScreen(
                     .fadeUnderHeader({ with(density) { (statusBar + LibraryFadeStart).toPx() } }, with(density) { LibraryFadeLength.toPx() }),
                 contentPadding = PaddingValues(start = contentStart, end = 20.dp, top = statusBar + LibraryFadeStart + LibraryFadeLength + 2.dp, bottom = contentBottom)
             ) {
-                item(key = "buttons") {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        MetalPillButton(stringResource(R.string.library_listen), onPlayAllClick, Modifier.weight(1f), icon = Icons.Rounded.PlayArrow)
-                        GlassPillButton(stringResource(R.string.library_shuffle), onShuffleClick, Modifier.weight(1f), icon = Icons.Rounded.Shuffle)
+                if (yandex) {
+                    item(key = "buttons") {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            MetalPillButton(stringResource(R.string.library_listen), onPlayAllClick, Modifier.weight(1f), icon = Icons.Rounded.PlayArrow)
+                            GlassPillButton(stringResource(R.string.library_shuffle), onShuffleClick, Modifier.weight(1f), icon = Icons.Rounded.Shuffle)
+                        }
                     }
                 }
                 item(key = "sections") {
-                    Column(Modifier.padding(top = 14.dp)) {
-                        SectionRow(Icons.Rounded.Favorite, stringResource(R.string.library_liked), tracks.size) { sectionName = LibrarySection.LIKED.name }
-                        SectionRow(Icons.Rounded.DownloadDone, stringResource(R.string.library_downloaded), downloaded.size) { sectionName = LibrarySection.DOWNLOADED.name }
+                    Column(Modifier.padding(top = if (yandex) 14.dp else 0.dp)) {
+                        if (yandex) {
+                            SectionRow(Icons.Rounded.Favorite, stringResource(R.string.library_liked), tracks.size) { sectionName = LibrarySection.LIKED.name }
+                            SectionRow(Icons.Rounded.DownloadDone, stringResource(R.string.library_downloaded), downloaded.size) { sectionName = LibrarySection.DOWNLOADED.name }
+                        }
                         SectionRow(Icons.Rounded.History, stringResource(R.string.history_row), historyCount) { sectionName = LibrarySection.HISTORY.name }
-                        SectionRow(Icons.AutoMirrored.Rounded.PlaylistPlay, stringResource(R.string.library_playlists_row), playlists.size) { sectionName = LibrarySection.PLAYLISTS.name }
+                        if (yandex) {
+                            SectionRow(Icons.AutoMirrored.Rounded.PlaylistPlay, stringResource(R.string.library_playlists_row), playlists.size) { sectionName = LibrarySection.PLAYLISTS.name }
+                        }
                     }
                 }
                 jellyfinLibraries.forEach { library ->
                     item(key = "jellyfin:" + library.account.value) { JellyfinLibrarySection(library, onOpenJellyfin) }
                 }
-                when (LoadState.of(tracks, tracks.isEmpty(), isLoading, loadFailed)) {
+                // The likes' states are Yandex's: with Jellyfin only there are none to load or to miss
+                if (yandex) when (LoadState.of(tracks, tracks.isEmpty(), isLoading, loadFailed)) {
                     LoadState.Loading -> item(key = "loading") { HiFiSkeletonRows(Modifier.padding(top = 28.dp), count = 4) }
                     LoadState.Failed -> item(key = "failed") { HiFiErrorState(onRetry = onRefresh) }
                     LoadState.Empty -> item(key = "empty") {

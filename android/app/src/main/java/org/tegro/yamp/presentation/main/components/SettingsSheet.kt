@@ -352,7 +352,7 @@ private fun SettingsActions.copyWith(onLogout: () -> Unit, onClearDownloads: () 
 
 @Composable
 private fun accountSummary(state: SettingsUiState): String =
-    stringResource(if (state.hasPlus) R.string.settings_account_plus else R.string.settings_account_no_plus)
+    state.accountSubtitle ?: stringResource(if (state.hasPlus) R.string.settings_account_plus else R.string.settings_account_no_plus)
 
 @Composable
 private fun playbackSummary(state: SettingsUiState): String {
@@ -397,7 +397,7 @@ private fun aboutSummary(): String = stringResource(R.string.settings_version, L
 private fun ColumnScope.RootPage(state: SettingsUiState, onOpen: (SettingsPage) -> Unit) {
     Spacer(Modifier.heightIn(min = 14.dp))
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Color.White.copy(alpha = 0.05f))) {
-        AccountCard(state.accountName, state.avatarUrl, state.hasPlus, onClick = { onOpen(SettingsPage.ACCOUNT) })
+        AccountCard(state.accountName, state.avatarUrl, state.hasPlus, onClick = { onOpen(SettingsPage.ACCOUNT) }, subtitle = state.accountSubtitle)
     }
     Spacer(Modifier.heightIn(min = 14.dp))
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Color.White.copy(alpha = 0.05f)).selectableGroup()) {
@@ -470,7 +470,7 @@ private fun ColumnScope.SettingsPageContent(page: SettingsPage, state: SettingsU
 private fun ColumnScope.AccountPage(state: SettingsUiState, actions: SettingsActions) {
     SettingsGroup(stringResource(R.string.settings_g_profile)) {
         // All accounts are live (D56): the card opens the accounts list (add, remove, default), nothing to switch to
-        AccountCard(state.accountName, state.avatarUrl, state.hasPlus, onClick = actions.onAccountManagement)
+        AccountCard(state.accountName, state.avatarUrl, state.hasPlus, onClick = actions.onAccountManagement, subtitle = state.accountSubtitle)
         SettingsRow(icon = Icons.AutoMirrored.Rounded.Login, title = stringResource(R.string.settings_add_account), onClick = actions.onAddAccount)
     }
     // With one account nothing is grouped, so the switch only shows with two or more (D58, D64)

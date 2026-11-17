@@ -61,6 +61,13 @@ class MainViewModel @Inject constructor(
     val isAuthorized = authRepository.isAuthorized()
         .stateIn(viewModelScope, SharingStarted.Eagerly, authRepository.getToken() != null)
 
+    /**
+     * Any account of any provider is signed in: what decides between the app and the first-start chooser. Yandex
+     * isn't required — with Jellyfin only the app runs on its queues ([isAuthorized] stays Yandex's).
+     */
+    val hasAnyAccount: StateFlow<Boolean> = signedInAccounts.accounts.map { it.isNotEmpty() }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, signedInAccounts.current().isNotEmpty())
+
     // region Library
 
     // Library and charts live in the process-wide LibraryRepository (single-flight, incremental sync)
@@ -300,7 +307,7 @@ class MainViewModel @Inject constructor(
 
     /** "Music on launch": once per process, and never over music that already plays. */
     fun applyStartMusic() {
-        if (!isAuthorized.value || !playRequests.claimLaunchStart()) return
+        if (!hasAnyAccount.value || !playRequests.claimLaunchStart()) return
         viewModelScope.launch {
             val mode = settingsRepository.startMusic.first()
             if (mode == StartMusic.OFF) return@launch
@@ -312,7 +319,8 @@ class MainViewModel @Inject constructor(
                 // persistent queues the queue the user chose last goes on (D35), the wave only when there is none
                 StartMusic.WAVE -> if (playbackController.currentTrack.value != null) {
                     playbackController.play()
-                } else {
+                } else if (isAuthorized.value) {
+                    // My Wave is Yandex's: with Jellyfin only there is none to start
                     playbackController.playMyVibe()
                 }
                 StartMusic.OFF -> Unit

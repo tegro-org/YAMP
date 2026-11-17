@@ -112,6 +112,12 @@
     <string name="add_account_yandex_sub">Ещё один аккаунт Яндекса — своя «Моя волна» и лайки</string>
     <string name="add_account_jellyfin_sub">Свой музыкальный сервер — адрес, затем код или пароль</string>
     <string name="add_account_note">Все аккаунты работают одновременно, у каждого — своя очередь для начала.</string>
+    <string name="welcome_line">Где ваша музыка?</string>
+    <string name="welcome_yandex_sub">Войти в аккаунт Яндекса — «Моя волна», лайки, плейлисты</string>
+    <string name="welcome_jellyfin_sub">Свой музыкальный сервер — адрес, затем код или пароль</string>
+    <string name="welcome_later">Другие аккаунты можно добавить позже: Настройки → Аккаунты.</string>
+    <string name="queue_empty_title">Очередь пока пуста</string>
+    <string name="queue_empty_hint">Добавьте музыку из Библиотеки или Поиска</string>
     <string name="jellyfin_intro">Ваш собственный музыкальный сервер. Укажите его адрес, а затем подтвердите код в Jellyfin или войдите со своей учётной записью.</string>
     <string name="jellyfin_server">Адрес сервера</string>
     <string name="jellyfin_check">Проверить</string>
@@ -146,4 +152,32 @@
     <string name="jellyfin_lib_genres">Жанры</string>
     <string name="jellyfin_page_offline">%1$s не отвечает. Показано с прошлого раза; повторим сами.</string>
     <string name="jellyfin_list_empty">Здесь пока пусто</string>
+    <!-- Действия с альбомом / исполнителем (канвас am-*) -->
+    <string name="tab_home">Главная</string>
+    <string name="media_play_now">Слушать сейчас</string>
+    <string name="media_play_now_sub">Заменит текущую очередь</string>
+    <string name="media_album_word">Альбом</string>
+    <string name="media_artist_word">Исполнитель</string>
+    <string name="media_artist_asks">Перед добавлением исполнителя спросим: все альбомы или популярное.</string>
+    <string name="media_artist_add_title">Добавить «%1$s»</string>
+    <string name="media_artist_play_title">Слушать «%1$s»</string>
+    <string name="media_target_play">Заменит текущую очередь.</string>
+    <string name="media_target_next">Сразу после текущего трека.</string>
+    <string name="media_target_end">В конец текущей очереди.</string>
+    <string name="media_target_queue">Затем выберите очередь.</string>
+    <string name="media_all_albums">Все альбомы · по дате выхода</string>
+    <string name="media_with_extras">Добавить синглы и сборники</string>
+    <string name="media_popular">Популярные треки</string>
+    <string name="media_add">Добавить</string>
+    <string name="media_play">Слушать</string>
+    <string name="media_loading">Загрузка…</string>
+    <string name="media_load_failed">Не удалось загрузить треки</string>
+    <string name="media_added">Добавлено: %1$s</string>
+    <string name="media_albums_one">%d альбом</string>
+    <string name="media_albums_few">%d альбома</string>
+    <string name="media_albums_many">%d альбомов</string>
+    <string name="media_releases_one">%d релиз</string>
+    <string name="media_releases_few">%d релиза</string>
+    <string name="media_releases_many">%d релизов</string>
+    <string name="cd_media_menu">Действия с альбомом или исполнителем</string>
 </resources>

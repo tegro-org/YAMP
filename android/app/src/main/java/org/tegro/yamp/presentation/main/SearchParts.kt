@@ -243,6 +243,12 @@ internal fun ResultsList(
     }
     // A new set of results rises in row by row
     val appearance = rememberAppearance(results)
+    // A long press on an album or an artist opens its actions (canvas am-search-album / am-search-artist)
+    val mediaMenu = org.tegro.yamp.presentation.media.LocalMediaMenu.current
+    val albumWord = stringResource(R.string.media_album_word)
+    val artistWord = stringResource(R.string.media_artist_word)
+    val holdArtist: (Artist) -> (() -> Unit)? = { artist -> mediaMenu?.let { m -> { m.open(org.tegro.yamp.presentation.media.MediaTarget.of(artist, artistWord)) } } }
+    val holdAlbum: (Album) -> (() -> Unit)? = { album -> mediaMenu?.let { m -> { m.open(org.tegro.yamp.presentation.media.MediaTarget.of(album, albumWord)) } } }
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(top = top, bottom = contentBottom)) {
         if (filter == SearchFilter.ALL) {
             item(key = "best_title") {
@@ -253,7 +259,7 @@ internal fun ResultsList(
                     val artist = artists.firstOrNull()
                     val track = results.firstOrNull()
                     if (artist != null) {
-                        BestResultCard(title = artist.name, subtitle = stringResource(R.string.search_artist_single), coverUri = artist.cover?.key, round = true, onClick = { onArtistClick(artist) }, onPlay = null)
+                        BestResultCard(title = artist.name, subtitle = stringResource(R.string.search_artist_single), coverUri = artist.cover?.key, round = true, onClick = { onArtistClick(artist) }, onPlay = null, onLongClick = holdArtist(artist))
                     } else if (track != null) {
                         BestResultCard(
                             title = track.title,
@@ -275,7 +281,7 @@ internal fun ResultsList(
                 LazyRow(contentPadding = PaddingValues(start = contentStart, end = 20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     items(artists, key = { it.ref.value }) { artist ->
                         Column(
-                            Modifier.width(96.dp).hifiPress({ onArtistClick(artist) }),
+                            Modifier.width(96.dp).hifiPress({ onArtistClick(artist) }, onLongClick = holdArtist(artist)),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Box(Modifier.hifiSoftShadow(CircleShape, 14.dp)) { Cover(artist.cover?.key, Icons.Rounded.Person, CircleShape, 88.dp) }
@@ -325,7 +331,7 @@ internal fun ResultsList(
             item(key = "albums") {
                 LazyRow(contentPadding = PaddingValues(start = contentStart, end = 20.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     items(albums, key = { it.ref.value }) { album ->
-                        Column(Modifier.width(150.dp).hifiPress({ onAlbumClick(album) })) {
+                        Column(Modifier.width(150.dp).hifiPress({ onAlbumClick(album) }, onLongClick = holdAlbum(album))) {
                             Box(Modifier.hifiSoftShadow(RoundedCornerShape(16.dp), 18.dp)) { Cover(album.cover?.key, Icons.Rounded.Album, RoundedCornerShape(16.dp), 150.dp) }
                             Spacer(Modifier.height(9.dp))
                             Text(album.title, style = HiFiType.CardTitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -349,7 +355,7 @@ internal fun ResultsList(
 
 /** The top match on a card tinted with the app color; a knob plays a track result right away. */
 @Composable
-internal fun BestResultCard(title: String, subtitle: String, coverUri: String?, round: Boolean, onClick: () -> Unit, onPlay: (() -> Unit)?) {
+internal fun BestResultCard(title: String, subtitle: String, coverUri: String?, round: Boolean, onClick: () -> Unit, onPlay: (() -> Unit)?, onLongClick: (() -> Unit)? = null) {
     val tint = LocalArtworkTint.current
     val shape = RoundedCornerShape(24.dp)
     Row(
@@ -360,7 +366,7 @@ internal fun BestResultCard(title: String, subtitle: String, coverUri: String?, 
             .clip(shape)
             .background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(tint.primary.copy(alpha = 0.55f), tint.secondary.copy(alpha = 0.55f), HiFi.Ground)))
             .hifiGlass(shape, fill = Color.Black.copy(alpha = 0.18f), border = Color.White.copy(alpha = 0.12f))
-            .hifiPress(onClick)
+            .hifiPress(onClick, onLongClick = onLongClick)
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

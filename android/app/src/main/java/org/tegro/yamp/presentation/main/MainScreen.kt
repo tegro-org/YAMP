@@ -133,6 +133,8 @@ fun MainScreen(
     val streamQuality by viewModel.streamQuality.collectAsStateWithLifecycle()
     val linkState by viewModel.linkState.collectAsStateWithLifecycle()
     val catalogStack by catalogVm.stack.collectAsStateWithLifecycle()
+    // A Yandex account is signed in: the first tab is My Wave, else a plain Home (Jellyfin only)
+    val isAuthorizedYandex by viewModel.isAuthorized.collectAsStateWithLifecycle()
     val radioStations by radioVm.stations.collectAsStateWithLifecycle()
     // Progress ticks 10× a second: the State is handed out as `{ progressState.value }` and read only where
     // it is drawn, so nothing here recomposes on a tick
@@ -178,6 +180,10 @@ fun MainScreen(
         TrackMenuLauncher { track, playlist -> trackMenu = TrackMenuRequest(track, playlist, pickPlaylist = false) }
     }
     val queueSwitcherLauncher = remember(queuesVm) { QueueSwitcherLauncher { queuesVm.open(it) } }
+    // Album / artist actions: a long press on one, or the ⋮ of its page
+    var mediaMenu by remember { mutableStateOf<org.tegro.yamp.presentation.media.MediaTarget?>(null) }
+    val mediaMenuLauncher = remember { org.tegro.yamp.presentation.media.MediaMenuLauncher { mediaMenu = it } }
+    val mediaScope = androidx.compose.runtime.rememberCoroutineScope()
     val catalogActions = remember(catalogVm, viewModel) {
         CatalogActions(
             onBack = { catalogVm.back() },
@@ -229,6 +235,8 @@ fun MainScreen(
         LocalLinkState provides linkState,
         LocalTrackMenu provides trackMenuLauncher,
         LocalQueueSwitcher provides queueSwitcherLauncher,
+        org.tegro.yamp.presentation.main.components.LocalWaveTab provides isAuthorizedYandex,
+        org.tegro.yamp.presentation.media.LocalMediaMenu provides mediaMenuLauncher,
         LocalHiFiLite provides lite,
         LocalArtworkTint provides appTint,
         org.tegro.yamp.presentation.player.LocalPlaybackAux provides playbackAux
@@ -273,7 +281,8 @@ fun MainScreen(
                         } else when (tab) {
                             MainTab.HOME -> HomeTab(
                                 viewModel, now, progress, isLandscape, contentBottom,
-                                onOpenPlayer = if (currentTrack != null) openPlayer else null
+                                onOpenPlayer = if (currentTrack != null) openPlayer else null,
+                                onOpenTab = { chosenTab = it }
                             )
                             MainTab.SEARCH -> SearchTab(viewModel, searchVm, catalogVm, now)
                             MainTab.LIBRARY -> LibraryTab(
@@ -427,6 +436,9 @@ fun MainScreen(
                         onDismiss = { trackMenu = null },
                         onLeavePlayer = { isPlayerExpanded = false }
                     )
+                }
+                mediaMenu?.let { target ->
+                    org.tegro.yamp.presentation.media.MediaMenuHost(target, snackbar, mediaScope, onDismiss = { mediaMenu = null })
                 }
                 QueueSwitcherHost(queuesVm, snackbar)
                 UpdateHost(updateVm)

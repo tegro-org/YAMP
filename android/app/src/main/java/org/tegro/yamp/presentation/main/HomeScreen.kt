@@ -22,6 +22,10 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -172,7 +176,11 @@ fun HomeScreen(
     queueCount: Int = 0,
     mode: HomeMode = HomeMode.Wave,
     /** The active queue's account, with more than one account: "as Anna" under the title (D56, D58). */
-    account: org.tegro.yamp.presentation.account.AccountTag? = null
+    account: org.tegro.yamp.presentation.account.AccountTag? = null,
+    /** A queue of the user's own with nothing in it yet: the bottom block says where to find music (`wl-jf-home`). */
+    emptyQueue: Boolean = false,
+    onOpenLibrary: () -> Unit = {},
+    onOpenSearch: () -> Unit = {}
 ) {
     val wave = mode is HomeMode.Wave
     val title = when (mode) {
@@ -231,8 +239,12 @@ fun HomeScreen(
                 if (account != null) AccountCaption(account, Modifier.padding(top = 4.dp))
                 if (!chipsOverKnob) chips(Modifier.padding(top = if (account != null) 8.dp else 10.dp))
                 Spacer(Modifier.weight(1f))
-                WaveTrackInfo(waveTrack, shelf.startsWith, wave, isLiked, onLike, onDislike)
-                WaveShelf(shelf, wave, shimmer, onOpenPlayer, onShelfClick, horizontalPadding = 0.dp, cardSize = if (windowSize.heightDp < 480) 84.dp else 112.dp)
+                if (emptyQueue) {
+                    EmptyQueueCard(big = windowSize.widthDp >= 900, onOpenLibrary = onOpenLibrary, onOpenSearch = onOpenSearch)
+                } else {
+                    WaveTrackInfo(waveTrack, shelf.startsWith, wave, isLiked, onLike, onDislike)
+                    WaveShelf(shelf, wave, shimmer, onOpenPlayer, onShelfClick, horizontalPadding = 0.dp, cardSize = if (windowSize.heightDp < 480) 84.dp else 112.dp)
+                }
             }
         }
     } else {
@@ -260,8 +272,12 @@ fun HomeScreen(
                 },
                 {
                     Column {
-                        Box(Modifier.padding(horizontal = 20.dp)) { WaveTrackInfo(waveTrack, shelf.startsWith, wave, isLiked, onLike, onDislike) }
-                        WaveShelf(shelf, wave, shimmer, onOpenPlayer, onShelfClick, horizontalPadding = 20.dp, cardSize = portraitShelfCard(windowSize.widthDp.dp))
+                        if (emptyQueue) {
+                            Box(Modifier.padding(horizontal = 20.dp)) { EmptyQueueCard(big = false, onOpenLibrary = onOpenLibrary, onOpenSearch = onOpenSearch) }
+                        } else {
+                            Box(Modifier.padding(horizontal = 20.dp)) { WaveTrackInfo(waveTrack, shelf.startsWith, wave, isLiked, onLike, onDislike) }
+                            WaveShelf(shelf, wave, shimmer, onOpenPlayer, onShelfClick, horizontalPadding = 20.dp, cardSize = portraitShelfCard(windowSize.widthDp.dp))
+                        }
                     }
                 }
             ),
@@ -291,6 +307,45 @@ fun HomeScreen(
 }
 
 private val WaveInstrumentPadding = 8.dp
+
+/**
+ * The empty queue's card (canvas `wl-jf-home`): what to do next, with the two ways there. Shown in place of the
+ * track and the "next up" shelf while the active queue of the user's own has no entries.
+ */
+@Composable
+internal fun EmptyQueueCard(big: Boolean, onOpenLibrary: () -> Unit, onOpenSearch: () -> Unit) {
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(if (big) 30.dp else 24.dp)
+    Column(
+        Modifier.fillMaxWidth().clip(shape).background(HiFi.GlassFill)
+            .border(1.dp, HiFi.GlassBorder, shape).padding(horizontal = if (big) 32.dp else 18.dp, vertical = if (big) 28.dp else 18.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.AutoMirrored.Filled.QueueMusic, null, tint = HiFi.TextSecondary, modifier = Modifier.size(if (big) 40.dp else 28.dp))
+            Column(Modifier.padding(start = if (big) 18.dp else 12.dp)) {
+                Text(stringResource(R.string.queue_empty_title), color = HiFi.TextPrimary, fontSize = if (big) 26.sp else 19.sp, fontWeight = FontWeight.ExtraBold)
+                Text(stringResource(R.string.queue_empty_hint), color = HiFi.TextSecondary, fontSize = if (big) 19.sp else 14.sp, modifier = Modifier.padding(top = 2.dp))
+            }
+        }
+        Row(Modifier.padding(top = if (big) 22.dp else 14.dp), horizontalArrangement = Arrangement.spacedBy(if (big) 16.dp else 10.dp)) {
+            EmptyQueueButton(Icons.Default.LibraryMusic, stringResource(R.string.tab_music), big, onOpenLibrary, Modifier.weight(1f))
+            EmptyQueueButton(Icons.Default.Search, stringResource(R.string.tab_search), big, onOpenSearch, Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+private fun EmptyQueueButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, big: Boolean, onClick: () -> Unit, modifier: Modifier) {
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(50)
+    Row(
+        modifier.height(if (big) 76.dp else 48.dp).clip(shape).background(HiFi.GlassFill).border(1.dp, HiFi.GlassBorder, shape)
+            .clickable(onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+    ) {
+        Icon(icon, null, tint = HiFi.TextPrimary, modifier = Modifier.size(if (big) 28.dp else 20.dp))
+        Text(label, color = HiFi.TextPrimary, fontSize = if (big) 22.sp else 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 8.dp))
+    }
+}
 
 /**
  * The "next up" cards on a standing screen: 132 dp on a phone, growing with the width so a tablet or a

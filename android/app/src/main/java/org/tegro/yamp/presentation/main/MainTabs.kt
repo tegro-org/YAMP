@@ -1,5 +1,6 @@
 package org.tegro.yamp.presentation.main
 
+import org.tegro.yamp.presentation.main.components.MainTab
 import org.tegro.yamp.data.player.PlaybackQueue
 import org.tegro.yamp.presentation.main.components.SettingsActions
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -95,7 +96,9 @@ internal fun HomeTab(
     progress: () -> Long,
     isLandscape: Boolean,
     contentBottom: Dp,
-    onOpenPlayer: (() -> Unit)?
+    onOpenPlayer: (() -> Unit)?,
+    /** The empty queue's card sends the user to Library or Search. */
+    onOpenTab: (MainTab) -> Unit = {}
 ) {
     val queue by viewModel.currentPlaylist.collectAsStateWithLifecycle()
     val wavePreview by viewModel.wavePreview.collectAsStateWithLifecycle()
@@ -146,7 +149,11 @@ internal fun HomeTab(
         onBackToMyWave = viewModel::returnToMyWave,
         queueCount = queues.size,
         account = viewModel.markOf(accountTags, active?.queue?.account),
-        mode = mode
+        mode = mode,
+        // A queue of the user's own with nothing in it yet (a new Jellyfin account's default queue, D83)
+        emptyQueue = !wavePage && active?.entries?.isEmpty() == true,
+        onOpenLibrary = { onOpenTab(MainTab.LIBRARY) },
+        onOpenSearch = { onOpenTab(MainTab.SEARCH) }
     )
 }
 
@@ -234,6 +241,8 @@ internal fun LibraryTab(
     val contextAccount by accountVm.contextAccount.collectAsStateWithLifecycle()
     val accountAvatarUrl by accountVm.accountAvatarUrl.collectAsStateWithLifecycle()
     val allAccounts by accountVm.allAccounts.collectAsStateWithLifecycle()
+    val jellyfinRows by accountVm.jellyfinRows.collectAsStateWithLifecycle()
+    val activeQueue by viewModel.activeQueue.collectAsStateWithLifecycle()
     val updateStatusMessage by updateVm.statusMessage.collectAsStateWithLifecycle()
     val crashReports by crashVm.reports.collectAsStateWithLifecycle()
     val userPlaylists by playlistsVm.playlists.collectAsStateWithLifecycle()
@@ -243,10 +252,15 @@ internal fun LibraryTab(
         if (viewModel.tracks.value.isEmpty()) viewModel.loadLikedTracks()
     }
 
+    // Without a Yandex account the card shows the active queue's Jellyfin account (or the first one)
+    val jellyfinCard = if (contextAccount == null) {
+        jellyfinRows.firstOrNull { it.tag.key == activeQueue?.queue?.account } ?: jellyfinRows.firstOrNull()
+    } else null
     val settings = settingsState.copy(
-        accountName = accountName,
-        avatarUrl = accountAvatarUrl,
+        accountName = jellyfinCard?.tag?.name ?: accountName,
+        avatarUrl = if (jellyfinCard != null) null else accountAvatarUrl,
         hasPlus = contextAccount?.hasPlus == true,
+        accountSubtitle = jellyfinCard?.let { if (it.sub.contains("Jellyfin")) it.sub else listOf("Jellyfin", it.sub).filter(String::isNotBlank).joinToString(" · ") },
         multiAccount = allAccounts.size > 1,
         updateStatus = updateStatusMessage,
         crashReports = crashReports.size
@@ -350,6 +364,7 @@ internal fun LibraryTab(
             )
         },
         jellyfinLibraries = jellyfinLibraries,
+        yandex = viewModel.isAuthorized.collectAsStateWithLifecycle().value,
         onOpenJellyfin = onOpenJellyfin
     )
 }
@@ -398,6 +413,7 @@ internal fun CarTab(
     val skipExplicit by viewModel.skipExplicit.collectAsStateWithLifecycle()
     val activeQueue by viewModel.activeQueue.collectAsStateWithLifecycle()
     val accountTags by viewModel.accountTags.collectAsStateWithLifecycle()
+    val isYandexSignedIn by viewModel.isAuthorized.collectAsStateWithLifecycle()
     val queueSwitcher = LocalQueueSwitcher.current
     val track = now.track
     // What will really play next, by the player's own rule (explicit passed over, a playlist goes on from its start)
@@ -418,6 +434,7 @@ internal fun CarTab(
         onPlayFavorites = { viewModel.playAllLikedTracks() },
         onPlayHits = { viewModel.playHits(shuffle = true) },
         onPlayDownloaded = { viewModel.playDownloaded() },
+        yandex = isYandexSignedIn,
         onPlayRadio = { radioVm.playFirst() },
         onExit = onExit,
         isLandscape = isLandscape,

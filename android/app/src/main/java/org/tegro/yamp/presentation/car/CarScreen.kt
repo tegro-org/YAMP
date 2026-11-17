@@ -174,6 +174,8 @@ fun CarScreen(
     onPlayFavorites: () -> Unit,
     onPlayHits: () -> Unit,
     onPlayDownloaded: () -> Unit,
+    /** A Yandex account is signed in: My Wave, favourites, hits and downloads are its; FM radio needs none. */
+    yandex: Boolean = true,
     onPlayRadio: () -> Unit,
     onExit: () -> Unit,
     isLandscape: Boolean = false,
@@ -259,7 +261,7 @@ fun CarScreen(
         DockItem(CarSource.RADIO, Icons.Rounded.Radio, stringResource(R.string.car_source_radio), onPlayRadio),
         DockItem(CarSource.HITS, Icons.AutoMirrored.Rounded.TrendingUp, stringResource(R.string.car_source_hits), onPlayHits),
         DockItem(CarSource.DOWNLOADED, Icons.Rounded.DownloadDone, stringResource(R.string.car_source_downloaded), onPlayDownloaded)
-    )
+    ).filter { yandex || it.source == CarSource.RADIO }
 
     // The gesture is set up once; the callbacks it fires are the latest ones
     val latestPrev by androidx.compose.runtime.rememberUpdatedState(onPrevClick)
@@ -368,7 +370,8 @@ fun CarScreen(
                 WavePill(Icons.Rounded.Tune, stringResource(R.string.wave_tune_short), active = !waveTuning.isDefault, height = pillHeight, fontSize = pillFont,
                     onClick = { tuneOpen = true }, description = stringResource(R.string.wave_tune_title))
             } else {
-                currentTrack?.takeIf { !it.isRadio }?.let { track ->
+                // A wave by a Jellyfin track has no Yandex station to come from
+                currentTrack?.takeIf { it.supportsLikes }?.let { track ->
                     WavePill(Icons.Rounded.Waves, stringResource(R.string.wave_by_track), active = false, height = pillHeight, fontSize = pillFont, onClick = { onTrackWave(track) })
                 }
                 if (onWave) {

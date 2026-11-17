@@ -30,6 +30,7 @@ import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Waves
+import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -49,6 +50,12 @@ import androidx.compose.ui.unit.sp
 import org.tegro.yamp.presentation.hifi.hifiSoftShadow
 import org.tegro.yamp.presentation.hifi.HiFi
 import org.tegro.yamp.presentation.hifi.HiFiMotion
+
+/**
+ * Whether the first tab is My Wave (a Yandex account is signed in) or a plain Home (Jellyfin only, canvas
+ * `wl-jf-home`): the label and icon follow. MainScreen provides it; previews and tests keep the wave.
+ */
+val LocalWaveTab = androidx.compose.runtime.staticCompositionLocalOf { true }
 
 enum class MainTab(@param:androidx.annotation.StringRes val title: Int, val icon: ImageVector, val route: String) {
     HOME(R.string.tab_wave, Icons.Rounded.Waves, "home"),
@@ -189,11 +196,14 @@ private fun TabItem(tab: MainTab, selected: Boolean, scaleFactor: Float, modifie
             .selectable(selected = selected, role = Role.Tab, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
+        // With Jellyfin only there is no My Wave: the first tab is "Home"
+        val plainHome = tab == MainTab.HOME && !LocalWaveTab.current
+        val title = stringResource(if (plainHome) R.string.tab_home else tab.title)
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(imageVector = tab.icon, contentDescription = stringResource(tab.title), tint = iconColor, modifier = Modifier.size(iconSize))
+            Icon(imageVector = if (plainHome) Icons.Rounded.Home else tab.icon, contentDescription = title, tint = iconColor, modifier = Modifier.size(iconSize))
             Spacer(Modifier.height(2.dp))
             Text(
-                text = stringResource(tab.title),
+                text = title,
                 color = if (selected) Color.White else Color.White.copy(alpha = 0.80f),
                 fontSize = (10.5f * scaleFactor).sp,
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,

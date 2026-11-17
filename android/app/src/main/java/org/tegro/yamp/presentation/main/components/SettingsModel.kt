@@ -17,6 +17,11 @@ data class SettingsUiState(
     val accountName: String = "",
     val avatarUrl: String? = null,
     val hasPlus: Boolean = false,
+    /**
+     * The card's second line when the context account isn't a Yandex one (Jellyfin only): "Jellyfin · server";
+     * null = the Yandex Plus line.
+     */
+    val accountSubtitle: String? = null,
     /** More than one signed-in account: the "Group" switch shows (D58, D64). */
     val multiAccount: Boolean = false,
     val groupQueues: Boolean = true,

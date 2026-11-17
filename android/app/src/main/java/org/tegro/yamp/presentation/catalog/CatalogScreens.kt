@@ -125,6 +125,14 @@ fun CatalogPageScreen(
         ?: state.playlist?.title?.ifEmpty { null } ?: state.page.title
     val coverKey = if (isArtist) state.artist?.artist?.cover?.key else state.album?.cover?.key ?: state.playlist?.cover?.key
     val appearance = rememberAppearance(state.page)
+    // The ⋮ of an album or artist page opens its actions (canvas am-album-page-menu / am-artist-page-menu), both
+    // providers; a playlist page keeps its list menu
+    val mediaMenu = org.tegro.yamp.presentation.media.LocalMediaMenu.current
+    val albumWord = stringResource(R.string.media_album_word)
+    val artistWord = stringResource(R.string.media_artist_word)
+    val pageTarget = state.album?.let { org.tegro.yamp.presentation.media.MediaTarget.of(it, albumWord) }
+        ?: state.artist?.artist?.let { org.tegro.yamp.presentation.media.MediaTarget.of(it, artistWord) }
+    val holdAlbum: (Album) -> (() -> Unit)? = { album -> mediaMenu?.let { m -> { m.open(org.tegro.yamp.presentation.media.MediaTarget.of(album, albumWord)) } } }
     val isLandscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation ==
         android.content.res.Configuration.ORIENTATION_LANDSCAPE
 
@@ -170,7 +178,10 @@ fun CatalogPageScreen(
                         }
                     },
                     trailing = {
-                        if (tracks.isNotEmpty() && !jellyfin) {
+                        if (pageTarget != null && mediaMenu != null) {
+                            Spacer(Modifier.width(12.dp))
+                            MediaMenuButton { mediaMenu.open(pageTarget) }
+                        } else if (tracks.isNotEmpty() && !jellyfin) {
                             Spacer(Modifier.width(12.dp))
                             ListMenuButton(tracks, state.page.title, actions.onAddToEnd, radioSeedOf(state.page))
                         }
@@ -188,7 +199,8 @@ fun CatalogPageScreen(
                     }
                     Spacer(Modifier.weight(1f))
                     // The list's queue actions sit where the playlist page keeps its menu
-                    if (tracks.isNotEmpty() && !jellyfin) ListMenuButton(tracks, state.page.title, actions.onAddToEnd, radioSeedOf(state.page))
+                    if (pageTarget != null && mediaMenu != null) MediaMenuButton { mediaMenu.open(pageTarget) }
+                    else if (tracks.isNotEmpty() && !jellyfin) ListMenuButton(tracks, state.page.title, actions.onAddToEnd, radioSeedOf(state.page))
                 }
                 Spacer(Modifier.height(12.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -252,7 +264,7 @@ fun CatalogPageScreen(
                     item(key = "albums") {
                         Column {
                             SectionTitle(stringResource(R.string.catalog_albums))
-                            AlbumsRow(albums, onOpen = { album -> openAlbum(album.ref.id, album.title) })
+                            AlbumsRow(albums, onOpen = { album -> openAlbum(album.ref.id, album.title) }, onHold = holdAlbum)
                         }
                     }
                 }
@@ -297,13 +309,19 @@ private fun TrackCountLine(count: Int) {
 
 /** A horizontal row of album covers, used on artist pages and in search results. */
 @Composable
-fun AlbumsRow(albums: List<Album>, onOpen: (Album) -> Unit, contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp)) {
+fun AlbumsRow(
+    albums: List<Album>,
+    onOpen: (Album) -> Unit,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp),
+    /** A long press: the album's actions (canvas am-artist-album-menu); null = none. */
+    onHold: (Album) -> (() -> Unit)? = { null }
+) {
     LazyRow(contentPadding = contentPadding, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         items(albums, key = { it.ref.value }) { album ->
             Column(
                 modifier = Modifier
                     .width(120.dp)
-                    .hifiPress({ onOpen(album) })
+                    .hifiPress({ onOpen(album) }, onLongClick = onHold(album))
             ) {
                 Cover(album.cover?.key, Icons.Default.Album, RoundedCornerShape(12.dp), 120.dp)
                 Spacer(Modifier.height(6.dp))
@@ -361,6 +379,14 @@ private fun ListMenuButton(tracks: List<Track>, title: String, onAddToEnd: (List
             Icon(Icons.Default.MoreVert, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
         }
         AddToQueueMenu(expanded = open, onDismiss = { open = false }, tracks = tracks, title = title, onAddToEnd = onAddToEnd, radioSeed = radioSeed)
+    }
+}
+
+/** "⋮" of an album or artist page: the album / artist actions. */
+@Composable
+private fun MediaMenuButton(onClick: () -> Unit) {
+    GlassCircleButton(onClick = onClick, contentDescription = stringResource(R.string.cd_media_menu)) {
+        Icon(Icons.Default.MoreVert, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
     }
 }
 
