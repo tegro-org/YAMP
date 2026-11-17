@@ -117,7 +117,7 @@ class LayoutSafetyTest {
 
     @Test
     fun testApiTracksMetadataSignatures() {
-        val apiFile = File(sourceDir, "data/network/YandexMusicApi.kt").readText()
+        val apiFile = File(sourceDir, "data/provider/yandex/network/YandexMusicApi.kt").readText()
         assertTrue("YandexMusicApi must declare POST getTracksMetadata with List<String>",
             apiFile.contains("suspend fun getTracksMetadata(\n        @retrofit2.http.Field(\"track-ids\") trackIds: List<String>"))
         assertTrue("YandexMusicApi must declare GET getTracksMetadataQuery with String",
@@ -157,11 +157,12 @@ class LayoutSafetyTest {
 
     @Test
     fun testRadioStationResourceUriFormat() {
-        val controllerFile = File(sourceDir, "data/player/PlaybackController.kt").readText()
-        assertTrue("PlaybackController must use BuildConfig.APPLICATION_ID for radio resource uri",
-            controllerFile.contains("android.resource://\${BuildConfig.APPLICATION_ID}/\$it"))
-        org.junit.Assert.assertFalse("PlaybackController must not hardcode old package name in resource uri",
-            controllerFile.contains("android.resource://org.tegro.yamp/"))
+        // The station on air is built by the FM radio source since phase 3 step 16 (D76)
+        val radioFile = File(sourceDir, "data/provider/radio/FmRadio.kt").readText()
+        assertTrue("FmRadio must use BuildConfig.APPLICATION_ID for radio resource uri",
+            radioFile.contains("android.resource://\${BuildConfig.APPLICATION_ID}/\$it"))
+        org.junit.Assert.assertFalse("FmRadio must not hardcode old package name in resource uri",
+            radioFile.contains("android.resource://org.tegro.yamp/"))
     }
 
     @Test
@@ -312,7 +313,7 @@ class LayoutSafetyTest {
         assertTrue("AuthRepositoryImpl must implement removeAccount", authRepoFile.contains("fun removeAccount("))
         assertTrue("AuthRepositoryImpl must implement clearAllAccounts", authRepoFile.contains("fun clearAllAccounts()"))
 
-        val cacheManagerFile = File(sourceDir, "data/cache/PlaylistCacheManager.kt").readText()
+        val cacheManagerFile = File(sourceDir, "data/provider/yandex/cache/PlaylistCacheManager.kt").readText()
         // Per-account isolation itself is checked on a device by PlaylistCacheInstrumentedTest.accountsAreIsolated
         assertTrue("PlaylistCacheManager must key lists by the account folder", cacheManagerFile.contains("sanitizeUserFolder(userFolder)"))
         assertTrue("PlaylistCacheManager must contain clearUserCache", cacheManagerFile.contains("fun clearUserCache("))
@@ -447,14 +448,20 @@ class LayoutSafetyTest {
         assertTrue("TrackPreloadManager must check TTL expiration",
             preloadManagerFile.contains("System.currentTimeMillis() - cached.fetchedAtMs > URL_TTL_MS"))
 
+        // A failed stream's link is spent: the engine reports it and the controller invalidates it (D74 — the engine
+        // itself never touches a resolver)
         val playerRepoFile = File(sourceDir, "data/repository/PlayerRepositoryImpl.kt").readText()
-        assertTrue("PlayerRepositoryImpl must evict URL on player error",
-            playerRepoFile.contains("preloadManager.evictUrl(it)"))
+        assertTrue("PlayerRepositoryImpl must report a stale stream on player error",
+            playerRepoFile.contains("_staleStreamEvent.tryEmit(it)"))
+        assertFalse("PlayerRepositoryImpl must not resolve streams (D74)", playerRepoFile.contains("TrackUrlResolver"))
+        val controllerFile = File(sourceDir, "data/player/PlaybackController.kt").readText()
+        assertTrue("PlaybackController must invalidate a stale stream",
+            controllerFile.contains("staleStreamEvent.onEach { streams.forAccount(playbackAccount).invalidate("))
     }
 
     @Test
     fun testLikedTracksZeroLikesSanitization() {
-        val repo = File(sourceDir, "data/repository/LibraryRepository.kt").readText()
+        val repo = File(sourceDir, "data/provider/yandex/repository/LibraryRepository.kt").readText()
         assertFalse("must not call landing personal-playlists fallback", repo.contains("landing3?blocks=personal-playlists"))
         assertFalse("must not call getPlaylistsListRaw fallback", repo.contains("getPlaylistsListRaw"))
         assertFalse("must not call liked playlists fallback", repo.contains("likes/playlists"))
@@ -465,7 +472,7 @@ class LayoutSafetyTest {
 
     @Test
     fun testLibrarySyncIsSingleFlightAndIncremental() {
-        val repo = File(sourceDir, "data/repository/LibraryRepository.kt").readText()
+        val repo = File(sourceDir, "data/provider/yandex/repository/LibraryRepository.kt").readText()
         // One running sync per account (Phase 2a): a concurrent call for the same account joins it
         assertTrue("concurrent syncs must join the running one", repo.contains("likesSyncs[folder]?.takeIf { it.isActive }"))
         assertTrue("unchanged revision must skip work", repo.contains("cacheManager.loadLikesRevision(folder)"))
@@ -479,7 +486,7 @@ class LayoutSafetyTest {
 
     @Test
     fun testMultiAccountCacheIsolationNewProfileEmpty() {
-        val cacheManagerFile = File(sourceDir, "data/cache/PlaylistCacheManager.kt").readText()
+        val cacheManagerFile = File(sourceDir, "data/provider/yandex/cache/PlaylistCacheManager.kt").readText()
         assertFalse("PlaylistCacheManager must not copy legacy cache to new user folders",
             cacheManagerFile.contains("val legacyFile = File(rootCacheDir, \"liked_tracks.json\")"))
     }

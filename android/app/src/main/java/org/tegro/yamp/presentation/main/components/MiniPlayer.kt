@@ -1,5 +1,10 @@
 package org.tegro.yamp.presentation.main.components
 
+import org.tegro.yamp.presentation.player.LocalPlaybackAux
+import org.tegro.yamp.presentation.player.NextLook
+import org.tegro.yamp.presentation.player.NextStateDecor
+import org.tegro.yamp.presentation.player.bufferedFraction
+import org.tegro.yamp.presentation.player.nextLookLabel
 import org.tegro.yamp.utils.cover
 import org.tegro.yamp.utils.CoverSize
 import androidx.compose.runtime.getValue
@@ -53,7 +58,11 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import org.tegro.yamp.presentation.hifi.hifiSoftShadow
 import org.tegro.yamp.R
-import org.tegro.yamp.data.dto.TrackDetailsDto
+import org.tegro.yamp.domain.media.Track
+import org.tegro.yamp.presentation.common.artistNames
+import org.tegro.yamp.presentation.common.coverUri
+import org.tegro.yamp.presentation.common.id
+import org.tegro.yamp.presentation.common.isRadio
 import org.tegro.yamp.presentation.hifi.HiFi
 import org.tegro.yamp.presentation.hifi.HiFiKnob
 import org.tegro.yamp.presentation.hifi.PlayPauseGlyph
@@ -95,7 +104,7 @@ object MiniGesture {
  */
 @Composable
 fun MiniPlayer(
-    track: TrackDetailsDto,
+    track: Track,
     isPlaying: Boolean,
     progress: () -> Long,
     onPlayPauseClick: () -> Unit,
@@ -111,11 +120,12 @@ fun MiniPlayer(
     val offsetX = remember { Animatable(0f) }
     val offsetY = remember { Animatable(0f) }
     val density = LocalDensity.current
-    LaunchedEffect(track.idString) { offsetX.snapTo(0f) }
+    LaunchedEffect(track.id) { offsetX.snapTo(0f) }
     val open by androidx.compose.runtime.rememberUpdatedState(onClick)
     val dismiss by androidx.compose.runtime.rememberUpdatedState(onDismiss)
     val swipeToDismissNow by androidx.compose.runtime.rememberUpdatedState(swipeToDismiss)
     val durationMs = (track.durationMs ?: 0L).coerceAtLeast(0L)
+    val buffered = LocalPlaybackAux.current.buffered
 
     Box(
         modifier = modifier
@@ -189,6 +199,8 @@ fun MiniPlayer(
                     val y = size.height - 1.dp.toPx()
                     val w = size.width - inset * 2
                     drawLine(Color.White.copy(alpha = 0.12f), Offset(inset, y), Offset(inset + w, y), 2.dp.toPx())
+                    val loaded = bufferedFraction(buffered(), progress(), durationMs)
+                    if (loaded > fraction) drawLine(Color.White.copy(alpha = 0.30f), Offset(inset, y), Offset(inset + w * loaded, y), 2.dp.toPx())
                     if (fraction > 0f) drawLine(Color.White.copy(alpha = 0.9f), Offset(inset, y), Offset(inset + w * fraction, y), 2.dp.toPx())
                 }
             }
@@ -224,7 +236,7 @@ fun MiniPlayer(
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = track.title ?: stringResource(R.string.bez_nazvaniya),
+                    text = track.title.ifEmpty { stringResource(R.string.bez_nazvaniya) },
                     color = Color.White,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
@@ -239,7 +251,7 @@ fun MiniPlayer(
                     }
                 } else {
                     Text(
-                        text = track.artists.joinToString { it.name ?: "" }.ifEmpty { stringResource(R.string.player_unknown_artist) },
+                        text = track.artistNames.ifEmpty { stringResource(R.string.player_unknown_artist) },
                         color = HiFi.TextSecondary,
                         fontSize = 13.sp,
                         maxLines = 1,
@@ -255,6 +267,8 @@ fun MiniPlayer(
             ) {
                 PlayPauseGlyph(isPlaying = isPlaying, isLoading = isLoading, size = 22.dp)
             }
+            // Never disabled (D81): the whole 44 dp circle is the tap target; the state only decorates the icon
+            val look = if (track.isRadio) NextLook.READY else LocalPlaybackAux.current.next()
             Box(
                 modifier = Modifier
                     .size(44.dp)
@@ -262,12 +276,18 @@ fun MiniPlayer(
                     .clickable(role = Role.Button, onClick = onNextClick),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    Icons.Rounded.SkipNext,
-                    contentDescription = stringResource(if (track.isRadio) R.string.cd_next_station else R.string.cd_sleduyuschiy_trek),
-                    tint = Color.White,
-                    modifier = Modifier.size(26.dp)
-                )
+                NextStateDecor(look, size = 30.dp) {
+                    Icon(
+                        Icons.Rounded.SkipNext,
+                        contentDescription = if (look == NextLook.READY) {
+                            stringResource(if (track.isRadio) R.string.cd_next_station else R.string.cd_sleduyuschiy_trek)
+                        } else {
+                            nextLookLabel(look)
+                        },
+                        tint = Color.White,
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
             }
         }
     }

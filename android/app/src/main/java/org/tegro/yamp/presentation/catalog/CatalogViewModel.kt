@@ -3,12 +3,15 @@ package org.tegro.yamp.presentation.catalog
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import org.tegro.yamp.data.dto.AlbumDto
-import org.tegro.yamp.data.dto.ArtistBriefDto
-import org.tegro.yamp.data.dto.TrackDetailsDto
+import org.tegro.yamp.data.provider.yandex.ArtistParts
+import org.tegro.yamp.data.provider.yandex.toArtistParts
+import org.tegro.yamp.data.provider.yandex.toAlbum
+import org.tegro.yamp.domain.media.Album
+import org.tegro.yamp.domain.media.Track
+import org.tegro.yamp.presentation.common.id
 import org.tegro.yamp.data.player.PlaybackController
 import org.tegro.yamp.data.player.PlaylistSource
-import org.tegro.yamp.data.repository.CatalogRepository
+import org.tegro.yamp.data.provider.yandex.repository.CatalogRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,10 +30,20 @@ sealed interface CatalogPage {
     data class Album(override val id: String, override val title: String) : CatalogPage
 }
 
+/** An artist's page: who, the popular tracks, the albums (only those that can be opened). */
+data class ArtistPage(
+    val artist: org.tegro.yamp.domain.media.Artist?,
+    val popularTracks: List<Track>,
+    val albums: List<Album>
+)
+
+/** The provider's artist parts as the screen shows them. */
+fun ArtistParts.toArtistPage(): ArtistPage = ArtistPage(artist, popularTracks, albums)
+
 data class CatalogPageState(
     val page: CatalogPage,
-    val artist: ArtistBriefDto? = null,
-    val album: AlbumDto? = null,
+    val artist: ArtistPage? = null,
+    val album: Album? = null,
     val isLoading: Boolean = true,
     val failed: Boolean = false
 )
@@ -72,9 +85,9 @@ class CatalogViewModel @Inject constructor(
     }
 
     /** Plays [tracks] from [trackId] (or the first one, shuffled if asked). */
-    fun play(tracks: List<TrackDetailsDto>, trackId: String? = null, shuffle: Boolean = false) {
+    fun play(tracks: List<Track>, trackId: String? = null, shuffle: Boolean = false) {
         val queue = if (shuffle) tracks.shuffled() else tracks
-        val start = trackId ?: queue.firstOrNull()?.idString ?: return
+        val start = trackId ?: queue.firstOrNull()?.id ?: return
         playRequests.userStarted()
         playbackController.playTrack(start, queue, PlaylistSource.SEARCH)
     }
@@ -84,11 +97,11 @@ class CatalogViewModel @Inject constructor(
             try {
                 when (page) {
                     is CatalogPage.Artist -> {
-                        val artist = repository.artist(page.id)
+                        val artist = repository.artist(page.id).toArtistParts().toArtistPage()
                         replace(page) { it.copy(artist = artist, isLoading = false) }
                     }
                     is CatalogPage.Album -> {
-                        val album = repository.album(page.id)
+                        val album = repository.album(page.id).toAlbum()
                         replace(page) { it.copy(album = album, isLoading = false) }
                     }
                 }

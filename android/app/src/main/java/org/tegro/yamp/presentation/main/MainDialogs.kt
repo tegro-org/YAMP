@@ -7,8 +7,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.tegro.yamp.R
-import org.tegro.yamp.data.dto.TrackDetailsDto
-import org.tegro.yamp.data.dto.UserPlaylistDto
+import org.tegro.yamp.domain.media.Track
+import org.tegro.yamp.presentation.common.id
+import org.tegro.yamp.domain.media.Playlist
 import org.tegro.yamp.data.updater.UpdateCheckResult
 import org.tegro.yamp.presentation.account.AccountManagementDialog
 import org.tegro.yamp.presentation.account.AccountViewModel
@@ -21,12 +22,11 @@ import org.tegro.yamp.presentation.queues.QueueSwitcherRequest
 import org.tegro.yamp.presentation.update.UpdateDialog
 import org.tegro.yamp.presentation.update.UpdateViewModel
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.JsonPrimitive
 
 /** What the track menu was opened for; [pickPlaylist] goes straight to the playlist picker. */
 internal data class TrackMenuRequest(
-    val track: TrackDetailsDto,
-    val playlist: UserPlaylistDto?,
+    val track: Track,
+    val playlist: Playlist?,
     val pickPlaylist: Boolean
 )
 
@@ -47,12 +47,12 @@ internal fun TrackMenuHost(
     val scope = rememberCoroutineScope()
     val track = request.track
     val queueSwitcher = LocalQueueSwitcher.current
-    val trackLabel = listOfNotNull(track.title, track.artists.joinToString { it.name.orEmpty() }.takeIf { it.isNotBlank() }).joinToString(" · ")
+    val trackLabel = listOfNotNull(track.title.ifEmpty { null }, track.artists.joinToString { it.name }.takeIf { it.isNotBlank() }).joinToString(" · ")
     TrackContextMenu(
         track = track,
         inPlaylist = request.playlist,
         playlists = playlists,
-        isLiked = track.idString in likedTrackIds,
+        isLiked = track.id in likedTrackIds,
         startWithPlaylists = request.pickPlaylist,
         onDismiss = onDismiss,
         onPlayNext = {
@@ -62,21 +62,21 @@ internal fun TrackMenuHost(
         onToggleLike = { viewModel.toggleLike(track) },
         onAddTo = { playlistsVm.addTrack(it, track) },
         onCreatePlaylist = { playlistsVm.create(it, thenAdd = track) },
-        onRemoveFromPlaylist = { request.playlist?.let { playlistsVm.removeTrack(it, track.idString) } },
+        onRemoveFromPlaylist = { request.playlist?.let { playlistsVm.removeTrack(it, track.id) } },
         onTrackWave = { viewModel.waveOrRadio(track) { queueSwitcher?.open(QueueSwitcherRequest.StartRadio.of(track)) } },
         waveActive = viewModel.waveActive.collectAsStateWithLifecycle().value,
         onStartRadio = queueSwitcher?.let { switcher -> { switcher.open(QueueSwitcherRequest.StartRadio.of(track)) } },
         onAddToEnd = { viewModel.addToEnd(listOf(track)) },
         onAddToQueue = { queueSwitcher?.open(QueueSwitcherRequest.AddTo(listOf(track), trackLabel)) },
-        onOpenArtist = track.artists.firstNotNullOfOrNull { artist -> artist.idString?.let { id -> id to artist.name.orEmpty() } }
+        onOpenArtist = track.artists.firstNotNullOfOrNull { artist -> artist.ref?.id?.let { id -> id to artist.name } }
             ?.let { (id, name) ->
                 {
                     onLeavePlayer()
                     catalogVm.openArtist(id, name)
                 }
             },
-        onOpenAlbum = track.albums.firstOrNull()?.let { album ->
-            val albumId = (album.id as? JsonPrimitive)?.content ?: return@let null
+        onOpenAlbum = track.album?.let { album ->
+            val albumId = album.ref?.id ?: return@let null
             {
                 onLeavePlayer()
                 catalogVm.openAlbum(albumId, album.title.orEmpty())

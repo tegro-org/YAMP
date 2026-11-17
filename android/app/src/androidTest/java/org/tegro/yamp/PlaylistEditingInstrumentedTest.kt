@@ -2,17 +2,17 @@ package org.tegro.yamp
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import org.tegro.yamp.data.cache.PlaylistCacheManager
+import org.tegro.yamp.data.provider.yandex.cache.PlaylistCacheManager
 import org.tegro.yamp.data.dto.ArtistDto
 import org.tegro.yamp.data.dto.PlaylistTrackDto
 import org.tegro.yamp.data.dto.ResponseWrapper
 import org.tegro.yamp.data.dto.TrackAlbumDto
 import org.tegro.yamp.data.dto.TrackDetailsDto
 import org.tegro.yamp.data.dto.UserPlaylistDto
-import org.tegro.yamp.data.network.YandexMusicApi
-import org.tegro.yamp.data.repository.LibraryRepository
-import org.tegro.yamp.data.repository.UserPlaylistsRepository
-import org.tegro.yamp.data.repository.UserPlaylistsRepository.AddTrackResult
+import org.tegro.yamp.data.provider.yandex.network.YandexMusicApi
+import org.tegro.yamp.data.provider.yandex.repository.LibraryRepository
+import org.tegro.yamp.data.provider.yandex.repository.UserPlaylistsRepository
+import org.tegro.yamp.data.provider.yandex.repository.UserPlaylistsRepository.AddTrackResult
 import org.tegro.yamp.domain.account.accountId
 import org.tegro.yamp.domain.model.UserAccount
 import org.tegro.yamp.domain.repository.AuthRepository

@@ -237,6 +237,42 @@ internal fun SegmentedRow(icon: androidx.compose.ui.graphics.vector.ImageVector,
     }
 }
 
+/** The on-disk stream cache (D86): its size, how full it is, and a way to empty it. */
+@Composable
+internal fun StreamCacheRows(sizeMb: Int, onSizeChange: (Int) -> Unit, usedBytes: Long, onClear: () -> Unit) {
+    val sizes = SettingsRepository.STREAM_CACHE_SIZES_MB
+    val labels = sizes.map { mb ->
+        when {
+            mb == 0 -> stringResource(R.string.settings_reserve_off)
+            mb >= 1024 -> stringResource(R.string.settings_reserve_gb, mb / 1024)
+            else -> stringResource(R.string.settings_reserve_mb, mb)
+        }
+    }
+    val selected = sizes.indexOf(sizeMb).coerceAtLeast(0)
+    SegmentedRow(Icons.Rounded.Route, stringResource(R.string.settings_stream_cache_size)) {
+        Text(stringResource(R.string.settings_stream_cache_hint), color = HiFi.TextSecondary, fontSize = 13.sp, lineHeight = 18.sp)
+        Spacer(Modifier.height(12.dp))
+        HiFiSegmented(options = labels, selectedIndex = selected, onSelect = { onSizeChange(sizes[it]) }, fontSize = 13.sp)
+        if (sizeMb > 0) {
+            Spacer(Modifier.height(6.dp))
+            Text(stringResource(R.string.settings_reserve_used, formatSize(usedBytes), labels[selected]), color = HiFi.TextSecondary, fontSize = 13.sp, lineHeight = 18.sp)
+        }
+    }
+    if (sizeMb > 0) {
+        SettingsRow(
+            icon = Icons.Rounded.DeleteOutline,
+            title = stringResource(R.string.settings_stream_cache_clear),
+            chevron = false,
+            onClick = null,
+            trailing = {
+                TextButton(onClick = onClear) {
+                    Text(stringResource(R.string.settings_clear), color = HiFi.Danger, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        )
+    }
+}
+
 /** The road reserve: its size, what that means in tracks and hours, how full it is. */
 @Composable
 internal fun RoadReserveRows(sizeMb: Int, onSizeChange: (Int) -> Unit, usedBytes: Long, onClear: () -> Unit) {

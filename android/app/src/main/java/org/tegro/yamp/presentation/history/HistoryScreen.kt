@@ -38,7 +38,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.tegro.yamp.R
-import org.tegro.yamp.data.dto.TrackDetailsDto
+import org.tegro.yamp.domain.media.Track
+import org.tegro.yamp.presentation.common.id
 import org.tegro.yamp.domain.queue.QueueKind
 import org.tegro.yamp.presentation.hifi.GlassCircleButton
 import org.tegro.yamp.presentation.hifi.HiFiAlertDialog
@@ -69,8 +70,8 @@ fun HistoryScreen(
     onBack: () -> Unit,
     onOpened: () -> Unit,
     onSelectFilter: (Long?) -> Unit,
-    onTrackClick: (TrackDetailsDto) -> Unit,
-    onToggleLike: (TrackDetailsDto) -> Unit,
+    onTrackClick: (Track) -> Unit,
+    onToggleLike: (Track) -> Unit,
     onClear: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -163,16 +164,16 @@ private fun HistoryTrack(
     likedTrackIds: Set<String>,
     downloadedTrackIds: Set<String>,
     showQueue: Boolean,
-    onToggleLike: (TrackDetailsDto) -> Unit,
-    onTrackClick: (TrackDetailsDto) -> Unit
+    onToggleLike: (Track) -> Unit,
+    onTrackClick: (Track) -> Unit
 ) {
     val track = row.track
-    val artist = track.artists.joinToString { it.name.orEmpty() }.ifEmpty { stringResource(R.string.player_unknown_artist) }
+    val artist = track.artists.joinToString { it.name }.ifEmpty { stringResource(R.string.player_unknown_artist) }
     TrackItem(
         track = track,
-        isPlaying = isPlaying && track.idString == currentTrackId,
-        isLiked = track.idString in likedTrackIds,
-        isDownloaded = track.idString in downloadedTrackIds,
+        isPlaying = isPlaying && track.id == currentTrackId,
+        isLiked = track.id in likedTrackIds,
+        isDownloaded = track.id in downloadedTrackIds,
         // In "All" every row says where it played
         subtitle = if (showQueue && !row.queueName.isNullOrBlank()) "$artist · ${row.queueName}" else null,
         onToggleLike = { onToggleLike(track) },

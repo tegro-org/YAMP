@@ -50,7 +50,8 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import org.tegro.yamp.R
-import org.tegro.yamp.data.dto.TrackDetailsDto
+import org.tegro.yamp.domain.media.Track
+import org.tegro.yamp.presentation.common.coverUri
 import org.tegro.yamp.presentation.hifi.HiFi
 import org.tegro.yamp.presentation.hifi.HiFiType
 import org.tegro.yamp.presentation.hifi.LocalHiFiLite
@@ -65,7 +66,7 @@ import kotlin.math.sin
  */
 @Composable
 fun TrackItem(
-    track: TrackDetailsDto,
+    track: Track,
     isPlaying: Boolean,
     isLiked: Boolean = false,
     isDownloaded: Boolean = false,
@@ -121,7 +122,7 @@ fun TrackItem(
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = track.title ?: stringResource(R.string.bez_nazvaniya),
+                text = track.title.ifEmpty { stringResource(R.string.bez_nazvaniya) },
                 style = HiFiType.Body.copy(fontSize = HiFiType.RowTitle.fontSize, lineHeight = HiFiType.RowTitle.lineHeight),
                 fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.Normal,
                 maxLines = 1,
@@ -129,7 +130,7 @@ fun TrackItem(
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = subtitle ?: track.artists.joinToString { it.name ?: "" }.ifEmpty { stringResource(R.string.player_unknown_artist) },
+                text = subtitle ?: track.artists.joinToString { it.name }.ifEmpty { stringResource(R.string.player_unknown_artist) },
                 style = HiFiType.Caption,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis

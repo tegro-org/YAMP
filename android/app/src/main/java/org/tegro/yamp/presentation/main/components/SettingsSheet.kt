@@ -528,6 +528,7 @@ private fun ColumnScope.PlaybackPage(state: SettingsUiState, actions: SettingsAc
     SettingsNote(stringResource(R.string.settings_wave_tuning_note))
     SettingsGroup(stringResource(R.string.settings_group_reserve)) {
         RoadReserveRows(state.reserveMb, actions.onReserveChange, state.reserveUsedBytes, actions.onClearReserve)
+        StreamCacheRows(state.streamCacheMb, actions.onStreamCacheChange, state.streamCacheUsedBytes, actions.onClearStreamCache)
     }
     SettingsGroup(stringResource(R.string.settings_group_downloads)) {
         SwitchRow(Icons.Rounded.Download, stringResource(R.string.settings_auto_download), stringResource(R.string.settings_auto_download_hint), state.autoDownload, actions.onAutoDownloadChange)

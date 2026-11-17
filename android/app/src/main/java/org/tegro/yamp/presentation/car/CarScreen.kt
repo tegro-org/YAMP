@@ -1,5 +1,11 @@
 package org.tegro.yamp.presentation.car
 
+import androidx.compose.ui.draw.alpha
+import org.tegro.yamp.presentation.player.LocalPlaybackAux
+import org.tegro.yamp.presentation.player.NextCoverOverlay
+import org.tegro.yamp.presentation.player.NextLook
+import org.tegro.yamp.presentation.player.NextStateDecor
+import org.tegro.yamp.presentation.player.nextLookLabel
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.systemBars
@@ -101,7 +107,11 @@ import coil3.request.crossfade
 import org.tegro.yamp.R
 import org.tegro.yamp.presentation.account.AccountMark
 import org.tegro.yamp.presentation.account.AccountTag
-import org.tegro.yamp.data.dto.TrackDetailsDto
+import org.tegro.yamp.domain.media.Track
+import org.tegro.yamp.presentation.common.artistNames
+import org.tegro.yamp.presentation.common.coverUri
+import org.tegro.yamp.presentation.common.id
+import org.tegro.yamp.presentation.common.isRadio
 import org.tegro.yamp.data.player.PlaylistSource
 import org.tegro.yamp.presentation.hifi.ArtworkTint
 import org.tegro.yamp.presentation.hifi.HiFi
@@ -150,14 +160,14 @@ fun carSourceOf(source: PlaylistSource, isRadio: Boolean): CarSource? = when {
  */
 @Composable
 fun CarScreen(
-    currentTrack: TrackDetailsDto?,
+    currentTrack: Track?,
     isPlaying: Boolean,
     likedTrackIds: Set<String>,
     onPlayPauseClick: () -> Unit,
     onNextClick: () -> Unit,
     onPrevClick: () -> Unit,
-    onToggleLike: (TrackDetailsDto) -> Unit,
-    onDislikeClick: (TrackDetailsDto) -> Unit,
+    onToggleLike: (Track) -> Unit,
+    onDislikeClick: (Track) -> Unit,
     onPlayMyVibe: () -> Unit,
     onPlayFavorites: () -> Unit,
     onPlayHits: () -> Unit,
@@ -169,17 +179,17 @@ fun CarScreen(
     progress: () -> Long = { 0L },
     durationMs: Long = 0L,
     onSeek: (Long) -> Unit = {},
-    upcoming: List<TrackDetailsDto> = emptyList(),
+    upcoming: List<Track> = emptyList(),
     upcomingLoading: Boolean = false,
-    onUpcomingClick: (TrackDetailsDto) -> Unit = {},
+    onUpcomingClick: (Track) -> Unit = {},
     source: PlaylistSource = PlaylistSource.NONE,
-    isLiked: Boolean = currentTrack?.let { likedTrackIds.contains(it.idString) } == true,
+    isLiked: Boolean = currentTrack?.let { likedTrackIds.contains(it.id) } == true,
     isBuffering: Boolean = false,
     showClock: Boolean = true,
     waveTuning: WaveTuning = WaveTuning(),
-    trackWaveSeed: TrackDetailsDto? = null,
+    trackWaveSeed: Track? = null,
     onWaveTuningChange: (WaveTuning) -> Unit = {},
-    onTrackWave: (TrackDetailsDto) -> Unit = {},
+    onTrackWave: (Track) -> Unit = {},
     onBackToMyWave: () -> Unit = {},
     initialTuneOpen: Boolean = false,
     /** The active queue's name on the queue pill; the pill opens the switcher (2 taps to switch, D26). */
@@ -223,7 +233,7 @@ fun CarScreen(
         else -> stringResource(R.string.car_next)
     }
     val sourceLabel = when {
-        trackWaveSeed != null && active == CarSource.WAVE -> stringResource(R.string.wave_by_track_car, trackWaveSeed.title.orEmpty())
+        trackWaveSeed != null && active == CarSource.WAVE -> stringResource(R.string.wave_by_track_car, trackWaveSeed.title)
         else -> null
     } ?: when (active) {
         CarSource.WAVE -> stringResource(R.string.car_source_wave)
@@ -605,7 +615,7 @@ private val Tabular = androidx.compose.ui.text.TextStyle(fontFeatureSettings = "
 @Composable
 private fun DriverPanel(
     u: Scale,
-    track: TrackDetailsDto?,
+    track: Track?,
     sourceLabel: String,
     isPlaying: Boolean,
     isLiked: Boolean,
@@ -634,13 +644,13 @@ private fun DriverPanel(
         }
         AnimatedContent(
             targetState = track,
-            contentKey = { it?.idString },
+            contentKey = { it?.id },
             transitionSpec = { (fadeIn(HiFiMotion.large()) + slideInVertically(HiFiMotion.large()) { it / 10 }) togetherWith fadeOut(HiFiMotion.quick()) },
             label = "car_title"
         ) { shown ->
             Column {
                 Text(
-                    shown?.title ?: stringResource(R.string.car_source_wave),
+                    shown?.title?.ifEmpty { null } ?: stringResource(R.string.car_source_wave),
                     color = Color.White,
                     fontSize = u.sp(if (compactDock) 44f else 56f),
                     lineHeight = u.sp(if (compactDock) 50f else 62f),
@@ -651,7 +661,7 @@ private fun DriverPanel(
                     modifier = Modifier.padding(top = u(6f))
                 )
                 Text(
-                    if (shown?.isRadio == true) stringResource(R.string.mini_player_live) else shown?.artists?.joinToString { it.name ?: "" }.orEmpty(),
+                    if (shown?.isRadio == true) stringResource(R.string.mini_player_live) else shown?.artistNames.orEmpty(),
                     color = Color.White.copy(alpha = 0.72f),
                     fontSize = u.sp(26f),
                     lineHeight = u.sp(32f),
@@ -695,8 +705,16 @@ private fun DriverPanel(
                     PlayPauseGlyph(isPlaying = isPlaying, size = u(if (compactDock) 46f else 56f))
                 }
             }
-            HiFiKnob(onClick = onNext, contentDescription = stringResource(R.string.cd_sleduyuschiy_trek), size = u(skipSize)) {
-                Icon(Icons.Rounded.SkipNext, contentDescription = null, tint = HiFi.OnMetal, modifier = Modifier.size(u(skipIcon)))
+            // Never disabled (D81): loading / failed only decorate it; the whole knob stays the tap target
+            val nextLook = LocalPlaybackAux.current.next()
+            NextStateDecor(nextLook, size = u(skipSize)) {
+                HiFiKnob(
+                    onClick = onNext,
+                    contentDescription = if (nextLook == NextLook.READY) stringResource(R.string.cd_sleduyuschiy_trek) else nextLookLabel(nextLook),
+                    size = u(skipSize)
+                ) {
+                    Icon(Icons.Rounded.SkipNext, contentDescription = null, tint = HiFi.OnMetal, modifier = Modifier.size(u(skipIcon)))
+                }
             }
             GlassRound(u(sideSize), stringResource(R.string.cd_nravitsya), onLike) {
                 Icon(
@@ -767,7 +785,7 @@ private fun Dock(u: Scale, items: List<DockItem>, active: CarSource?, compact: B
 
 /** The cover with a gloss and a coloured shadow. Nothing lies on it: what comes next has its own row. */
 @Composable
-private fun CarCover(u: Scale, track: TrackDetailsDto?, modifier: Modifier) {
+private fun CarCover(u: Scale, track: Track?, modifier: Modifier) {
     val context = LocalContext.current
     val tint: ArtworkTint = LocalArtworkTint.current
     val shape = RoundedCornerShape(u(30f))
@@ -789,7 +807,7 @@ private fun CarCover(u: Scale, track: TrackDetailsDto?, modifier: Modifier) {
                     .crossfade(true)
                     .apply { if (track?.isRadio == true) browserUserAgent() }
                     .build(),
-                contentDescription = track?.title,
+                contentDescription = track?.title?.ifEmpty { null },
                 contentScale = if (track?.isRadio == true) ContentScale.Fit else ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxSize()
@@ -821,13 +839,14 @@ private fun CarCover(u: Scale, track: TrackDetailsDto?, modifier: Modifier) {
 private fun NextRow(
     u: Scale,
     caption: String,
-    tracks: List<TrackDetailsDto>,
+    tracks: List<Track>,
     loading: Boolean,
     maxCard: Dp,
     gap: Dp,
-    onClick: (TrackDetailsDto) -> Unit
+    onClick: (Track) -> Unit
 ) {
     if (tracks.isEmpty() && !loading) return
+    val nextLook = LocalPlaybackAux.current.next()
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
         val card = ((maxWidth - gap * 2) / 3).coerceAtMost(maxCard)
         Column(Modifier.width(card * 3 + gap * 2)) {
@@ -845,12 +864,14 @@ private fun NextRow(
                 repeat(3) { slot ->
                     AnimatedContent(
                         targetState = tracks.getOrNull(slot),
-                        contentKey = { it?.idString },
+                        contentKey = { it?.id },
                         transitionSpec = { fadeIn(HiFiMotion.large()) togetherWith fadeOut(HiFiMotion.quick()) },
                         label = "car_next_$slot"
                     ) { track ->
                         when {
-                            track != null -> NextCard(u, track, card) { onClick(track) }
+                            // The first card is the next track: its artwork shows the next-track state (D81), and the
+                            // whole card stays the tap target
+                            track != null -> NextCard(u, track, card, look = if (slot == 0) nextLook else NextLook.READY) { onClick(track) }
                             loading -> NextCardPlaceholder(u, card)
                             else -> Spacer(Modifier.width(card))
                         }
@@ -862,11 +883,12 @@ private fun NextRow(
 }
 
 @Composable
-private fun NextCard(u: Scale, track: TrackDetailsDto, size: Dp, onClick: () -> Unit) {
+private fun NextCard(u: Scale, track: Track, size: Dp, look: NextLook = NextLook.READY, onClick: () -> Unit) {
     val context = LocalContext.current
     val shape = RoundedCornerShape(u(18f))
-    val title = track.title ?: stringResource(R.string.bez_nazvaniya)
-    val description = stringResource(R.string.car_next_play_cd, title)
+    val title = track.title.ifEmpty { stringResource(R.string.bez_nazvaniya) }
+    val play = stringResource(R.string.car_next_play_cd, title)
+    val description = if (look == NextLook.READY) play else "$play. ${nextLookLabel(look)}"
     Column(
         Modifier
             .width(size)
@@ -874,20 +896,24 @@ private fun NextCard(u: Scale, track: TrackDetailsDto, size: Dp, onClick: () -> 
             .clickable(role = Role.Button, onClickLabel = description, onClick = onClick)
             .semantics(mergeDescendants = true) { contentDescription = description }
     ) {
-        AsyncImage(
-            model = ImageRequest.Builder(context).cover(track.coverUri, CoverSize.Medium).crossfade(true).build(),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .size(size)
-                .hifiSoftShadow(shape, u(16f))
-                .clip(shape)
-                .background(HiFi.Placeholder)
-        )
+        Box(contentAlignment = Alignment.Center) {
+            AsyncImage(
+                model = ImageRequest.Builder(context).cover(track.coverUri, CoverSize.Medium).crossfade(true).build(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(size)
+                    .hifiSoftShadow(shape, u(16f))
+                    .clip(shape)
+                    .background(HiFi.Placeholder)
+                    .alpha(if (look == NextLook.FAILED) 0.4f else 1f)
+            )
+            NextCoverOverlay(look, size)
+        }
         Spacer(Modifier.height(u(10f)))
         Text(title, color = Color.White, fontSize = u.sp(17f), lineHeight = u.sp(22f), fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(
-            track.artists.joinToString { it.name ?: "" },
+            track.artistNames,
             color = Color.White.copy(alpha = 0.66f),
             fontSize = u.sp(15f),
             lineHeight = u.sp(20f),

@@ -32,7 +32,7 @@ class NowPlayingWidgetUpdater @Inject constructor(
     fun start() {
         if (started) return
         started = true
-        combine(playbackController.currentTrack, playbackController.isPlaying) { track, playing -> track?.idString to playing }
+        combine(playbackController.currentTrack, playbackController.isPlaying) { track, playing -> track?.ref?.id to playing }
             .distinctUntilChanged()
             .debounce(300)
             .onEach { runCatching { NowPlayingWidget().updateAll(context) } }

@@ -1,5 +1,7 @@
 package org.tegro.yamp.presentation
 
+import org.tegro.yamp.data.provider.yandex.toPlaylist
+import org.tegro.yamp.data.provider.yandex.toTrack
 import android.app.Application
 import android.os.Looper
 import android.os.SystemClock
@@ -99,13 +101,16 @@ class Screenshots112Test {
     private fun track(id: String, title: String, artist: String = "Исполнитель") =
         TrackDetailsDto(id = JsonPrimitive(id), title = title, artists = listOf(ArtistDto(name = artist)), durationMs = 215_000)
 
+    /** The fixture tracks as screens show them (phase 3 step 12–15). */
+    private val shown get() = tracks.map { it.toTrack() }
+
     private val tracks = listOf(
         track("1", "Первая песня", "Группа"),
         track("2", "Очень длинное название трека, которое не помещается в одну строку", "Исполнитель с длинным именем"),
         track("3", "Третья песня")
     )
     private val shelfTracks = (2..7).map { track("$it", "Песня номер $it", "Кино") }
-    private val playlists = listOf(UserPlaylistDto(kind = JsonPrimitive(1003), title = "В дорогу", trackCount = 42, revision = 7))
+    private val playlists = listOf(UserPlaylistDto(kind = JsonPrimitive(1003), title = "В дорогу", trackCount = 42, revision = 7)).mapNotNull { it.toPlaylist() }
     private val tuned = WaveTuning(WaveDiversity.DISCOVER, WaveMood.CALM, WaveLanguage.FOREIGN)
     private val seed = track("9", "Звезда по имени Солнце", "Кино")
     private val longSeed = track("10", "Очень длинное название трека, по которому запущена волна", "Кино")
@@ -144,10 +149,10 @@ class Screenshots112Test {
     @Composable
     private fun Wave(tuning: WaveTuning = tuned, seedTrack: TrackDetailsDto? = null, contentBottom: androidx.compose.ui.unit.Dp = 100.dp) {
         HomeScreen(
-            waveTrack = tracks[0], isPlaying = true, isLoading = false, isLiked = true, progress = { 70_000L },
-            shelf = waveShelfOf(true, shelfTracks, emptyList()), shimmer = false,
+            waveTrack = shown[0], isPlaying = true, isLoading = false, isLiked = true, progress = { 70_000L },
+            shelf = waveShelfOf(true, shelfTracks.map { it.toTrack() }, emptyList()), shimmer = false,
             onPlayPause = {}, onLike = {}, onDislike = {}, onOpenPlayer = {}, onShelfClick = {},
-            contentBottom = contentBottom, tuning = tuning, trackWaveSeed = seedTrack
+            contentBottom = contentBottom, tuning = tuning, trackWaveSeed = seedTrack?.toTrack()
         )
     }
 
@@ -266,7 +271,7 @@ class Screenshots112Test {
     private fun Player() {
         CompositionLocalProvider(org.tegro.yamp.utils.LocalStreamQuality provides "MP3 · 320 кбит/с") {
             FullScreenPlayer(
-                track = tracks[1], isPlaying = true, isLiked = true, progress = { 82_000L }, queue = tracks,
+                track = tracks[1].toTrack(), isPlaying = true, isLiked = true, progress = { 82_000L }, queue = tracks.map { it.toTrack() },
                 onPlayPauseClick = {}, onToggleLike = {}, onNextClick = {}, onPrevClick = {}, onSeekTo = {},
                 onTrackSelect = {}, onRemoveFromQueue = {}, onCollapse = {}, onCloseAndClear = {}, onDislikeClick = {},
                 sourceLabel = "Моя волна", onTrackWave = {}
@@ -308,7 +313,7 @@ class Screenshots112Test {
                 track = tracks[0].copy(
                     artists = listOf(ArtistDto(id = JsonPrimitive(7), name = "Группа")),
                     albums = listOf(org.tegro.yamp.data.dto.TrackAlbumDto(id = JsonPrimitive(2), title = "Группа крови"))
-                ), inPlaylist = playlists[0], playlists = playlists, isLiked = false,
+                ).toTrack(), inPlaylist = playlists[0], playlists = playlists, isLiked = false,
                 startWithPlaylists = false, onDismiss = {}, onPlayNext = {}, onToggleLike = {}, onAddTo = {},
                 onCreatePlaylist = {}, onRemoveFromPlaylist = {}, onOpenArtist = {}, onOpenAlbum = {}, onTrackWave = {}
             )
@@ -321,7 +326,7 @@ class Screenshots112Test {
     fun trackMenuWithStartRadioOnMyWave() {
         show {
             TrackContextMenu(
-                track = tracks[0], inPlaylist = null, playlists = playlists, isLiked = false,
+                track = shown[0], inPlaylist = null, playlists = playlists, isLiked = false,
                 startWithPlaylists = false, onDismiss = {}, onPlayNext = {}, onToggleLike = {}, onAddTo = {},
                 onCreatePlaylist = {}, onRemoveFromPlaylist = {}, onTrackWave = {}, waveActive = true, onStartRadio = {}
             )
@@ -334,7 +339,7 @@ class Screenshots112Test {
     fun trackMenuWithStartRadioOnAnotherQueue() {
         show {
             TrackContextMenu(
-                track = tracks[0], inPlaylist = null, playlists = playlists, isLiked = false,
+                track = shown[0], inPlaylist = null, playlists = playlists, isLiked = false,
                 startWithPlaylists = false, onDismiss = {}, onPlayNext = {}, onToggleLike = {}, onAddTo = {},
                 onCreatePlaylist = {}, onRemoveFromPlaylist = {}, onTrackWave = {}, waveActive = false, onStartRadio = {}
             )
@@ -373,11 +378,11 @@ class Screenshots112Test {
         current: TrackDetailsDto = tracks[0]
     ) = CompositionLocalProvider(LocalCarClock provides { FIXED_TIME }, LocalLinkState provides LinkState.WEAK) {
         CarScreen(
-            currentTrack = current, isPlaying = true, likedTrackIds = setOf("1"), onPlayPauseClick = {}, onNextClick = {},
+            currentTrack = current?.toTrack(), isPlaying = true, likedTrackIds = setOf("1"), onPlayPauseClick = {}, onNextClick = {},
             onPrevClick = {}, onToggleLike = {}, onDislikeClick = {}, onPlayMyVibe = {}, onPlayFavorites = {}, onPlayHits = {},
             onPlayDownloaded = {}, onPlayRadio = {}, onExit = {}, isLandscape = isLandscape, steeringWheelOnLeft = wheelOnLeft,
-            progress = { 82_000L }, durationMs = 286_000, upcoming = next, upcomingLoading = loading, source = source,
-            showClock = clock, waveTuning = tuning, trackWaveSeed = seedTrack, initialTuneOpen = tuneOpen
+            progress = { 82_000L }, durationMs = 286_000, upcoming = next.map { it.toTrack() }, upcomingLoading = loading, source = source,
+            showClock = clock, waveTuning = tuning, trackWaveSeed = seedTrack?.toTrack(), initialTuneOpen = tuneOpen
         )
     }
 

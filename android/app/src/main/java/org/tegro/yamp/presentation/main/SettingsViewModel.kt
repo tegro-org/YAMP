@@ -8,7 +8,7 @@ import org.tegro.yamp.data.network.TrackDownloadManager
 import org.tegro.yamp.data.player.PlaybackController
 import org.tegro.yamp.data.player.PlaybackJournal
 import org.tegro.yamp.data.player.SoundMode
-import org.tegro.yamp.data.reserve.RoadReserve
+import org.tegro.yamp.data.provider.yandex.reserve.RoadReserve
 import org.tegro.yamp.domain.model.AnimationMode
 import org.tegro.yamp.domain.model.StartMusic
 import org.tegro.yamp.domain.model.StartPage
@@ -41,6 +41,7 @@ class SettingsViewModel @Inject constructor(
     private val equalizer: org.tegro.yamp.data.player.SystemEqualizer,
     private val journal: PlaybackJournal,
     private val diagnosticLog: org.tegro.yamp.data.diagnostics.DiagnosticLog,
+    private val streamCache: org.tegro.yamp.data.player.StreamCache,
     @param:dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
 ) : ViewModel() {
 
@@ -51,7 +52,7 @@ class SettingsViewModel @Inject constructor(
     )
     private data class Look(val startPage: StartPage, val expand: Boolean, val swipe: Boolean, val left: Boolean, val clock: Boolean)
     private data class Scale(val auto: Boolean, val manual: Float, val animations: AnimationMode)
-    private data class Library(val reserveMb: Int, val reserveUsed: Long, val autoDownload: Boolean, val cacheBytes: Long, val journal: PlaybackJournal.Snapshot = PlaybackJournal.Snapshot(), val diagnosticLog: Boolean = false, val groupQueues: Boolean = true)
+    private data class Library(val reserveMb: Int, val reserveUsed: Long, val autoDownload: Boolean, val cacheBytes: Long, val journal: PlaybackJournal.Snapshot = PlaybackJournal.Snapshot(), val diagnosticLog: Boolean = false, val groupQueues: Boolean = true, val streamCacheMb: Int = SettingsRepository.DEFAULT_STREAM_CACHE_MB, val streamCacheUsed: Long = 0L)
 
     private val sound: Flow<Sound> = combine(
         combine(soundMode.compatible, settings.crossfadeSeconds, settings.normalizeVolume, settings.keepAudioStreams) { c, f, n, k -> Sound(c, f, n, StartMusic.OFF, false, false, keepStreams = k) },
@@ -70,6 +71,9 @@ class SettingsViewModel @Inject constructor(
 
     private val scale: Flow<Scale> = combine(settings.uiScaleAuto, settings.uiScaleManual, settings.animationMode, ::Scale)
 
+    /** Bumped after the stream cache is emptied, so its "used" line is read again. */
+    private val streamCacheTick = kotlinx.coroutines.flow.MutableStateFlow(0)
+
     private val library: Flow<Library> = combine(
         combine(settings.roadReserveMb, roadReserve.usedBytes, settings.autoDownloadLikedTracks, downloadManager.cacheSizeBytes) { mb, used, auto, cache ->
             Library(mb, used, auto, cache)
@@ -78,6 +82,9 @@ class SettingsViewModel @Inject constructor(
         settings.diagnosticLog,
         settings.groupQueuesByAccount
     ) { lib, journal, diag, group -> lib.copy(journal = journal, diagnosticLog = diag, groupQueues = group) }
+        .combine(combine(settings.streamCacheMb, streamCacheTick) { mb, _ -> mb }) { lib, mb ->
+            lib.copy(streamCacheMb = mb, streamCacheUsed = streamCache.usedBytes)
+        }
 
     val state: StateFlow<SettingsUiState> = combine(sound, look, scale, library, storage.state) { s, l, sc, lib, card ->
         SettingsUiState(
@@ -98,6 +105,8 @@ class SettingsViewModel @Inject constructor(
             listeningHistory = s.history,
             reserveMb = lib.reserveMb,
             reserveUsedBytes = lib.reserveUsed,
+            streamCacheMb = lib.streamCacheMb,
+            streamCacheUsedBytes = lib.streamCacheUsed,
             autoDownload = lib.autoDownload,
             cacheSizeBytes = lib.cacheBytes,
             journal = lib.journal,
@@ -163,6 +172,14 @@ class SettingsViewModel @Inject constructor(
     fun setSkipExplicit(enabled: Boolean) = save { setSkipExplicit(enabled) }
     fun setListeningHistory(enabled: Boolean) = save { setListeningHistory(enabled) }
     fun setReserveMb(megabytes: Int) = save { setRoadReserveMb(megabytes) }
+    fun setStreamCacheMb(megabytes: Int) = save { setStreamCacheMb(megabytes) }
+    fun clearStreamCache() {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            streamCache.clear()
+            streamCacheTick.value++
+        }
+    }
+
     fun clearReserve() {
         viewModelScope.launch { roadReserve.clear() }
     }

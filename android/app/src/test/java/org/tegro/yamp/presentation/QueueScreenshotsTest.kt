@@ -1,5 +1,6 @@
 package org.tegro.yamp.presentation
 
+import org.tegro.yamp.data.provider.yandex.toTrack
 import android.app.Application
 import android.os.Looper
 import androidx.compose.foundation.layout.Box
@@ -127,6 +128,9 @@ class QueueScreenshotsTest {
     private fun track(id: String, title: String, artist: String) =
         TrackDetailsDto(id = JsonPrimitive(id), title = title, artists = listOf(ArtistDto(name = artist)), durationMs = 215_000)
 
+    /** The fixture tracks as screens show them (phase 3 step 12–15). */
+    private val shown get() = tracks.map { it.toTrack() }
+
     private val tracks = listOf(
         track("1", "Wish You Were Here", "Pink Floyd"),
         track("2", "Shine On You Crazy Diamond", "Pink Floyd"),
@@ -176,7 +180,7 @@ class QueueScreenshotsTest {
 
     @Test
     fun addToQueuePicker() {
-        show { Switcher(QueueSwitcherRequest.AddTo(listOf(tracks[3]), "Comfortably Numb · Pink Floyd")) }
+        show { Switcher(QueueSwitcherRequest.AddTo(listOf(shown[3]), "Comfortably Numb · Pink Floyd")) }
         snapScreen("queue_add_to")
     }
 
@@ -237,7 +241,7 @@ class QueueScreenshotsTest {
     )
 
     private val radioRequest = QueueSwitcherRequest.StartRadio(
-        RadioSeed(MediaRef(MediaRef.PROVIDER_YANDEX, MediaRef.KIND_TRACK, "4"), "Comfortably Numb"), tracks[3]
+        RadioSeed(MediaRef(MediaRef.PROVIDER_YANDEX, MediaRef.KIND_TRACK, "4"), "Comfortably Numb"), shown[3]
     )
 
     @Composable
@@ -309,7 +313,7 @@ class QueueScreenshotsTest {
     fun playerQueueWithModes() {
         show {
             FullScreenPlayer(
-                track = tracks[0], isPlaying = true, isLiked = true, progress = { 82_000L }, queue = tracks,
+                track = tracks[0].toTrack(), isPlaying = true, isLiked = true, progress = { 82_000L }, queue = tracks.map { it.toTrack() },
                 onPlayPauseClick = {}, onToggleLike = {}, onNextClick = {}, onPrevClick = {}, onSeekTo = {},
                 onTrackSelect = {}, onRemoveFromQueue = {}, onCollapse = {}, onCloseAndClear = {}, onDislikeClick = {},
                 sourceLabel = "With family", initialQueueOpen = true,
@@ -325,8 +329,8 @@ class QueueScreenshotsTest {
     fun homeQueueButton() {
         show {
             HomeScreen(
-                waveTrack = tracks[0], isPlaying = true, isLoading = false, isLiked = true, progress = { 70_000L },
-                shelf = waveShelfOf(true, tracks.drop(1), emptyList()), shimmer = false,
+                waveTrack = shown[0], isPlaying = true, isLoading = false, isLiked = true, progress = { 70_000L },
+                shelf = waveShelfOf(true, shown.drop(1), emptyList()), shimmer = false,
                 onPlayPause = {}, onLike = {}, onDislike = {}, onOpenPlayer = {}, onShelfClick = {}, queueCount = 5
             )
         }
@@ -337,7 +341,7 @@ class QueueScreenshotsTest {
     private val familyQueue = ActiveQueue(
         queue = PlayQueue(id = 1L, name = "With family", kind = QueueKind.STATIC),
         entries = tracks.mapIndexed { i, t -> QueueEntry(entryId = 10L + i, queueId = 1L, position = i, originalPosition = i, ref = TrackRef.yandex(t.idString), title = t.title.orEmpty(), artist = "") },
-        tracks = tracks,
+        tracks = tracks.map { it.toTrack() },
         cursorIndex = 1
     )
 
@@ -345,7 +349,7 @@ class QueueScreenshotsTest {
     @Composable
     private fun HomeQueuePage(contentBottom: androidx.compose.ui.unit.Dp = 100.dp) {
         HomeScreen(
-            waveTrack = tracks[1], isPlaying = true, isLoading = false, isLiked = false, progress = { 70_000L },
+            waveTrack = shown[1], isPlaying = true, isLoading = false, isLiked = false, progress = { 70_000L },
             shelf = queueShelfOf(familyQueue, playing = true), shimmer = false,
             onPlayPause = {}, onLike = {}, onDislike = {}, onOpenPlayer = {}, onShelfClick = {}, queueCount = 5,
             contentBottom = contentBottom, mode = homeModeOf(familyQueue)
@@ -555,7 +559,7 @@ class QueueScreenshotsTest {
     fun playerQueueWithAccount() {
         show {
             FullScreenPlayer(
-                track = tracks[0], isPlaying = true, isLiked = true, progress = { 82_000L }, queue = tracks,
+                track = tracks[0].toTrack(), isPlaying = true, isLiked = true, progress = { 82_000L }, queue = tracks.map { it.toTrack() },
                 onPlayPauseClick = {}, onToggleLike = {}, onNextClick = {}, onPrevClick = {}, onSeekTo = {},
                 onTrackSelect = {}, onRemoveFromQueue = {}, onCollapse = {}, onCloseAndClear = {}, onDislikeClick = {},
                 sourceLabel = "With family", initialQueueOpen = true, queueAccount = anna,
@@ -568,10 +572,10 @@ class QueueScreenshotsTest {
     @Composable
     private fun Car(steeringWheelOnLeft: Boolean = true, waveActive: Boolean = true, account: AccountTag? = null) = CompositionLocalProvider(LocalCarClock provides { FIXED_TIME }) {
         CarScreen(
-            currentTrack = tracks[0], isPlaying = true, likedTrackIds = setOf("1"), onPlayPauseClick = {}, onNextClick = {},
+            currentTrack = tracks[0].toTrack(), isPlaying = true, likedTrackIds = setOf("1"), onPlayPauseClick = {}, onNextClick = {},
             onPrevClick = {}, onToggleLike = {}, onDislikeClick = {}, onPlayMyVibe = {}, onPlayFavorites = {}, onPlayHits = {},
             onPlayDownloaded = {}, onPlayRadio = {}, onExit = {}, isLandscape = true, steeringWheelOnLeft = steeringWheelOnLeft,
-            progress = { 82_000L }, durationMs = 286_000, upcoming = tracks.drop(1), source = org.tegro.yamp.data.player.PlaylistSource.LIBRARY,
+            progress = { 82_000L }, durationMs = 286_000, upcoming = tracks.drop(1).map { it.toTrack() }, source = org.tegro.yamp.data.player.PlaylistSource.LIBRARY,
             activeQueueName = "With family", waveActive = waveActive, activeQueueAccount = account
         )
     }

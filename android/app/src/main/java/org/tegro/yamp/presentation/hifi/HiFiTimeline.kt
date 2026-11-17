@@ -99,7 +99,8 @@ object TimelineMath {
  * on a spring, the track is sought where the finger is lifted. A new track or a seek glides instead of
  * jumping. Everything is read and drawn in the draw phase: nothing recomposes while it moves.
  * Sizes are in "units" ([unit] each): 48 tall, groove 6→12, bead 18→32 — the car scales them up.
- * [onScrub] gets the finger position while it is down and null when it is lifted.
+ * [onScrub] gets the finger position while it is down and null when it is lifted. [buffered] (ms loaded, or
+ * [Long.MAX_VALUE] when the whole file is on disk) is drawn as a lighter part ahead of the played one (D81).
  */
 @Composable
 fun HiFiTimeline(
@@ -110,7 +111,8 @@ fun HiFiTimeline(
     modifier: Modifier = Modifier,
     unit: Dp = 1.dp,
     height: Float = 48f,
-    onScrub: (Float?) -> Unit = {}
+    onScrub: (Float?) -> Unit = {},
+    buffered: () -> Long = { 0L }
 ) {
     val view = LocalView.current
     val scope = rememberCoroutineScope()
@@ -219,6 +221,11 @@ fun HiFiTimeline(
                     // Groove
                     drawRoundRect(rest, Offset(0f, top), Size(size.width, h), r)
                     drawRoundRect(Color.Black.copy(alpha = 0.55f), Offset(0f, top), Size(size.width, h), r, style = Stroke(1f))
+                    // Loaded part ahead of the played one (only while nobody drags)
+                    if (!touching) {
+                        val loaded = org.tegro.yamp.presentation.player.bufferedFraction(buffered(), progress(), duration)
+                        if (loaded > f) drawRoundRect(Color.White.copy(alpha = 0.30f), Offset(0f, top), Size(size.width * loaded, h), r)
+                    }
                     // Played part with the running highlight
                     drawRoundRect(playedFill, Offset(0f, top), Size(playedW, h), r)
                     sheen?.value?.let { p ->

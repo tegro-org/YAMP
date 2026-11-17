@@ -98,4 +98,11 @@
     <string name="queue_account_caption">аккаунт %1$s</string>
     <string name="account_management_all_live">Все аккаунты работают одновременно. Каждая очередь принадлежит аккаунту, в котором создана.</string>
     <string name="settings_logout_note">Очереди аккаунта скрываются и вернутся, когда вы снова войдёте в него; его загрузки удаляются.</string>
+    <!-- On-disk stream cache (D86) -->
+    <string name="settings_stream_cache_size">Кэш потока</string>
+    <string name="settings_stream_cache_hint">Прослушанные и следующие треки хранятся на диске: «Назад» и «Далее» срабатывают сразу, даже после обрыва связи</string>
+    <string name="settings_stream_cache_clear">Очистить кэш потока</string>
+    <string name="next_state_ready">Следующий трек готов</string>
+    <string name="next_state_loading">Следующий трек загружается</string>
+    <string name="next_state_failed">Не загрузился — нажмите, чтобы повторить</string>
 </resources>

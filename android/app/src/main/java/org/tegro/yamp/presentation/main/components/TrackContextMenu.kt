@@ -64,19 +64,21 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
-import org.tegro.yamp.data.dto.TrackDetailsDto
-import org.tegro.yamp.data.dto.UserPlaylistDto
+import org.tegro.yamp.domain.media.Track
+import org.tegro.yamp.presentation.common.isRadio
+import org.tegro.yamp.domain.media.Playlist
+import org.tegro.yamp.presentation.common.coverUri
 import org.tegro.yamp.utils.russianQuantityString
 
 /** Opens the track menu. MainScreen provides it, so every [TrackItem] shows the "⋮" button. */
 fun interface TrackMenuLauncher {
-    fun open(track: TrackDetailsDto, playlist: UserPlaylistDto?)
+    fun open(track: Track, playlist: Playlist?)
 }
 
 val LocalTrackMenu = staticCompositionLocalOf<TrackMenuLauncher?> { null }
 
 /** The playlist whose tracks are listed, so the menu can offer "remove from playlist". */
-val LocalTrackMenuPlaylist = staticCompositionLocalOf<UserPlaylistDto?> { null }
+val LocalTrackMenuPlaylist = staticCompositionLocalOf<Playlist?> { null }
 
 /**
  * Track actions, and the "add to playlist" picker ([startWithPlaylists] opens it directly, as the
@@ -85,15 +87,15 @@ val LocalTrackMenuPlaylist = staticCompositionLocalOf<UserPlaylistDto?> { null }
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TrackContextMenu(
-    track: TrackDetailsDto,
-    inPlaylist: UserPlaylistDto?,
-    playlists: List<UserPlaylistDto>,
+    track: Track,
+    inPlaylist: Playlist?,
+    playlists: List<Playlist>,
     isLiked: Boolean,
     startWithPlaylists: Boolean,
     onDismiss: () -> Unit,
     onPlayNext: () -> Unit,
     onToggleLike: () -> Unit,
-    onAddTo: (UserPlaylistDto) -> Unit,
+    onAddTo: (Playlist) -> Unit,
     onCreatePlaylist: (String) -> Unit,
     onRemoveFromPlaylist: () -> Unit,
     onOpenArtist: (() -> Unit)? = null,
@@ -162,7 +164,7 @@ fun TrackContextMenu(
                     Spacer(Modifier.width(4.dp))
                 }
                 Text(
-                    text = track.title ?: stringResource(R.string.bez_nazvaniya),
+                    text = track.title.ifEmpty { stringResource(R.string.bez_nazvaniya) },
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
                     fontSize = 17.sp,
@@ -172,7 +174,7 @@ fun TrackContextMenu(
             }
             Text(
                 text = if (picking) stringResource(R.string.track_context_menu_dobavit_v_pleylist)
-                else track.artists.joinToString { it.name.orEmpty() },
+                else track.artists.joinToString { it.name },
                 color = Color.White.copy(alpha = 0.6f),
                 fontSize = 13.sp,
                 maxLines = 1,
@@ -185,7 +187,7 @@ fun TrackContextMenu(
                     item(key = "new") {
                         ContextMenuItem(icon = Icons.Default.Add, text = stringResource(R.string.playlist_new)) { naming = true }
                     }
-                    items(playlists.filter { it.kindString != inPlaylist?.kindString }, key = { it.kindString }) { playlist ->
+                    items(playlists.filter { it.ref != inPlaylist?.ref }, key = { it.ref.value }) { playlist ->
                         PlaylistPickerRow(playlist) {
                             onAddTo(playlist)
                             onDismiss()
@@ -235,13 +237,13 @@ fun TrackContextMenu(
                     }
                 }
                 if (onOpenArtist != null) {
-                    ContextMenuItem(Icons.Default.Person, stringResource(R.string.track_menu_artist, (track.artists.firstOrNull { it.idString != null } ?: track.artists.firstOrNull())?.name.orEmpty())) {
+                    ContextMenuItem(Icons.Default.Person, stringResource(R.string.track_menu_artist, (track.artists.firstOrNull { it.ref != null } ?: track.artists.firstOrNull())?.name.orEmpty())) {
                         onOpenArtist()
                         onDismiss()
                     }
                 }
                 if (onOpenAlbum != null) {
-                    ContextMenuItem(Icons.Default.Album, stringResource(R.string.track_menu_album, track.albums.firstOrNull()?.title.orEmpty()).removeSuffix(": ")) {
+                    ContextMenuItem(Icons.Default.Album, stringResource(R.string.track_menu_album, track.album?.title.orEmpty()).removeSuffix(": ")) {
                         onOpenAlbum()
                         onDismiss()
                     }
@@ -261,7 +263,7 @@ fun TrackContextMenu(
 }
 
 @Composable
-private fun PlaylistPickerRow(playlist: UserPlaylistDto, onClick: () -> Unit) {
+private fun PlaylistPickerRow(playlist: Playlist, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -286,7 +288,7 @@ private fun PlaylistPickerRow(playlist: UserPlaylistDto, onClick: () -> Unit) {
         }
         Spacer(modifier = Modifier.width(16.dp))
         Column {
-            Text(playlist.title.orEmpty(), color = Color.White, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(playlist.title, color = Color.White, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
                 russianQuantityString(playlist.trackCount, R.string.tracks_count_one, R.string.tracks_count_few, R.string.tracks_count_many),
                 color = Color.White.copy(alpha = 0.6f),

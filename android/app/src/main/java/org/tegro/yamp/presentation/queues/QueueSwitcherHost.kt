@@ -14,7 +14,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import org.tegro.yamp.R
-import org.tegro.yamp.data.dto.TrackDetailsDto
+import org.tegro.yamp.domain.media.Track
+import org.tegro.yamp.presentation.common.id
 import org.tegro.yamp.domain.queue.MediaRef
 import org.tegro.yamp.domain.queue.RadioSeed
 import org.tegro.yamp.presentation.hifi.PanelSide
@@ -24,7 +25,7 @@ sealed interface QueueSwitcherRequest {
     data class Switch(val car: Boolean = false, val side: PanelSide = PanelSide.RIGHT) : QueueSwitcherRequest
 
     /** "Add to queue…" for [tracks]; [subtitle] names what is being added (a track, an album). */
-    data class AddTo(val tracks: List<TrackDetailsDto>, val subtitle: String) : QueueSwitcherRequest
+    data class AddTo(val tracks: List<Track>, val subtitle: String) : QueueSwitcherRequest
 
     /**
      * "Start radio" (D51): the radios to re-seed and "New radio". [track] is the seed track to play first, when
@@ -32,13 +33,13 @@ sealed interface QueueSwitcherRequest {
      */
     data class StartRadio(
         val seed: RadioSeed,
-        val track: TrackDetailsDto? = null,
+        val track: Track? = null,
         val car: Boolean = false,
         val side: PanelSide = PanelSide.RIGHT
     ) : QueueSwitcherRequest {
         companion object {
-            fun of(track: TrackDetailsDto, car: Boolean = false, side: PanelSide = PanelSide.RIGHT) = StartRadio(
-                RadioSeed(MediaRef(MediaRef.PROVIDER_YANDEX, MediaRef.KIND_TRACK, track.idString), track.title.orEmpty()),
+            fun of(track: Track, car: Boolean = false, side: PanelSide = PanelSide.RIGHT) = StartRadio(
+                RadioSeed(MediaRef(MediaRef.PROVIDER_YANDEX, MediaRef.KIND_TRACK, track.id), track.title),
                 track, car, side
             )
         }

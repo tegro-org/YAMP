@@ -14,7 +14,10 @@ internal fun CarTimeline(
     isPlaying: Boolean,
     onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier
-) = HiFiTimeline(progress, durationMs, isPlaying, onSeek, modifier, unit = u(1f))
+) = HiFiTimeline(
+    progress, durationMs, isPlaying, onSeek, modifier, unit = u(1f),
+    buffered = org.tegro.yamp.presentation.player.LocalPlaybackAux.current.buffered
+)
 
 /** Radio has no timeline: a quiet line with the on-air mark in the middle. */
 @Composable

@@ -1,5 +1,9 @@
 package org.tegro.yamp.presentation
 
+import org.tegro.yamp.presentation.catalog.toArtistPage
+import org.tegro.yamp.data.provider.yandex.toArtistParts
+import org.tegro.yamp.data.provider.yandex.toTrack
+import org.tegro.yamp.data.provider.yandex.toPlaylist
 import org.tegro.yamp.presentation.main.components.landscapeColumns
 import android.app.Application
 import androidx.compose.foundation.layout.Box
@@ -55,6 +59,7 @@ class LandscapeDockTest {
     val compose = createComposeRule()
 
     private val tracks = (1..30).map { TrackDetailsDto(id = JsonPrimitive("$it"), title = "Песня $it", artists = listOf(ArtistDto(name = "Группа"))) }
+    private val shownTracks = tracks.map { it.toTrack() }
     private val last = "Песня 30"
 
     private val actions = CatalogActions({}, {}, { _, _ -> }, { _, _ -> }, { _, _, _ -> }, {})
@@ -80,7 +85,7 @@ class LandscapeDockTest {
         CatalogPageScreen(
             state = CatalogPageState(
                 CatalogPage.Artist("7", "Кино"),
-                artist = ArtistBriefDto(ArtistDto(id = JsonPrimitive(7), name = "Кино"), tracks, emptyList()),
+                artist = ArtistBriefDto(ArtistDto(id = JsonPrimitive(7), name = "Кино"), tracks, emptyList()).toArtistParts().toArtistPage(),
                 isLoading = false
             ),
             currentTrackId = null, isPlaying = false, likedTrackIds = emptySet(), contentBottom = DockClearance, actions = actions
@@ -89,7 +94,7 @@ class LandscapeDockTest {
 
     private fun playlistPage() = docked {
         PlaylistScreen(
-            opened = OpenedPlaylist(UserPlaylistDto(kind = JsonPrimitive(1003), title = "Избранное", trackCount = 30, revision = 2), tracks, isLoading = false),
+            opened = OpenedPlaylist(UserPlaylistDto(kind = JsonPrimitive(1003), title = "Избранное", trackCount = 30, revision = 2).toPlaylist()!!, shownTracks, isLoading = false),
             currentTrackId = null, isPlaying = false, likedTrackIds = emptySet(), downloadedTrackIds = emptySet(),
             contentBottom = DockClearance, onBack = {}, onPlay = {}, onTrackClick = {}, onToggleLike = {}, onRetry = {},
             onRename = {}, onDelete = {}
@@ -98,7 +103,7 @@ class LandscapeDockTest {
 
     private fun libraryPage() = docked {
         LibraryScreen(
-            tracks = tracks, isLoading = false, currentTrackId = null, isPlaying = false, likedTrackIds = emptySet(), downloadedTrackIds = emptySet(),
+            tracks = shownTracks, isLoading = false, currentTrackId = null, isPlaying = false, likedTrackIds = emptySet(), downloadedTrackIds = emptySet(),
             downloadProgress = null, onTrackClick = {}, onPlayAllClick = {}, onShuffleClick = {},
             onDownloadAllClick = {}, onCancelDownload = {}, onToggleLike = {}
         )

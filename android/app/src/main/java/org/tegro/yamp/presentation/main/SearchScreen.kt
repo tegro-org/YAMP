@@ -77,9 +77,9 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.tegro.yamp.R
-import org.tegro.yamp.data.dto.AlbumDto
-import org.tegro.yamp.data.dto.ArtistDto
-import org.tegro.yamp.data.dto.TrackDetailsDto
+import org.tegro.yamp.domain.media.Album
+import org.tegro.yamp.domain.media.Artist
+import org.tegro.yamp.domain.media.Track
 import org.tegro.yamp.presentation.catalog.Cover
 import org.tegro.yamp.presentation.hifi.GlassCircleButton
 import org.tegro.yamp.presentation.hifi.HiFi
@@ -100,23 +100,23 @@ internal enum class SearchFilter { ALL, TRACKS, ARTISTS, ALBUMS }
 fun SearchScreen(
     query: String,
     onQueryChange: (String) -> Unit,
-    results: List<TrackDetailsDto>,
-    weeklyHits: List<TrackDetailsDto>,
-    trendTracks: List<TrackDetailsDto>,
+    results: List<Track>,
+    weeklyHits: List<Track>,
+    trendTracks: List<Track>,
     isSearching: Boolean,
     currentTrackId: String?,
     isPlaying: Boolean,
     likedTrackIds: Set<String>,
-    onTrackClick: (String, List<TrackDetailsDto>) -> Unit,
-    onToggleLike: (TrackDetailsDto) -> Unit,
+    onTrackClick: (String, List<Track>) -> Unit,
+    onToggleLike: (Track) -> Unit,
     onLoadMoreHits: () -> Unit = {},
     onLoadMoreTrends: () -> Unit = {},
     hasActiveTrack: Boolean = false,
-    artists: List<ArtistDto> = emptyList(),
-    albums: List<AlbumDto> = emptyList(),
+    artists: List<Artist> = emptyList(),
+    albums: List<Album> = emptyList(),
     history: List<String> = emptyList(),
-    onArtistClick: (ArtistDto) -> Unit = {},
-    onAlbumClick: (AlbumDto) -> Unit = {},
+    onArtistClick: (Artist) -> Unit = {},
+    onAlbumClick: (Album) -> Unit = {},
     onRemoveFromHistory: (String) -> Unit = {},
     onClearHistory: () -> Unit = {},
     onSubmit: () -> Unit = {},

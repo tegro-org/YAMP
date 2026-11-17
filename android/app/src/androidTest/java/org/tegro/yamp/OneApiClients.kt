@@ -2,7 +2,7 @@ package org.tegro.yamp
 
 import okhttp3.OkHttpClient
 import org.tegro.yamp.data.network.YandexClients
-import org.tegro.yamp.data.network.YandexMusicApi
+import org.tegro.yamp.data.provider.yandex.network.YandexMusicApi
 import org.tegro.yamp.domain.account.AccountId
 
 /** Every account's calls go to one [api] — the test's fake server answers them all. */

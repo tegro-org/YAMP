@@ -13,10 +13,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import org.tegro.yamp.data.dto.TrackDetailsDto
+import org.tegro.yamp.domain.media.Track
+import org.tegro.yamp.presentation.common.id
+import org.tegro.yamp.presentation.common.isRadio
 import org.tegro.yamp.data.player.PlaylistSource
 import org.tegro.yamp.domain.model.RadioCategory
 import org.tegro.yamp.domain.queue.QueueKind
+import org.tegro.yamp.domain.queue.QueueEntry
+import org.tegro.yamp.data.queue.ActiveQueue
 import org.tegro.yamp.presentation.account.AccountViewModel
 import org.tegro.yamp.presentation.car.CarScreen
 import org.tegro.yamp.presentation.hifi.PanelSide
@@ -34,21 +38,21 @@ import org.tegro.yamp.presentation.update.UpdateViewModel
  */
 @Immutable
 data class NowPlaying(
-    val track: TrackDetailsDto?,
+    val track: Track?,
     val isPlaying: Boolean,
     val isBuffering: Boolean,
     val source: PlaylistSource,
     val likedTrackIds: Set<String>
 ) {
-    val trackId: String? get() = track?.idString
+    val trackId: String? get() = track?.id
     val hasTrack: Boolean get() = track != null
     /** The wave is what plays (or is paused) right now. */
     val waveActive: Boolean get() = source == PlaylistSource.VIBE && track != null
 }
 
 /** The tracks after the current one (at most [limit]). Pure; unit-tested. */
-fun upcomingOf(queue: List<TrackDetailsDto>, currentId: String?, limit: Int = 10): List<TrackDetailsDto> {
-    val index = queue.indexOfFirst { it.idString == currentId }
+fun upcomingOf(queue: List<Track>, currentId: String?, limit: Int = 10): List<Track> {
+    val index = queue.indexOfFirst { it.id == currentId }
     return if (index < 0) emptyList() else queue.drop(index + 1).take(limit)
 }
 
@@ -60,6 +64,27 @@ fun upcomingOf(queue: List<TrackDetailsDto>, currentId: String?, limit: Int = 10
 fun homePagePlays(mode: HomeMode, now: NowPlaying): Boolean = when (mode) {
     HomeMode.Wave -> now.waveActive
     is HomeMode.Queue -> now.track != null && !now.track.isRadio
+}
+
+/**
+ * A queue's page under the knob: the tracks after the cursor (a queue without a cursor counts from its first
+ * entry). While the queue is not what plays, the cursor track is what the knob starts with. Nothing is ever
+ * being fetched for a static queue, so the shelf is never "loading".
+ */
+fun queueShelfOf(active: ActiveQueue, playing: Boolean, limit: Int = 10): WaveShelfState {
+    val start = active.cursorIndex.coerceAtLeast(0)
+    return WaveShelfState(
+        startsWith = if (playing) null else active.tracks.getOrNull(start),
+        shelf = active.tracks.drop(start + 1).take(limit),
+        loading = false
+    )
+}
+
+/** The entry a shelf card stands for: the first occurrence of the track after the cursor. */
+fun shelfEntryOf(active: ActiveQueue, trackId: String): QueueEntry? {
+    val from = active.cursorIndex.coerceAtLeast(0) + 1
+    val index = (from until active.tracks.size).firstOrNull { active.tracks[it].ref.id == trackId } ?: return null
+    return active.entries.getOrNull(index)
 }
 
 @Composable
@@ -92,7 +117,7 @@ internal fun HomeTab(
         org.tegro.yamp.presentation.main.components.WaveTuneSheet(tuning, onChange = viewModel::setWaveTuning, onDismiss = { tuneOpen = false })
     }
     HomeScreen(
-        waveTrack = if (pagePlays) now.track else null,
+        waveTrack = remember(now.track, pagePlays) { if (pagePlays) now.track else null },
         isPlaying = now.isPlaying,
         // The ring loads the page's own music: the wave, or the queue's track (never a station's stream)
         isLoading = now.isBuffering && if (wavePage) now.source == PlaylistSource.VIBE else now.source != PlaylistSource.RADIO,
@@ -108,14 +133,14 @@ internal fun HomeTab(
         onShelfClick = { track ->
             val queuePage = active?.takeIf { !wavePage }
             when {
-                queuePage != null -> shelfEntryOf(queuePage, track.idString)?.let { viewModel.playEntry(it.entryId) }
-                pagePlays -> viewModel.playTrack(track.idString, queue, PlaylistSource.VIBE)
-                else -> viewModel.playWaveFrom(track.idString)
+                queuePage != null -> shelfEntryOf(queuePage, track.id)?.let { viewModel.playEntry(it.entryId) }
+                pagePlays -> viewModel.playTrack(track.id, queue, PlaylistSource.VIBE)
+                else -> viewModel.playWaveFrom(track.id)
             }
         },
         contentBottom = if (pagePlays && !isLandscape) 100.dp else contentBottom,
         tuning = tuning,
-        trackWaveSeed = seed?.takeIf { wavePage && pagePlays },
+        trackWaveSeed = remember(seed, wavePage, pagePlays) { seed?.takeIf { wavePage && pagePlays } },
         onTune = { tuneOpen = true },
         onBackToMyWave = viewModel::returnToMyWave,
         queueCount = queues.size,
@@ -156,18 +181,16 @@ internal fun SearchTab(
         onLoadMoreHits = { searchVm.loadMoreHits() },
         onLoadMoreTrends = { searchVm.loadMoreTrends() },
         hasActiveTrack = now.hasTrack,
-        artists = found.artists,
-        albums = found.albums,
+        artists = remember(found.artists) { found.artists.map { it.item } },
+        albums = remember(found.albums) { found.albums.map { it.item } },
         history = history,
         onArtistClick = { artist ->
-            val id = artist.idString ?: return@SearchScreen
             searchVm.rememberQuery()
-            catalogVm.openArtist(id, artist.name.orEmpty())
+            catalogVm.openArtist(artist.ref.id, artist.name)
         },
         onAlbumClick = { album ->
-            val id = album.idString ?: return@SearchScreen
             searchVm.rememberQuery()
-            catalogVm.openAlbum(id, album.title.orEmpty())
+            catalogVm.openAlbum(album.ref.id, album.title)
         },
         onRemoveFromHistory = { searchVm.removeFromHistory(it) },
         onClearHistory = { searchVm.clearHistory() },
@@ -248,6 +271,8 @@ internal fun LibraryTab(
             onListeningHistoryChange = settingsVm::setListeningHistory,
             onReserveChange = settingsVm::setReserveMb,
             onClearReserve = settingsVm::clearReserve,
+            onStreamCacheChange = settingsVm::setStreamCacheMb,
+            onClearStreamCache = settingsVm::clearStreamCache,
             onAutoDownloadChange = settingsVm::setAutoDownload,
             onDownloadAll = { viewModel.downloadAllLikedTracks() },
             onUpgradeDownloads = settingsVm::upgradeDownloads,
@@ -334,7 +359,7 @@ internal fun RadioTab(viewModel: MainViewModel, radioVm: RadioViewModel, now: No
         allStations = stations,
         selectedCategory = selectedCategory,
         onCategorySelect = { selectedCategory = it },
-        currentStationId = now.track?.takeIf { it.isRadio }?.idString?.removePrefix("radio_"),
+        currentStationId = now.track?.takeIf { it.isRadio }?.id?.removePrefix("radio_"),
         isPlaying = now.isPlaying,
         favoriteStationIds = favoriteStationIds,
         onStationClick = { radioVm.play(it) },
@@ -366,7 +391,7 @@ internal fun CarTab(
     // What will really play next, by the player's own rule (explicit passed over, a playlist goes on from its start)
     val upcoming = remember(queue, now.trackId, now.source, skipExplicit, track?.isRadio) {
         if (track == null || track.isRadio) emptyList()
-        else PlaybackQueue.upcoming(queue, queue.indexOfFirst { it.idString == now.trackId }, now.source, 3) { skipExplicit && it.isExplicit }
+        else PlaybackQueue.upcoming(queue, queue.indexOfFirst { it.id == now.trackId }, now.source, 3) { skipExplicit && it.explicit }
     }
     CarScreen(
         currentTrack = track,
@@ -391,16 +416,16 @@ internal fun CarTab(
         upcoming = upcoming,
         // The wave with nothing fetched yet ahead: placeholders keep the row's place
         upcomingLoading = now.source == PlaylistSource.VIBE && track != null && !track.isRadio && upcoming.isEmpty(),
-        onUpcomingClick = { viewModel.playTrack(it.idString, queue, now.source, byUser = false) },
+        onUpcomingClick = { viewModel.playTrack(it.id, queue, now.source, byUser = false) },
         source = now.source,
         isBuffering = now.isBuffering,
         showClock = showClock,
         waveTuning = waveTuning,
         trackWaveSeed = waveSeed,
         onWaveTuningChange = viewModel::setWaveTuning,
-        onTrackWave = { track ->
-            viewModel.waveOrRadio(track) {
-                queueSwitcher?.open(QueueSwitcherRequest.StartRadio.of(track, car = true, side = if (steeringWheelOnLeft) PanelSide.LEFT else PanelSide.RIGHT))
+        onTrackWave = { shown ->
+            viewModel.waveOrRadio(shown) {
+                queueSwitcher?.open(QueueSwitcherRequest.StartRadio.of(shown, car = true, side = if (steeringWheelOnLeft) PanelSide.LEFT else PanelSide.RIGHT))
             }
         },
         onBackToMyWave = viewModel::returnToMyWave,

@@ -1,5 +1,6 @@
 package org.tegro.yamp
 
+import org.tegro.yamp.presentation.common.id
 import android.Manifest
 import android.content.ComponentName
 import android.os.Build
@@ -60,7 +61,7 @@ class PlaybackLifecycleInstrumentedTest {
         val vm = viewModelOf(scenario)
         val station = radio.stations.value.first { it.id == "record" }
         instrumentation.runOnMainSync { radio.play(station) }
-        waitUntil(30_000, "station is the current item") { vm.currentTrack.value?.idString == "radio_${station.id}" }
+        waitUntil(30_000, "station is the current item") { vm.currentTrack.value?.id == "radio_${station.id}" }
 
         val token = SessionToken(context, ComponentName(context, MusicService::class.java))
         val future = MediaController.Builder(context, token).buildAsync()
@@ -140,7 +141,7 @@ class PlaybackLifecycleInstrumentedTest {
             // 4. Reopen the app: the UI must show what is actually playing
             val second = ActivityScenario.launch(MainActivity::class.java)
             val reopenedVm = viewModelOf(second)
-            assertEquals("radio_${next.id}", reopenedVm.currentTrack.value?.idString)
+            assertEquals("radio_${next.id}", reopenedVm.currentTrack.value?.id)
             assertTrue("UI must show playing state", reopenedVm.isPlaying.value)
             second.close()
         } finally {
@@ -164,7 +165,7 @@ class PlaybackLifecycleInstrumentedTest {
         val scenario = ActivityScenario.launch(MainActivity::class.java)
         val vm = viewModelOf(scenario)
         waitUntil(5_000, "session restored") { vm.currentTrack.value != null }
-        assertTrue("restored track is radio", vm.currentTrack.value!!.idString.startsWith("radio_"))
+        assertTrue("restored track is radio", vm.currentTrack.value!!.id.startsWith("radio_"))
         assertTrue("restored session starts paused", !vm.isPlaying.value)
         scenario.close()
     }

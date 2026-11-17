@@ -17,12 +17,14 @@ import androidx.lifecycle.viewModelScope
 import org.tegro.yamp.data.account.AccountSessionManager
 import org.tegro.yamp.data.download.DownloadQueueState
 import org.tegro.yamp.data.download.DownloadScheduler
-import org.tegro.yamp.data.dto.TrackDetailsDto
+import org.tegro.yamp.data.provider.yandex.toTrack
+import org.tegro.yamp.domain.media.Track
+import org.tegro.yamp.presentation.common.id
 import org.tegro.yamp.data.network.TrackDownloadManager
 import org.tegro.yamp.data.player.PlaybackController
 import org.tegro.yamp.data.player.PlaylistSource
 import org.tegro.yamp.data.player.SleepTimerState
-import org.tegro.yamp.data.repository.LibraryRepository
+import org.tegro.yamp.data.provider.yandex.repository.LibraryRepository
 import org.tegro.yamp.domain.repository.AuthRepository
 import org.tegro.yamp.domain.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -60,9 +62,11 @@ class MainViewModel @Inject constructor(
     // region Library
 
     // Library and charts live in the process-wide LibraryRepository (single-flight, incremental sync)
-    val tracks: StateFlow<List<TrackDetailsDto>> = libraryRepository.likedTracks
+    val tracks: StateFlow<List<Track>> = libraryRepository.likedTracks.map { list -> list.map { it.toTrack() } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, libraryRepository.likedTracks.value.map { it.toTrack() })
     val likedTrackIds: StateFlow<Set<String>> = libraryRepository.likedIds
-    val popularTracks: StateFlow<List<TrackDetailsDto>> = libraryRepository.popularTracks
+    val popularTracks: StateFlow<List<Track>> = libraryRepository.popularTracks.map { list -> list.map { it.toTrack() } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, libraryRepository.popularTracks.value.map { it.toTrack() })
     val isLoading: StateFlow<Boolean> = libraryRepository.isSyncingLikes
     /** The likes could not be loaded; they are retried by themselves as soon as the network is back. */
     val libraryLoadFailed: StateFlow<Boolean> = libraryRepository.likesSyncFailed
@@ -93,16 +97,20 @@ class MainViewModel @Inject constructor(
     // region Playback state
 
     val currentSource: StateFlow<PlaylistSource> = playbackController.currentSource
-    val currentPlaylist: StateFlow<List<TrackDetailsDto>> = playbackController.currentPlaylist
-    val currentTrack: StateFlow<TrackDetailsDto?> = playbackController.currentTrack
+    val currentPlaylist: StateFlow<List<Track>> = playbackController.currentPlaylist
+    val currentTrack: StateFlow<Track?> = playbackController.currentTrack
     val currentTrackId: StateFlow<String?> = playbackController.currentTrack
-        .map { it?.idString }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, playbackController.currentTrack.value?.idString)
+        .map { it?.id }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, playbackController.currentTrack.value?.id)
     val isPlaying: StateFlow<Boolean> = playbackController.isPlaying
     val isBuffering: StateFlow<Boolean> = playbackController.isBuffering
     val progress: StateFlow<Long> = playbackController.progress
+    /** How far the current track is loaded: the lighter part of the progress bars ([Long.MAX_VALUE] = all of it). */
+    val bufferedProgress: StateFlow<Long> = playbackController.bufferedProgress
+    /** The next track's state: the Next button shows it (D81). */
+    val nextTrack: StateFlow<org.tegro.yamp.domain.player.NextTrack> = playbackController.nextTrack
     val isFetchingMoreQueue: StateFlow<Boolean> = playbackController.isFetchingMoreQueue
-    val wavePreview: StateFlow<List<org.tegro.yamp.data.dto.TrackDetailsDto>> = playbackController.wavePreview
+    val wavePreview: StateFlow<List<Track>> = playbackController.wavePreview
     val streamQuality: StateFlow<String?> = playbackController.streamQuality
     val sleepTimer: StateFlow<SleepTimerState?> = playbackController.sleepTimer
     val playbackMessages: SharedFlow<String> = playbackController.messages
@@ -123,7 +131,7 @@ class MainViewModel @Inject constructor(
 
     init {
         // The controller outlives this ViewModel; give it the library for "play liked" fallbacks.
-        tracks.onEach { playbackController.updateLibrary(it) }.launchIn(viewModelScope)
+        libraryRepository.likedTracks.onEach { playbackController.updateLibrary(it.map { track -> track.toTrack() }) }.launchIn(viewModelScope)
 
         viewModelScope.launch { session.refreshProfileIfIncomplete() }
 
@@ -144,10 +152,10 @@ class MainViewModel @Inject constructor(
     }
 
     /** The heart: a track's like, or a station's favourite (shared with the player in the notification). */
-    fun toggleLike(track: TrackDetailsDto) = reactions.toggleLike(track)
+    fun toggleLike(track: Track) = reactions.toggleLike(track)
 
     /** "Не нравится": a track leaves the wave and the next one plays; a station leaves the favourites. */
-    fun dislikeTrack(track: TrackDetailsDto) = reactions.dislike(track)
+    fun dislikeTrack(track: Track) = reactions.dislike(track)
 
     /** Offline downloads run in WorkManager: they continue after the app is closed. */
     fun downloadAllLikedTracks() {
@@ -202,10 +210,10 @@ class MainViewModel @Inject constructor(
 
     /** The liked tracks that are on the device, in the library's order. */
     fun playDownloaded() {
-        val downloaded = tracks.value.filter { it.idString in downloadedTrackIds.value }
+        val downloaded = tracks.value.filter { it.id in downloadedTrackIds.value }
         downloaded.firstOrNull()?.let {
             playRequests.userStarted()
-            playbackController.playTrack(it.idString, downloaded, PlaylistSource.LIBRARY)
+            playbackController.playTrack(it.id, downloaded, PlaylistSource.LIBRARY)
         }
     }
 
@@ -216,11 +224,11 @@ class MainViewModel @Inject constructor(
 
     fun playHits(shuffle: Boolean = true) {
         playRequests.userStarted()
-        playbackController.playHits(libraryRepository.weeklyHits.value, shuffle)
+        playbackController.playHits(libraryRepository.weeklyHits.value.map { it.toTrack() }, shuffle)
     }
 
     /** @param byUser the user chose this track (a list, a card); false when the app moves on by itself. */
-    fun playTrack(trackId: String, playlist: List<TrackDetailsDto>, source: PlaylistSource? = null, byUser: Boolean = true) {
+    fun playTrack(trackId: String, playlist: List<Track>, source: PlaylistSource? = null, byUser: Boolean = true) {
         if (byUser) playRequests.userStarted()
         playbackController.playTrack(trackId, playlist, source)
     }
@@ -228,11 +236,11 @@ class MainViewModel @Inject constructor(
     // region My Wave: tuning and a wave by a track
 
     val waveTuning: StateFlow<WaveTuning> = playbackController.waveTuning
-    val waveSeed: StateFlow<TrackDetailsDto?> = playbackController.waveSeed
-    val trackWaveStarted: Flow<TrackDetailsDto> = playbackController.trackWaveStarted
+    val waveSeed: StateFlow<Track?> = playbackController.waveSeed
+    val trackWaveStarted: Flow<Track> = playbackController.trackWaveStarted
 
     fun setWaveTuning(tuning: WaveTuning) = playbackController.setWaveTuning(tuning)
-    fun startTrackWave(track: TrackDetailsDto) {
+    fun startTrackWave(track: Track) {
         playRequests.userStarted()
         playbackController.startTrackWave(track)
     }
@@ -242,7 +250,7 @@ class MainViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     /** D54, the one place the choice is made: a wave by [track] on My Wave, the radio picker on any other queue. */
-    fun waveOrRadio(track: TrackDetailsDto, openRadioPicker: () -> Unit) {
+    fun waveOrRadio(track: Track, openRadioPicker: () -> Unit) {
         if (waveActive.value) startTrackWave(track) else openRadioPicker()
     }
 
@@ -316,13 +324,13 @@ class MainViewModel @Inject constructor(
     fun removeFromQueue(trackId: String) = playbackController.removeFromQueue(trackId)
     fun moveInQueue(trackId: String, targetId: String) = playbackController.moveInQueue(trackId, targetId)
 
-    fun enqueueNext(track: TrackDetailsDto) = playbackController.enqueueNext(track)
+    fun enqueueNext(track: Track) = playbackController.enqueueNext(track)
 
     /** "Add to end of queue" for a track or a whole list. */
-    fun addToEnd(tracks: List<TrackDetailsDto>) = playbackController.addToEnd(tracks)
+    fun addToEnd(tracks: List<Track>) = playbackController.addToEnd(tracks)
 
     /** History's row: the track plays now, right after the cursor; the active queue goes on after it. */
-    fun playNowKeepQueue(track: TrackDetailsDto) {
+    fun playNowKeepQueue(track: Track) {
         playRequests.userStarted()
         playbackController.playNowKeepQueue(track)
     }

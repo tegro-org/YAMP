@@ -565,4 +565,11 @@
     <!-- Debug: test sign-out without losing credentials (debug builds only) -->
     <string name="debug_account_hide">Hide %1$s (test sign-out)</string>
     <string name="debug_account_unhide">Unhide %1$s</string>
+    <!-- On-disk stream cache (D86) -->
+    <string name="settings_stream_cache_size">Stream cache</string>
+    <string name="settings_stream_cache_hint">Played and next tracks are kept on disk: Back and Next start at once, even after a dropout</string>
+    <string name="settings_stream_cache_clear">Clear stream cache</string>
+    <string name="next_state_ready">Next track ready</string>
+    <string name="next_state_loading">Next track loading</string>
+    <string name="next_state_failed">Couldn\'t load — tap to retry</string>
 </resources>

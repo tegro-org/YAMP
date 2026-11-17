@@ -42,7 +42,7 @@
 
 # Keep all DTO, Domain Models and Updater
 -keep class org.tegro.yamp.data.dto.** { *; }
--keep class org.tegro.yamp.data.cache.PlaybackSnapshot { *; }
+-keep class org.tegro.yamp.data.provider.yandex.cache.PlaybackSnapshot { *; }
 -keep class org.tegro.yamp.data.updater.** { *; }
 -keep class org.tegro.yamp.domain.model.** { *; }
 -keep class org.tegro.yamp.data.radio.** { *; }

@@ -1,5 +1,6 @@
 package org.tegro.yamp.presentation.main
 
+import org.tegro.yamp.presentation.player.look
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.systemBars
 import kotlinx.coroutines.launch
@@ -61,7 +62,10 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
-import org.tegro.yamp.data.dto.TrackDetailsDto
+import org.tegro.yamp.domain.media.Track
+import org.tegro.yamp.presentation.common.coverUri
+import org.tegro.yamp.presentation.common.id
+import org.tegro.yamp.presentation.common.isRadio
 import org.tegro.yamp.presentation.account.AccountViewModel
 import org.tegro.yamp.presentation.catalog.CatalogActions
 import org.tegro.yamp.presentation.catalog.CatalogPageScreen
@@ -134,6 +138,12 @@ fun MainScreen(
     // it is drawn, so nothing here recomposes on a tick
     val progressState = viewModel.progress.collectAsStateWithLifecycle()
     val progress = remember(progressState) { { progressState.value } }
+    // The next track's state and the loaded part: read only where a Next button or a progress bar draws them
+    val bufferedState = viewModel.bufferedProgress.collectAsStateWithLifecycle()
+    val nextTrackState = viewModel.nextTrack.collectAsStateWithLifecycle()
+    val playbackAux = remember(bufferedState, nextTrackState) {
+        org.tegro.yamp.presentation.player.PlaybackAux(next = { nextTrackState.value.look() }, buffered = { bufferedState.value })
+    }
 
     val now = NowPlaying(currentTrack, isPlaying, isBuffering, currentSource, likedTrackIds)
 
@@ -191,10 +201,10 @@ fun MainScreen(
         AnimationMode.MINIMUM -> true
         else -> autoLite
     }
-    val stationTint = remember(currentTrack?.idString, radioStations) {
+    val stationTint = remember(currentTrack?.id, radioStations) {
         val track = currentTrack
         if (track?.isRadio != true) null
-        else radioStations.firstOrNull { it.id == track.idString.removePrefix("radio_") }?.let {
+        else radioStations.firstOrNull { it.id == track.id.removePrefix("radio_") }?.let {
             ArtworkTint(Color(TintMath.normalize(it.brandColorStart.toInt())), Color(TintMath.normalize(it.brandColorEnd.toInt())))
         }
     }
@@ -216,7 +226,8 @@ fun MainScreen(
         LocalTrackMenu provides trackMenuLauncher,
         LocalQueueSwitcher provides queueSwitcherLauncher,
         LocalHiFiLite provides lite,
-        LocalArtworkTint provides appTint
+        LocalArtworkTint provides appTint,
+        org.tegro.yamp.presentation.player.LocalPlaybackAux provides playbackAux
     ) {
         SharedTransitionLayout(modifier = Modifier.fillMaxSize()) {
             val sharedScope = this
@@ -440,7 +451,7 @@ private fun catalogTransition(forward: Boolean, lite: Boolean): androidx.compose
 @Suppress("ModifierParameter")
 @Composable
 private fun PlayerHost(
-    track: TrackDetailsDto,
+    track: Track,
     now: NowPlaying,
     favoriteStationIds: Set<String>,
     progress: () -> Long,
@@ -458,9 +469,9 @@ private fun PlayerHost(
     val waveActive by viewModel.waveActive.collectAsStateWithLifecycle()
     val queueSwitcher = LocalQueueSwitcher.current
     val sleepTimer by viewModel.sleepTimer.collectAsStateWithLifecycle()
-    val stationId = track.idString.removePrefix("radio_")
+    val stationId = track.id.removePrefix("radio_")
     // The sheet's rows are the queue's entries (a track twice = two rows) while a queue is what plays
-    val entries = activeQueue?.takeIf { !track.isRadio && it.tracks == queue }
+    val entries = activeQueue?.takeIf { !track.isRadio && it.isShownAs(queue) }
     val queueModes = remember(entries?.queue?.shuffle, entries?.queue?.repeat, entries != null) {
         QueueModes(
             shuffle = entries?.queue?.shuffle == true,
@@ -476,7 +487,7 @@ private fun PlayerHost(
         isPlaying = now.isPlaying,
         isLoading = now.isBuffering,
         controlsOnLeft = steeringWheelOnLeft,
-        isLiked = if (track.isRadio) stationId in favoriteStationIds else track.idString in now.likedTrackIds,
+        isLiked = if (track.isRadio) stationId in favoriteStationIds else track.id in now.likedTrackIds,
         progress = progress,
         queue = queue,
         sourceLabel = playerSourceLabelRes(now.source, track.isRadio)?.let { stringResource(it) }.orEmpty(),
@@ -526,11 +537,11 @@ private fun Modifier.sharedCover(scope: SharedTransitionScope, visibility: Anima
  * size), and the wave's "next up" cards — opening the player or moving on finds them ready.
  */
 @Composable
-private fun PrefetchCovers(viewModel: MainViewModel, track: TrackDetailsDto?) {
+private fun PrefetchCovers(viewModel: MainViewModel, track: Track?) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val queue by viewModel.currentPlaylist.collectAsStateWithLifecycle()
     val wavePreview by viewModel.wavePreview.collectAsStateWithLifecycle()
-    val ahead = remember(queue, track?.idString) { listOfNotNull(track) + upcomingOf(queue, track?.idString, limit = 2) }
+    val ahead = remember(queue, track?.id) { listOfNotNull(track) + upcomingOf(queue, track?.id, limit = 2) }
     LaunchedEffect(ahead) {
         org.tegro.yamp.utils.prefetchCovers(context, ahead, listOf(CoverSize.Large, CoverSize.Small))
     }

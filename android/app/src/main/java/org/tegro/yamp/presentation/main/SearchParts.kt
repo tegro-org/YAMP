@@ -59,9 +59,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.tegro.yamp.presentation.hifi.hifiSoftShadow
 import org.tegro.yamp.R
-import org.tegro.yamp.data.dto.AlbumDto
-import org.tegro.yamp.data.dto.ArtistDto
-import org.tegro.yamp.data.dto.TrackDetailsDto
+import org.tegro.yamp.domain.media.Album
+import org.tegro.yamp.domain.media.Artist
+import org.tegro.yamp.domain.media.Track
+import org.tegro.yamp.presentation.common.coverUri
+import org.tegro.yamp.presentation.common.id
 import org.tegro.yamp.presentation.catalog.Cover
 import org.tegro.yamp.presentation.hifi.HiFi
 import org.tegro.yamp.presentation.hifi.HiFiFilterPill
@@ -112,12 +114,12 @@ internal fun RecentPanel(history: List<String>, onPick: (String) -> Unit, onRemo
 internal fun DiscoverList(
     list: LazyListState,
     top: Dp,
-    weeklyHits: List<TrackDetailsDto>,
-    trendTracks: List<TrackDetailsDto>,
+    weeklyHits: List<Track>,
+    trendTracks: List<Track>,
     contentStart: Dp,
     contentBottom: Dp,
     columns: Int,
-    onTrackClick: (String, List<TrackDetailsDto>) -> Unit,
+    onTrackClick: (String, List<Track>) -> Unit,
     onLoadMoreHits: () -> Unit,
     onLoadMoreTrends: () -> Unit
 ) {
@@ -144,8 +146,8 @@ internal fun DiscoverList(
             }
             item(key = "hits") {
                 LazyRow(state = rowState, contentPadding = PaddingValues(start = contentStart, end = 20.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    items(hits, key = { it.idString }, contentType = { "hit" }) { track ->
-                        CoverCard(track, Modifier.width(150.dp)) { onTrackClick(track.idString, hits) }
+                    items(hits, key = { it.id }, contentType = { "hit" }) { track ->
+                        CoverCard(track, Modifier.width(150.dp)) { onTrackClick(track.id, hits) }
                     }
                 }
             }
@@ -154,9 +156,9 @@ internal fun DiscoverList(
             item(key = "trends_title") {
                 HiFiSectionHeader(stringResource(R.string.search_v_trende), Modifier.padding(start = contentStart, end = 20.dp, top = 24.dp, bottom = 12.dp))
             }
-            items(trends.chunked(columns), key = { row -> "trend_" + row.joinToString("|") { it.idString } }, contentType = { "cover_row" }) { row ->
+            items(trends.chunked(columns), key = { row -> "trend_" + row.joinToString("|") { it.id } }, contentType = { "cover_row" }) { row ->
                 Row(Modifier.fillMaxWidth().padding(start = contentStart, end = 20.dp, bottom = 18.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    row.forEach { track -> CoverCard(track, Modifier.weight(1f)) { onTrackClick(track.idString, trends) } }
+                    row.forEach { track -> CoverCard(track, Modifier.weight(1f)) { onTrackClick(track.id, trends) } }
                     repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
@@ -165,7 +167,7 @@ internal fun DiscoverList(
 }
 
 /** The filters worth offering for these results; nothing found, nothing to filter. */
-internal fun availableFilters(results: List<TrackDetailsDto>, artists: List<ArtistDto>, albums: List<AlbumDto>): List<SearchFilter> =
+internal fun availableFilters(results: List<Track>, artists: List<Artist>, albums: List<Album>): List<SearchFilter> =
     if (results.isEmpty() && artists.isEmpty() && albums.isEmpty()) {
         emptyList()
     } else {
@@ -211,19 +213,19 @@ internal fun SearchFilterRow(
 internal fun ResultsList(
     top: Dp,
     filter: SearchFilter,
-    results: List<TrackDetailsDto>,
-    artists: List<ArtistDto>,
-    albums: List<AlbumDto>,
+    results: List<Track>,
+    artists: List<Artist>,
+    albums: List<Album>,
     contentStart: Dp,
     contentBottom: Dp,
     isLandscape: Boolean,
     currentTrackId: String?,
     isPlaying: Boolean,
     likedTrackIds: Set<String>,
-    onTrackClick: (String, List<TrackDetailsDto>) -> Unit,
-    onToggleLike: (TrackDetailsDto) -> Unit,
-    onArtistClick: (ArtistDto) -> Unit,
-    onAlbumClick: (AlbumDto) -> Unit
+    onTrackClick: (String, List<Track>) -> Unit,
+    onToggleLike: (Track) -> Unit,
+    onArtistClick: (Artist) -> Unit,
+    onAlbumClick: (Album) -> Unit
 ) {
     if (results.isEmpty() && artists.isEmpty() && albums.isEmpty()) {
         HiFiEmptyState(
@@ -246,15 +248,15 @@ internal fun ResultsList(
                     val artist = artists.firstOrNull()
                     val track = results.firstOrNull()
                     if (artist != null) {
-                        BestResultCard(title = artist.name.orEmpty(), subtitle = stringResource(R.string.search_artist_single), coverUri = artist.coverUri, round = true, onClick = { onArtistClick(artist) }, onPlay = null)
+                        BestResultCard(title = artist.name, subtitle = stringResource(R.string.search_artist_single), coverUri = artist.cover?.key, round = true, onClick = { onArtistClick(artist) }, onPlay = null)
                     } else if (track != null) {
                         BestResultCard(
-                            title = track.title.orEmpty(),
-                            subtitle = track.artists.joinToString { it.name ?: "" },
+                            title = track.title,
+                            subtitle = track.artists.joinToString { it.name },
                             coverUri = track.coverUri,
                             round = false,
-                            onClick = { onTrackClick(track.idString, results) },
-                            onPlay = { onTrackClick(track.idString, results) }
+                            onClick = { onTrackClick(track.id, results) },
+                            onPlay = { onTrackClick(track.id, results) }
                         )
                     }
                 }
@@ -266,14 +268,14 @@ internal fun ResultsList(
             }
             item(key = "artists") {
                 LazyRow(contentPadding = PaddingValues(start = contentStart, end = 20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    items(artists, key = { it.idString ?: it.name.orEmpty() }) { artist ->
+                    items(artists, key = { it.ref.value }) { artist ->
                         Column(
                             Modifier.width(96.dp).hifiPress({ onArtistClick(artist) }),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Box(Modifier.hifiSoftShadow(CircleShape, 14.dp)) { Cover(artist.coverUri, Icons.Rounded.Person, CircleShape, 88.dp) }
+                            Box(Modifier.hifiSoftShadow(CircleShape, 14.dp)) { Cover(artist.cover?.key, Icons.Rounded.Person, CircleShape, 88.dp) }
                             Spacer(Modifier.height(8.dp))
-                            Text(artist.name.orEmpty(), style = HiFiType.CardTitle.copy(fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(artist.name, style = HiFiType.CardTitle.copy(fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }
@@ -285,20 +287,20 @@ internal fun ResultsList(
             }
             val shown = if (filter == SearchFilter.ALL) results.take(6) else results
             if (isLandscape) {
-                items(shown.chunked(2), key = { row -> "t_" + row.joinToString("|") { it.idString } }, contentType = { "track_row" }) { row ->
+                items(shown.chunked(2), key = { row -> "t_" + row.joinToString("|") { it.id } }, contentType = { "track_row" }) { row ->
                     Row(Modifier.fillMaxWidth().padding(start = contentStart - 8.dp, end = 12.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         row.forEach { track ->
                             Box(Modifier.weight(1f)) {
-                                TrackItem(track = track, isPlaying = isPlaying && track.idString == currentTrackId, isLiked = likedTrackIds.contains(track.idString), onToggleLike = { onToggleLike(track) }, onClick = { onTrackClick(track.idString, results) })
+                                TrackItem(track = track, isPlaying = isPlaying && track.id == currentTrackId, isLiked = likedTrackIds.contains(track.id), onToggleLike = { onToggleLike(track) }, onClick = { onTrackClick(track.id, results) })
                             }
                         }
                         if (row.size == 1) Spacer(Modifier.weight(1f))
                     }
                 }
             } else {
-                itemsIndexed(shown, key = { _, t -> "t_" + t.idString }, contentType = { _, _ -> "track" }) { index, track ->
-                    Box(Modifier.padding(start = contentStart - 12.dp, end = 8.dp).appearOnce(appearance, track.idString, index)) {
-                        TrackItem(track = track, isPlaying = isPlaying && track.idString == currentTrackId, isLiked = likedTrackIds.contains(track.idString), onToggleLike = { onToggleLike(track) }, onClick = { onTrackClick(track.idString, results) })
+                itemsIndexed(shown, key = { _, t -> "t_" + t.id }, contentType = { _, _ -> "track" }) { index, track ->
+                    Box(Modifier.padding(start = contentStart - 12.dp, end = 8.dp).appearOnce(appearance, track.id, index)) {
+                        TrackItem(track = track, isPlaying = isPlaying && track.id == currentTrackId, isLiked = likedTrackIds.contains(track.id), onToggleLike = { onToggleLike(track) }, onClick = { onTrackClick(track.id, results) })
                     }
                 }
             }
@@ -309,12 +311,12 @@ internal fun ResultsList(
             }
             item(key = "albums") {
                 LazyRow(contentPadding = PaddingValues(start = contentStart, end = 20.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    items(albums, key = { it.idString ?: it.title.orEmpty() }) { album ->
+                    items(albums, key = { it.ref.value }) { album ->
                         Column(Modifier.width(150.dp).hifiPress({ onAlbumClick(album) })) {
-                            Box(Modifier.hifiSoftShadow(RoundedCornerShape(16.dp), 18.dp)) { Cover(album.coverUri, Icons.Rounded.Album, RoundedCornerShape(16.dp), 150.dp) }
+                            Box(Modifier.hifiSoftShadow(RoundedCornerShape(16.dp), 18.dp)) { Cover(album.cover?.key, Icons.Rounded.Album, RoundedCornerShape(16.dp), 150.dp) }
                             Spacer(Modifier.height(9.dp))
-                            Text(album.title.orEmpty(), style = HiFiType.CardTitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(listOfNotNull(album.year?.toString(), album.artists.firstOrNull()?.name).joinToString(" · "), style = HiFiType.Caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(album.title, style = HiFiType.CardTitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(listOfNotNull(album.year?.toString(), album.artists.firstOrNull()?.name?.ifEmpty { null }).joinToString(" · "), style = HiFiType.Caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }

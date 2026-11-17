@@ -15,7 +15,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.ui.platform.LocalDensity
-import org.tegro.yamp.data.dto.TrackDetailsDto
+import org.tegro.yamp.domain.media.Track
 import org.tegro.yamp.presentation.hifi.AppScale
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -42,9 +42,9 @@ import org.tegro.yamp.presentation.hifi.HiFi
 fun AddToQueueMenu(
     expanded: Boolean,
     onDismiss: () -> Unit,
-    tracks: List<TrackDetailsDto>,
+    tracks: List<Track>,
     title: String,
-    onAddToEnd: (List<TrackDetailsDto>) -> Unit,
+    onAddToEnd: (List<Track>) -> Unit,
     radioSeed: RadioSeed? = null
 ) {
     val launcher = LocalQueueSwitcher.current

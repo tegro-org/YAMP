@@ -17,7 +17,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
-import org.tegro.yamp.data.dto.TrackDetailsDto
+import org.tegro.yamp.domain.media.Track
 import org.tegro.yamp.data.history.HistoryItem
 import org.tegro.yamp.data.history.ListeningHistory
 import org.tegro.yamp.data.player.PlaybackController
@@ -38,7 +38,7 @@ data class HistoryFilter(
 
 /** One row: the track as [org.tegro.yamp.presentation.main.components.TrackItem] shows it, and where it played. */
 @Immutable
-data class HistoryRow(val id: Long, val track: TrackDetailsDto, val queueName: String?)
+data class HistoryRow(val id: Long, val track: Track, val queueName: String?)
 
 @Immutable
 data class DaySection(val day: DayKey, val rows: List<HistoryRow>)

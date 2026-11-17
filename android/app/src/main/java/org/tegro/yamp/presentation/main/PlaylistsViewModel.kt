@@ -5,12 +5,15 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import org.tegro.yamp.R
-import org.tegro.yamp.data.dto.TrackDetailsDto
-import org.tegro.yamp.data.dto.UserPlaylistDto
+import org.tegro.yamp.domain.media.Track
+import org.tegro.yamp.presentation.common.id
+import org.tegro.yamp.data.provider.yandex.PlaylistEntry
+import org.tegro.yamp.data.provider.yandex.YandexPlaylists
+import org.tegro.yamp.domain.media.Playlist
 import org.tegro.yamp.data.player.PlaybackController
 import org.tegro.yamp.data.player.PlaylistSource
-import org.tegro.yamp.data.repository.UserPlaylistsRepository
-import org.tegro.yamp.data.repository.UserPlaylistsRepository.AddTrackResult
+import org.tegro.yamp.data.provider.yandex.repository.UserPlaylistsRepository
+import org.tegro.yamp.data.provider.yandex.repository.UserPlaylistsRepository.AddTrackResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -18,10 +21,13 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -33,12 +39,15 @@ import javax.inject.Inject
 @HiltViewModel
 class PlaylistsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val repository: UserPlaylistsRepository,
+    private val repository: YandexPlaylists,
     private val playbackController: PlaybackController,
     private val playRequests: org.tegro.yamp.data.player.PlayRequests
 ) : ViewModel() {
 
-    val playlists: StateFlow<List<UserPlaylistDto>> = repository.playlists
+    /** The screens read neutral playlists (phase 3 step 13); edits find the service's own entry again by its ref. */
+    val playlists: StateFlow<List<Playlist>> = repository.entries
+        .map { list -> list.map { it.playlist } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, repository.currentEntries().map { it.playlist })
 
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
     val messages: SharedFlow<String> = _messages
@@ -49,39 +58,53 @@ class PlaylistsViewModel @Inject constructor(
     val opened: StateFlow<OpenedPlaylist?> = _opened.asStateFlow()
     private var openJob: Job? = null
 
+    /** The opened playlist as the service has it: its revision says when to reload. */
+    private var openedEntry: PlaylistEntry? = null
+
     init {
         // Edits (here or in Android Auto's list), server refreshes and account changes
-        repository.playlists.onEach { list ->
+        repository.entries.onEach { list ->
             val opened = _opened.value ?: return@onEach
-            val now = list.firstOrNull { it.kindString == opened.playlist.kindString }
+            val shown = openedEntry ?: return@onEach
+            val now = list.firstOrNull { it.playlist.ref == shown.playlist.ref }
             when {
                 now == null -> close() // deleted, or another account
-                now.revision != opened.playlist.revision -> open(now, keepShownTracks = true)
-                now != opened.playlist -> _opened.value = opened.copy(playlist = now)
+                now.revision != shown.revision -> openEntry(now, keepShownTracks = true)
+                now != shown -> {
+                    openedEntry = now
+                    _opened.value = opened.copy(playlist = now.playlist)
+                }
             }
         }.launchIn(viewModelScope)
     }
 
+    fun open(playlist: Playlist) {
+        repository.entry(playlist.ref)?.let { openEntry(it) }
+    }
+
     /** @param keepShownTracks reload in place (after an edit) instead of showing the spinner. */
-    fun open(playlist: UserPlaylistDto, keepShownTracks: Boolean = false) {
+    private fun openEntry(entry: PlaylistEntry, keepShownTracks: Boolean = false) {
+        val playlist = entry.playlist
         openJob?.cancel()
-        val shown = _opened.value?.takeIf { keepShownTracks && it.playlist.kindString == playlist.kindString }?.tracks.orEmpty()
+        val shown = _opened.value?.takeIf { keepShownTracks && it.playlist.ref == playlist.ref }?.tracks.orEmpty()
+        openedEntry = entry
         _opened.value = OpenedPlaylist(playlist, shown, isLoading = shown.isEmpty())
         openJob = viewModelScope.launch {
             val loaded = try {
-                OpenedPlaylist(playlist, repository.tracks(playlist), isLoading = false)
+                OpenedPlaylist(playlist, repository.tracks(playlist.ref).orEmpty(), isLoading = false)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Playlist load failed", e)
                 OpenedPlaylist(playlist, isLoading = false, failed = true, failReason = failureReason(e))
             }
-            if (_opened.value?.playlist?.kindString == playlist.kindString) _opened.value = loaded
+            if (_opened.value?.playlist?.ref == playlist.ref) _opened.value = loaded
         }
     }
 
     fun close() {
         openJob?.cancel()
+        openedEntry = null
         _opened.value = null
     }
 
@@ -89,7 +112,7 @@ class PlaylistsViewModel @Inject constructor(
         val tracks = _opened.value?.tracks.orEmpty().let { if (shuffle) it.shuffled() else it }
         tracks.firstOrNull()?.let {
             playRequests.userStarted()
-            playbackController.playTrack(it.idString, tracks, PlaylistSource.LIBRARY)
+            playbackController.playTrack(it.id, tracks, PlaylistSource.LIBRARY)
         }
     }
 
@@ -104,43 +127,44 @@ class PlaylistsViewModel @Inject constructor(
     // region Editing
 
     /** Creates a playlist; with [thenAdd] the track goes straight into it. */
-    fun create(title: String, thenAdd: TrackDetailsDto? = null) = edit {
-        val created = repository.create(title)
+    fun create(title: String, thenAdd: Track? = null) = edit {
+        val created = repository.create(title, thenAdd)
+        val shownTitle = created?.title?.ifEmpty { null } ?: title
         if (thenAdd != null) {
-            repository.addTrack(created, thenAdd)
-            say(R.string.playlist_msg_added, created.title ?: title)
+            say(R.string.playlist_msg_added, shownTitle)
         } else {
-            say(R.string.playlist_msg_created, created.title ?: title)
+            say(R.string.playlist_msg_created, shownTitle)
         }
     }
 
-    fun rename(playlist: UserPlaylistDto, title: String) = edit {
-        repository.rename(playlist, title)
+    fun rename(playlist: Playlist, title: String) = edit {
+        if (!repository.rename(playlist.ref, title)) return@edit
         say(R.string.playlist_msg_renamed, title.trim())
     }
 
-    fun delete(playlist: UserPlaylistDto) = edit {
-        repository.delete(playlist)
-        say(R.string.playlist_msg_deleted, playlist.title.orEmpty())
+    fun delete(playlist: Playlist) = edit {
+        if (!repository.delete(playlist.ref)) return@edit
+        say(R.string.playlist_msg_deleted, playlist.title)
     }
 
-    fun addTrack(playlist: UserPlaylistDto, track: TrackDetailsDto) = edit {
-        val result = repository.addTrack(playlist, track)
-        say(if (result == AddTrackResult.ALREADY_THERE) R.string.playlist_msg_already else R.string.playlist_msg_added, playlist.title.orEmpty())
+    fun addTrack(playlist: Playlist, track: Track) = edit {
+        val result = repository.addTrack(playlist.ref, track) ?: return@edit
+        say(if (result == AddTrackResult.ALREADY_THERE) R.string.playlist_msg_already else R.string.playlist_msg_added, playlist.title)
     }
 
-    fun removeTrack(playlist: UserPlaylistDto, trackId: String) = edit {
-        repository.removeTrack(playlist, trackId)
-        say(R.string.playlist_msg_removed, playlist.title.orEmpty())
+    fun removeTrack(playlist: Playlist, trackId: String) = edit {
+        if (!repository.removeTrack(playlist.ref, trackId)) return@edit
+        say(R.string.playlist_msg_removed, playlist.title)
     }
 
     /** Saves a new track order; when the playlist changed elsewhere meanwhile, reloads it instead. */
-    fun reorder(playlist: UserPlaylistDto, shownOrder: List<String>, newOrder: List<String>) {
+    fun reorder(playlist: Playlist, shownOrder: List<String>, newOrder: List<String>) {
         if (shownOrder == newOrder) return
+        if (repository.entry(playlist.ref) == null) return
         viewModelScope.launch {
             try {
-                repository.reorder(playlist, shownOrder, newOrder)
-                say(R.string.playlist_msg_reordered, playlist.title.orEmpty())
+                if (!repository.reorder(playlist.ref, shownOrder, newOrder)) return@launch
+                say(R.string.playlist_msg_reordered, playlist.title)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: UserPlaylistsRepository.PlaylistChangedException) {
@@ -153,9 +177,9 @@ class PlaylistsViewModel @Inject constructor(
         }
     }
 
-    fun setPublic(playlist: UserPlaylistDto, public: Boolean) = edit {
-        repository.setPublic(playlist, public)
-        say(if (public) R.string.playlist_msg_public else R.string.playlist_msg_private, playlist.title.orEmpty())
+    fun setPublic(playlist: Playlist, public: Boolean) = edit {
+        if (!repository.setPublic(playlist.ref, public)) return@edit
+        say(if (public) R.string.playlist_msg_public else R.string.playlist_msg_private, playlist.title)
     }
 
     private fun edit(block: suspend () -> Unit) {
@@ -184,8 +208,8 @@ class PlaylistsViewModel @Inject constructor(
 
 /** A playlist opened from the library, with its tracks once loaded. */
 data class OpenedPlaylist(
-    val playlist: UserPlaylistDto,
-    val tracks: List<TrackDetailsDto> = emptyList(),
+    val playlist: Playlist,
+    val tracks: List<Track> = emptyList(),
     val isLoading: Boolean = true,
     val failed: Boolean = false,
     /** Short and technical: a tester's screenshot should say what to fix. */

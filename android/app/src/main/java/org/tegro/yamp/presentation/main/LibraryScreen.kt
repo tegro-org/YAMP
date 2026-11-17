@@ -91,8 +91,10 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import org.tegro.yamp.R
 import org.tegro.yamp.data.download.DownloadQueueState
-import org.tegro.yamp.data.dto.TrackDetailsDto
-import org.tegro.yamp.data.dto.UserPlaylistDto
+import org.tegro.yamp.domain.media.Track
+import org.tegro.yamp.presentation.common.coverUri
+import org.tegro.yamp.presentation.common.id
+import org.tegro.yamp.domain.media.Playlist
 import org.tegro.yamp.data.network.DownloadProgressInfo
 import org.tegro.yamp.presentation.hifi.GlassCircleButton
 import org.tegro.yamp.presentation.hifi.GlassPillButton
@@ -120,7 +122,7 @@ private val LibraryFadeLength = 22.dp
  */
 @Composable
 fun LibraryScreen(
-    tracks: List<TrackDetailsDto>,
+    tracks: List<Track>,
     isLoading: Boolean,
     loadFailed: Boolean = false,
     downloadState: DownloadQueueState = DownloadQueueState.IDLE,
@@ -136,21 +138,21 @@ fun LibraryScreen(
     onCancelDownload: () -> Unit,
     settings: SettingsUiState = SettingsUiState(),
     settingsActions: SettingsActions = SettingsActions(),
-    onToggleLike: (TrackDetailsDto) -> Unit,
+    onToggleLike: (Track) -> Unit,
     onRefresh: () -> Unit = {},
     hasActiveTrack: Boolean = false,
-    playlists: List<UserPlaylistDto> = emptyList(),
+    playlists: List<Playlist> = emptyList(),
     openedPlaylist: OpenedPlaylist? = null,
-    onOpenPlaylist: (UserPlaylistDto) -> Unit = {},
+    onOpenPlaylist: (Playlist) -> Unit = {},
     onClosePlaylist: () -> Unit = {},
     onPlayPlaylist: (shuffle: Boolean) -> Unit = {},
     onPlaylistTrackClick: (String) -> Unit = {},
     onCreatePlaylist: (String) -> Unit = {},
-    onRenamePlaylist: (UserPlaylistDto, String) -> Unit = { _, _ -> },
-    onDeletePlaylist: (UserPlaylistDto) -> Unit = {},
-    onReorderPlaylist: (UserPlaylistDto, List<String>, List<String>) -> Unit = { _, _, _ -> },
-    onSetPlaylistPublic: (UserPlaylistDto, Boolean) -> Unit = { _, _ -> },
-    onAddToEnd: (List<TrackDetailsDto>) -> Unit = {},
+    onRenamePlaylist: (Playlist, String) -> Unit = { _, _ -> },
+    onDeletePlaylist: (Playlist) -> Unit = {},
+    onReorderPlaylist: (Playlist, List<String>, List<String>) -> Unit = { _, _, _ -> },
+    onSetPlaylistPublic: (Playlist, Boolean) -> Unit = { _, _ -> },
+    onAddToEnd: (List<Track>) -> Unit = {},
     /** Rows of the last seven days, on the "History" row. */
     historyCount: Int = 0,
     /** The History page (D46), given the page modifier, the bottom clearance and the way back. */
@@ -168,7 +170,7 @@ fun LibraryScreen(
     val navigationBar = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val contentBottom = if (isLandscape) DockClearance + navigationBar else (if (hasActiveTrack) 168.dp else 100.dp)
     val columns = if (isLandscape) landscapeColumns(org.tegro.yamp.utils.currentWindowSizeDp().widthDp) else 2
-    val downloaded = remember(tracks, downloadedTrackIds) { tracks.filter { downloadedTrackIds.contains(it.idString) } }
+    val downloaded = remember(tracks, downloadedTrackIds) { tracks.filter { downloadedTrackIds.contains(it.id) } }
 
     if (openedPlaylist != null) {
         PlaylistScreen(
@@ -247,7 +249,7 @@ fun LibraryScreen(
                         coverGrid(
                             tracks = tracks.take(if (isLandscape) columns * 2 else 6),
                             columns = columns,
-                            onClick = { onTrackClick(it.idString) }
+                            onClick = { onTrackClick(it.id) }
                         )
                     }
                 }
@@ -295,7 +297,7 @@ fun LibraryScreen(
                             )
                         }
                     } else if (isLandscape) {
-                        items(list.chunked(2), key = { row -> row.joinToString("|") { it.idString } }, contentType = { "track_row" }) { rowItems ->
+                        items(list.chunked(2), key = { row -> row.joinToString("|") { it.id } }, contentType = { "track_row" }) { rowItems ->
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                                 rowItems.forEach { track ->
                                     Box(Modifier.weight(1f)) { LibraryTrack(track, currentTrackId, isPlaying, likedTrackIds, downloadedTrackIds, onToggleLike, onTrackClick) }
@@ -304,8 +306,8 @@ fun LibraryScreen(
                             }
                         }
                     } else {
-                        itemsIndexed(list, key = { _, t -> t.idString }, contentType = { _, _ -> "track" }) { index, track ->
-                            Box(Modifier.appearOnce(appearance, track.idString, index)) {
+                        itemsIndexed(list, key = { _, t -> t.id }, contentType = { _, _ -> "track" }) { index, track ->
+                            Box(Modifier.appearOnce(appearance, track.id, index)) {
                                 LibraryTrack(track, currentTrackId, isPlaying, likedTrackIds, downloadedTrackIds, onToggleLike, onTrackClick)
                             }
                         }
@@ -351,21 +353,21 @@ fun LibraryScreen(
 
 @Composable
 private fun LibraryTrack(
-    track: TrackDetailsDto,
+    track: Track,
     currentTrackId: String?,
     isPlaying: Boolean,
     likedTrackIds: Set<String>,
     downloadedTrackIds: Set<String>,
-    onToggleLike: (TrackDetailsDto) -> Unit,
+    onToggleLike: (Track) -> Unit,
     onTrackClick: (String) -> Unit
 ) {
     TrackItem(
         track = track,
-        isPlaying = isPlaying && track.idString == currentTrackId,
-        isLiked = likedTrackIds.contains(track.idString),
-        isDownloaded = downloadedTrackIds.contains(track.idString),
+        isPlaying = isPlaying && track.id == currentTrackId,
+        isLiked = likedTrackIds.contains(track.id),
+        isDownloaded = downloadedTrackIds.contains(track.id),
         onToggleLike = { onToggleLike(track) },
-        onClick = { onTrackClick(track.idString) }
+        onClick = { onTrackClick(track.id) }
     )
 }
 
@@ -408,8 +410,8 @@ private fun SectionHeader(title: String, count: Int, onBack: () -> Unit) {
 }
 
 /** Covers in rows of [columns]; each row is one lazy item so long grids stay cheap. */
-private fun LazyListScope.coverGrid(tracks: List<TrackDetailsDto>, columns: Int, onClick: (TrackDetailsDto) -> Unit) {
-    items(tracks.chunked(columns), key = { row -> "grid_" + row.joinToString("|") { it.idString } }, contentType = { "cover_row" }) { row ->
+private fun LazyListScope.coverGrid(tracks: List<Track>, columns: Int, onClick: (Track) -> Unit) {
+    items(tracks.chunked(columns), key = { row -> "grid_" + row.joinToString("|") { it.id } }, contentType = { "cover_row" }) { row ->
         Row(Modifier.fillMaxWidth().padding(bottom = 18.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             row.forEach { track -> CoverCard(track, Modifier.weight(1f)) { onClick(track) } }
             repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
@@ -418,7 +420,7 @@ private fun LazyListScope.coverGrid(tracks: List<TrackDetailsDto>, columns: Int,
 }
 
 @Composable
-internal fun CoverCard(track: TrackDetailsDto, modifier: Modifier = Modifier, onClick: () -> Unit) {
+internal fun CoverCard(track: Track, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val context = LocalContext.current
     Column(
         // Only the top corners are rounded: a fully rounded clip would shave the first letter off the caption
@@ -427,7 +429,7 @@ internal fun CoverCard(track: TrackDetailsDto, modifier: Modifier = Modifier, on
     ) {
         AsyncImage(
             model = ImageRequest.Builder(context).cover(track.coverUri, CoverSize.Medium).crossfade(true).build(),
-            contentDescription = track.title,
+            contentDescription = track.title.ifEmpty { null },
             contentScale = ContentScale.Crop,
             modifier = Modifier
                 .fillMaxWidth()
@@ -438,19 +440,19 @@ internal fun CoverCard(track: TrackDetailsDto, modifier: Modifier = Modifier, on
                 .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(16.dp))
         )
         Spacer(Modifier.height(9.dp))
-        Text(track.title ?: stringResource(R.string.bez_nazvaniya), style = HiFiType.CardTitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(track.artists.joinToString { it.name ?: "" }, style = HiFiType.Caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(track.title.ifEmpty { stringResource(R.string.bez_nazvaniya) }, style = HiFiType.CardTitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(track.artists.joinToString { it.name }, style = HiFiType.Caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
 @Composable
 private fun PlaylistsPage(
     modifier: Modifier,
-    playlists: List<UserPlaylistDto>,
+    playlists: List<Playlist>,
     columns: Int,
     contentPadding: PaddingValues,
     onBack: () -> Unit,
-    onOpen: (UserPlaylistDto) -> Unit,
+    onOpen: (Playlist) -> Unit,
     onCreate: (String) -> Unit
 ) {
     var naming by remember { mutableStateOf(false) }
@@ -462,7 +464,7 @@ private fun PlaylistsPage(
             onDismiss = { naming = false }
         )
     }
-    val cells: List<UserPlaylistDto?> = listOf<UserPlaylistDto?>(null) + playlists
+    val cells: List<Playlist?> = listOf<Playlist?>(null) + playlists
     LazyColumn(modifier = modifier.fillMaxSize().statusBarsPadding(), contentPadding = contentPadding) {
         item(key = "header") {
             Row(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -473,7 +475,7 @@ private fun PlaylistsPage(
                 Text(stringResource(R.string.library_playlists_row), style = HiFiType.LargeTitle.copy(fontSize = 28.sp, lineHeight = 34.sp))
             }
         }
-        items(cells.chunked(columns), key = { row -> "pl_" + row.joinToString("|") { it?.kindString ?: "new" } }, contentType = { "playlist_row" }) { row ->
+        items(cells.chunked(columns), key = { row -> "pl_" + row.joinToString("|") { it?.ref?.value ?: "new" } }, contentType = { "playlist_row" }) { row ->
             Row(Modifier.fillMaxWidth().padding(bottom = 18.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 row.forEach { playlist ->
                     Column(
@@ -498,7 +500,7 @@ private fun PlaylistsPage(
                         } else {
                             PlaylistCover(playlist, Modifier.fillMaxWidth().aspectRatio(1f).hifiSoftShadow(RoundedCornerShape(16.dp), 18.dp).clip(RoundedCornerShape(16.dp)))
                             Spacer(Modifier.height(9.dp))
-                            Text(playlist.title ?: "", style = HiFiType.CardTitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(playlist.title, style = HiFiType.CardTitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(
                                 russianQuantityString(playlist.trackCount, R.string.tracks_count_one, R.string.tracks_count_few, R.string.tracks_count_many),
                                 style = HiFiType.Caption

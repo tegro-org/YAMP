@@ -1,5 +1,7 @@
 package org.tegro.yamp
 
+import org.tegro.yamp.data.provider.yandex.toTrack
+import org.tegro.yamp.data.provider.yandex.toPlaylist
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,7 +47,7 @@ class StepBackNavigationInstrumentedTest {
             YandexMusicTheme {
                 var accounts by remember { mutableStateOf(false) }
                 LibraryScreen(
-                    tracks = listOf(track), isLoading = false,
+                    tracks = listOf(track.toTrack()), isLoading = false,
                     currentTrackId = null, isPlaying = false, likedTrackIds = emptySet(), downloadedTrackIds = emptySet(),
                     downloadProgress = null, onTrackClick = {}, onPlayAllClick = {}, onShuffleClick = {},
                     onDownloadAllClick = {}, onCancelDownload = {}, onToggleLike = {},
@@ -89,8 +91,8 @@ class StepBackNavigationInstrumentedTest {
         compose.setContent {
             YandexMusicTheme {
                 TrackContextMenu(
-                    track = track, inPlaylist = null,
-                    playlists = listOf(UserPlaylistDto(kind = JsonPrimitive(1003), title = "В дорогу", trackCount = 4, revision = 1)),
+                    track = track.toTrack(), inPlaylist = null,
+                    playlists = listOf(UserPlaylistDto(kind = JsonPrimitive(1003), title = "В дорогу", trackCount = 4, revision = 1)).mapNotNull { it.toPlaylist() },
                     isLiked = false, startWithPlaylists = false,
                     onDismiss = { dismissed++ }, onPlayNext = {}, onToggleLike = {}, onAddTo = {},
                     onCreatePlaylist = {}, onRemoveFromPlaylist = {}

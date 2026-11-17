@@ -1,5 +1,7 @@
 package org.tegro.yamp
 
+import org.tegro.yamp.data.provider.yandex.toPlaylist
+import org.tegro.yamp.data.provider.yandex.toTrack
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -119,8 +121,8 @@ class PromoScreenshots {
     @Test
     fun wave() = shoot("wave") {
         HomeScreen(
-            waveTrack = nowPlaying, isPlaying = true, isLoading = false, isLiked = true, progress = { 82_000L },
-            shelf = waveShelfOf(true, tracks.drop(1).take(6), emptyList()), shimmer = false,
+            waveTrack = nowPlaying.toTrack(), isPlaying = true, isLoading = false, isLiked = true, progress = { 82_000L },
+            shelf = waveShelfOf(true, tracks.drop(1).take(6).map { it.toTrack() }, emptyList()), shimmer = false,
             onPlayPause = {}, onLike = {}, onDislike = {}, onOpenPlayer = {}, onShelfClick = {}
         )
         BottomChrome(MainTab.HOME, mini = false)
@@ -135,7 +137,7 @@ class PromoScreenshots {
     @Test
     fun search() = shoot("search") {
         SearchScreen(
-            query = "", onQueryChange = {}, results = emptyList(), weeklyHits = tracks.drop(2).take(6), trendTracks = tracks.drop(4),
+            query = "", onQueryChange = {}, results = emptyList(), weeklyHits = tracks.drop(2).take(6).map { it.toTrack() }, trendTracks = tracks.drop(4).map { it.toTrack() },
             isSearching = false, currentTrackId = nowPlaying.idString, isPlaying = true, likedTrackIds = liked,
             onTrackClick = { _, _ -> }, onToggleLike = {}, hasActiveTrack = true
         )
@@ -147,9 +149,9 @@ class PromoScreenshots {
         val playlists = listOf(
             UserPlaylistDto(kind = JsonPrimitive(1), title = "В дорогу", trackCount = 42, revision = 1, ogImage = cover("p1", 4, 30f)),
             UserPlaylistDto(kind = JsonPrimitive(2), title = "Спокойное", trackCount = 18, revision = 1, ogImage = cover("p2", 2, 200f))
-        )
+        ).mapNotNull { it.toPlaylist() }
         LibraryScreen(
-            tracks = tracks.drop(1), isLoading = false, currentTrackId = nowPlaying.idString, isPlaying = true, likedTrackIds = liked, downloadedTrackIds = setOf("2", "3", "4", "7"),
+            tracks = tracks.drop(1).map { it.toTrack() }, isLoading = false, currentTrackId = nowPlaying.idString, isPlaying = true, likedTrackIds = liked, downloadedTrackIds = setOf("2", "3", "4", "7"),
             downloadProgress = null, onTrackClick = {}, onPlayAllClick = {}, onShuffleClick = {},
             onDownloadAllClick = {}, onCancelDownload = {}, onToggleLike = {},
             hasActiveTrack = true, playlists = playlists
@@ -202,11 +204,11 @@ class PromoScreenshots {
         shoot("car", settleMs = 3_500, backdropCover = null) {
             CompositionLocalProvider(LocalCarClock provides { noon }) {
                 CarScreen(
-                    currentTrack = nowPlaying, isPlaying = true, likedTrackIds = liked,
+                    currentTrack = nowPlaying.toTrack(), isPlaying = true, likedTrackIds = liked,
                     onPlayPauseClick = {}, onNextClick = {}, onPrevClick = {}, onToggleLike = {}, onDislikeClick = {},
                     onPlayMyVibe = {}, onPlayFavorites = {}, onPlayHits = {}, onPlayDownloaded = {}, onPlayRadio = {}, onExit = {},
                     isLandscape = true, steeringWheelOnLeft = true, progress = { 82_000L }, durationMs = 286_000,
-                    upcoming = tracks.drop(1).take(3), source = PlaylistSource.VIBE
+                    upcoming = tracks.drop(1).take(3).map { it.toTrack() }, source = PlaylistSource.VIBE
                 )
             }
         }
@@ -215,7 +217,7 @@ class PromoScreenshots {
     @Composable
     private fun Player(queueOpen: Boolean) {
         FullScreenPlayer(
-            track = nowPlaying, isPlaying = true, isLiked = true, progress = { 82_000L }, queue = tracks,
+            track = nowPlaying.toTrack(), isPlaying = true, isLiked = true, progress = { 82_000L }, queue = tracks.map { it.toTrack() },
             onPlayPauseClick = {}, onToggleLike = {}, onNextClick = {}, onPrevClick = {}, onSeekTo = {},
             onTrackSelect = {}, onRemoveFromQueue = {}, onCollapse = {}, onCloseAndClear = {}, onDislikeClick = {},
             sourceLabel = "Моя волна", initialQueueOpen = queueOpen
@@ -235,7 +237,7 @@ class PromoScreenshots {
         ) {
             if (mini) {
                 MiniPlayer(
-                    track = nowPlaying, isPlaying = true, progress = { 82_000L },
+                    track = nowPlaying.toTrack(), isPlaying = true, progress = { 82_000L },
                     onPlayPauseClick = {}, onNextClick = {}, onClick = {}, onDismiss = {}
                 )
                 Spacer(Modifier.height(10.dp))

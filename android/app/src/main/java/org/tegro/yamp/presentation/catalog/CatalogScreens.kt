@@ -75,8 +75,9 @@ import coil3.compose.AsyncImage
 import org.tegro.yamp.presentation.hifi.GlassPillButton
 import org.tegro.yamp.presentation.hifi.MetalPillButton
 import org.tegro.yamp.R
-import org.tegro.yamp.data.dto.AlbumDto
-import org.tegro.yamp.data.dto.TrackDetailsDto
+import org.tegro.yamp.domain.media.Album
+import org.tegro.yamp.domain.media.Track
+import org.tegro.yamp.presentation.common.id
 import org.tegro.yamp.presentation.main.components.TrackItem
 import org.tegro.yamp.utils.russianQuantityString
 
@@ -86,9 +87,9 @@ class CatalogActions(
     val onRetry: () -> Unit,
     val onOpenArtist: (id: String, name: String) -> Unit,
     val onOpenAlbum: (id: String, title: String) -> Unit,
-    val onPlay: (tracks: List<TrackDetailsDto>, trackId: String?, shuffle: Boolean) -> Unit,
-    val onToggleLike: (TrackDetailsDto) -> Unit,
-    val onAddToEnd: (List<TrackDetailsDto>) -> Unit = {}
+    val onPlay: (tracks: List<Track>, trackId: String?, shuffle: Boolean) -> Unit,
+    val onToggleLike: (Track) -> Unit,
+    val onAddToEnd: (List<Track>) -> Unit = {}
 )
 
 /** The page on top of the catalog stack: an artist or an album. Back returns to the previous page. */
@@ -118,7 +119,7 @@ fun CatalogPageScreen(
         item(key = "header") {
             if (isLandscape) {
                 HiFiWideHeader(
-                    title = state.artist?.artist?.name ?: state.album?.title ?: state.page.title,
+                    title = state.artist?.artist?.name?.ifEmpty { null } ?: state.album?.title?.ifEmpty { null } ?: state.page.title,
                     modifier = Modifier
                         .statusBarsPadding()
                         .padding(horizontal = 16.dp, vertical = 8.dp),
@@ -129,7 +130,7 @@ fun CatalogPageScreen(
                     },
                     cover = { size ->
                         Cover(
-                            uri = if (isArtist) state.artist?.artist?.coverUri else state.album?.coverUri,
+                            uri = if (isArtist) state.artist?.artist?.cover?.key else state.album?.cover?.key,
                             placeholder = if (isArtist) Icons.Default.Person else Icons.Default.Album,
                             shape = if (isArtist) CircleShape else RoundedCornerShape(12.dp),
                             size = size
@@ -170,7 +171,7 @@ fun CatalogPageScreen(
                 Spacer(Modifier.height(12.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Cover(
-                        uri = if (isArtist) state.artist?.artist?.coverUri else state.album?.coverUri,
+                        uri = if (isArtist) state.artist?.artist?.cover?.key else state.album?.cover?.key,
                         placeholder = if (isArtist) Icons.Default.Person else Icons.Default.Album,
                         shape = if (isArtist) CircleShape else RoundedCornerShape(12.dp),
                         size = 112.dp
@@ -178,7 +179,7 @@ fun CatalogPageScreen(
                     Spacer(Modifier.width(16.dp))
                     Column {
                         Text(
-                            text = state.artist?.artist?.name ?: state.album?.title ?: state.page.title,
+                            text = state.artist?.artist?.name?.ifEmpty { null } ?: state.album?.title?.ifEmpty { null } ?: state.page.title,
                             style = HiFiType.LargeTitle.copy(fontSize = 26.sp, lineHeight = 32.sp),
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
@@ -209,23 +210,23 @@ fun CatalogPageScreen(
                 if (isArtist && tracks.isNotEmpty()) {
                     item(key = "popular_title") { SectionTitle(stringResource(R.string.catalog_popular_tracks)) }
                 }
-                itemsIndexed(tracks, key = { _, t -> "t" + t.idString }, contentType = { _, _ -> "track" }) { index, track ->
-                    Box(Modifier.padding(horizontal = 8.dp).appearOnce(appearance, track.idString, index)) {
+                itemsIndexed(tracks, key = { _, t -> "t" + t.id }, contentType = { _, _ -> "track" }) { index, track ->
+                    Box(Modifier.padding(horizontal = 8.dp).appearOnce(appearance, track.id, index)) {
                         TrackItem(
                             track = track,
-                            isPlaying = isPlaying && track.idString == currentTrackId,
-                            isLiked = track.idString in likedTrackIds,
+                            isPlaying = isPlaying && track.id == currentTrackId,
+                            isLiked = track.id in likedTrackIds,
                             onToggleLike = { actions.onToggleLike(track) },
-                            onClick = { actions.onPlay(tracks, track.idString, false) }
+                            onClick = { actions.onPlay(tracks, track.id, false) }
                         )
                     }
                 }
-                val albums = state.artist?.albums.orEmpty().filter { it.idString != null }
+                val albums = state.artist?.albums.orEmpty()
                 if (albums.isNotEmpty()) {
                     item(key = "albums") {
                         Column {
                             SectionTitle(stringResource(R.string.catalog_albums))
-                            AlbumsRow(albums, onOpen = { album -> album.idString?.let { actions.onOpenAlbum(it, album.title.orEmpty()) } })
+                            AlbumsRow(albums, onOpen = { album -> actions.onOpenAlbum(album.ref.id, album.title) })
                         }
                     }
                 }
@@ -235,17 +236,17 @@ fun CatalogPageScreen(
 }
 
 @Composable
-private fun AlbumSubtitle(album: AlbumDto, actions: CatalogActions) {
-    val artist = album.artists.firstOrNull { it.idString != null }
+private fun AlbumSubtitle(album: Album, actions: CatalogActions) {
+    val artist = album.artists.firstOrNull { it.ref != null }
     if (artist != null) {
         Text(
-            text = album.artists.joinToString { it.name.orEmpty() },
+            text = album.artists.joinToString { it.name },
             color = Color.White.copy(alpha = 0.88f),
             fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.clickable(role = Role.Button) { artist.idString?.let { actions.onOpenArtist(it, artist.name.orEmpty()) } }
+            modifier = Modifier.clickable(role = Role.Button) { artist.ref?.id?.let { actions.onOpenArtist(it, artist.name) } }
         )
     }
     Text(
@@ -260,19 +261,19 @@ private fun AlbumSubtitle(album: AlbumDto, actions: CatalogActions) {
 
 /** A horizontal row of album covers, used on artist pages and in search results. */
 @Composable
-fun AlbumsRow(albums: List<AlbumDto>, onOpen: (AlbumDto) -> Unit, contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp)) {
+fun AlbumsRow(albums: List<Album>, onOpen: (Album) -> Unit, contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp)) {
     LazyRow(contentPadding = contentPadding, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        items(albums, key = { it.idString ?: it.title.orEmpty() }) { album ->
+        items(albums, key = { it.ref.value }) { album ->
             Column(
                 modifier = Modifier
                     .width(120.dp)
                     .hifiPress({ onOpen(album) })
             ) {
-                Cover(album.coverUri, Icons.Default.Album, RoundedCornerShape(12.dp), 120.dp)
+                Cover(album.cover?.key, Icons.Default.Album, RoundedCornerShape(12.dp), 120.dp)
                 Spacer(Modifier.height(6.dp))
-                Text(album.title.orEmpty(), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(album.title, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
-                    text = album.year?.toString() ?: album.artists.joinToString { it.name.orEmpty() },
+                    text = album.year?.toString() ?: album.artists.joinToString { it.name },
                     color = Color.White.copy(alpha = 0.6f),
                     fontSize = 11.sp,
                     maxLines = 1,
@@ -317,7 +318,7 @@ private fun PlayButton(icon: ImageVector, label: String, primary: Boolean, modif
 
 /** "⋮" in the header: the whole list to the end of the queue, or to a chosen queue. */
 @Composable
-private fun ListMenuButton(tracks: List<TrackDetailsDto>, title: String, onAddToEnd: (List<TrackDetailsDto>) -> Unit, radioSeed: RadioSeed? = null) {
+private fun ListMenuButton(tracks: List<Track>, title: String, onAddToEnd: (List<Track>) -> Unit, radioSeed: RadioSeed? = null) {
     var open by remember { mutableStateOf(false) }
     Box {
         GlassCircleButton(onClick = { open = true }, contentDescription = stringResource(R.string.cd_playlist_menu)) {

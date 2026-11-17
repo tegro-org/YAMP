@@ -5,7 +5,9 @@ import coil3.SingletonImageLoader
 import coil3.network.httpHeaders
 import coil3.request.ImageRequest
 import org.tegro.yamp.BuildConfig
-import org.tegro.yamp.data.dto.TrackDetailsDto
+import org.tegro.yamp.domain.media.Track
+import org.tegro.yamp.presentation.common.coverUri
+import org.tegro.yamp.presentation.common.isRadio
 
 private const val RESOURCE_SCHEME = "android.resource://"
 
@@ -79,7 +81,7 @@ fun ImageRequest.Builder.cover(uri: String?, size: CoverSize): ImageRequest.Buil
  * Fetches covers before they are shown: the playing track and the next ones in the player's size and
  * in the small one, so opening the player or moving on finds them ready.
  */
-fun prefetchCovers(context: Context, tracks: List<TrackDetailsDto>, sizes: List<CoverSize>) {
+fun prefetchCovers(context: Context, tracks: List<Track>, sizes: List<CoverSize>) {
     val loader = SingletonImageLoader.get(context)
     for (track in tracks) {
         if (track.isRadio) continue

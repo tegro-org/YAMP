@@ -83,9 +83,10 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import org.tegro.yamp.R
 import org.tegro.yamp.presentation.queues.QueueButton
-import org.tegro.yamp.data.dto.TrackDetailsDto
+import org.tegro.yamp.domain.media.Track
+import org.tegro.yamp.presentation.common.coverUri
+import org.tegro.yamp.presentation.common.id
 import org.tegro.yamp.data.queue.ActiveQueue
-import org.tegro.yamp.domain.queue.QueueEntry
 import org.tegro.yamp.domain.queue.QueueKind
 import org.tegro.yamp.presentation.hifi.GlassCircleButton
 import org.tegro.yamp.presentation.hifi.HiFi
@@ -110,12 +111,12 @@ import org.tegro.yamp.presentation.hifi.SpectrumRing
  * The shelf is never simply missing: when there is nothing to show yet, [loading] keeps its place.
  */
 data class WaveShelfState(
-    val startsWith: TrackDetailsDto?,
-    val shelf: List<TrackDetailsDto>,
+    val startsWith: Track?,
+    val shelf: List<Track>,
     val loading: Boolean
 )
 
-fun waveShelfOf(waveActive: Boolean, upcoming: List<TrackDetailsDto>, preview: List<TrackDetailsDto>): WaveShelfState =
+fun waveShelfOf(waveActive: Boolean, upcoming: List<Track>, preview: List<Track>): WaveShelfState =
     if (waveActive) {
         WaveShelfState(startsWith = null, shelf = upcoming, loading = upcoming.isEmpty())
     } else {
@@ -135,26 +136,6 @@ sealed interface HomeMode {
 fun homeModeOf(active: ActiveQueue?): HomeMode =
     if (active == null || active.queue.kind == QueueKind.WAVE) HomeMode.Wave else HomeMode.Queue(active.queue.name)
 
-/**
- * A queue's page under the knob: the tracks after the cursor (a queue without a cursor counts from its first
- * entry). While the queue is not what plays, the cursor track is what the knob starts with. Nothing is ever
- * being fetched for a static queue, so the shelf is never "loading".
- */
-fun queueShelfOf(active: ActiveQueue, playing: Boolean, limit: Int = 10): WaveShelfState {
-    val start = active.cursorIndex.coerceAtLeast(0)
-    return WaveShelfState(
-        startsWith = if (playing) null else active.tracks.getOrNull(start),
-        shelf = active.tracks.drop(start + 1).take(limit),
-        loading = false
-    )
-}
-
-/** The entry a shelf card stands for: the first occurrence of the track after the cursor. */
-fun shelfEntryOf(active: ActiveQueue, trackId: String): QueueEntry? {
-    val from = active.cursorIndex.coerceAtLeast(0) + 1
-    val index = (from until active.tracks.size).firstOrNull { active.tracks[it].idString == trackId } ?: return null
-    return active.entries.getOrNull(index)
-}
 
 /**
  * The first tab — the face of the app: a metal knob inside a spectrum ring (equalizer and track progress
@@ -169,7 +150,7 @@ fun shelfEntryOf(active: ActiveQueue, trackId: String): QueueEntry? {
  */
 @Composable
 fun HomeScreen(
-    waveTrack: TrackDetailsDto?,
+    waveTrack: Track?,
     isPlaying: Boolean,
     isLoading: Boolean,
     isLiked: Boolean,
@@ -180,10 +161,10 @@ fun HomeScreen(
     onLike: () -> Unit,
     onDislike: () -> Unit,
     onOpenPlayer: (() -> Unit)?,
-    onShelfClick: (TrackDetailsDto) -> Unit,
+    onShelfClick: (Track) -> Unit,
     contentBottom: Dp = 100.dp,
     tuning: WaveTuning = WaveTuning(),
-    trackWaveSeed: TrackDetailsDto? = null,
+    trackWaveSeed: Track? = null,
     onTune: () -> Unit = {},
     onBackToMyWave: () -> Unit = {},
     /** How many queues the user has: the badge on the queue button. */
@@ -195,7 +176,7 @@ fun HomeScreen(
     val wave = mode is HomeMode.Wave
     val title = when (mode) {
         is HomeMode.Queue -> mode.name
-        HomeMode.Wave -> trackWaveSeed?.let { stringResource(R.string.wave_by_track_title, it.title.orEmpty()) } ?: stringResource(R.string.wave_title)
+        HomeMode.Wave -> trackWaveSeed?.let { stringResource(R.string.wave_by_track_title, it.title) } ?: stringResource(R.string.wave_title)
     }
     // A queue's page has no pills; the row keeps its place so the knob stays where it is across queues
     val chips: @Composable (Modifier) -> Unit = { modifier ->
@@ -388,10 +369,10 @@ private val TrackInfoHeight = 56.dp
  * height. With nothing at all: the wave is being fetched, a queue of the user's own is empty.
  */
 @Composable
-private fun WaveTrackInfo(track: TrackDetailsDto?, startsWith: TrackDetailsDto?, wave: Boolean, isLiked: Boolean, onLike: () -> Unit, onDislike: () -> Unit) {
+private fun WaveTrackInfo(track: Track?, startsWith: Track?, wave: Boolean, isLiked: Boolean, onLike: () -> Unit, onDislike: () -> Unit) {
     AnimatedContent(
         targetState = track to startsWith,
-        contentKey = { (playing, next) -> playing?.idString ?: ("idle:" + next?.idString) },
+        contentKey = { (playing, next) -> playing?.id ?: ("idle:" + next?.id) },
         transitionSpec = {
             (fadeIn(HiFiMotion.large()) + slideInVertically(HiFiMotion.large()) { it / 8 }) togetherWith fadeOut(HiFiMotion.quick())
         },
@@ -406,7 +387,7 @@ private fun WaveTrackInfo(track: TrackDetailsDto?, startsWith: TrackDetailsDto?,
                 }
                 Text(stringResource(R.string.wave_starts_with).uppercase(), style = HiFiType.SectionCaps)
                 Text(
-                    text = listOfNotNull(next.title, next.artists.firstOrNull()?.name).joinToString(" · "),
+                    text = listOfNotNull(next.title.ifEmpty { null }, next.artists.firstOrNull()?.name?.ifEmpty { null }).joinToString(" · "),
                     color = Color.White,
                     fontSize = 22.sp,
                     lineHeight = 28.sp,
@@ -424,7 +405,7 @@ private fun WaveTrackInfo(track: TrackDetailsDto?, startsWith: TrackDetailsDto?,
                 }
                 Column(Modifier.weight(1f).padding(horizontal = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        text = shown.title ?: stringResource(R.string.bez_nazvaniya),
+                        text = shown.title.ifEmpty { stringResource(R.string.bez_nazvaniya) },
                         color = Color.White,
                         fontSize = 26.sp,
                         lineHeight = 32.sp,
@@ -435,7 +416,7 @@ private fun WaveTrackInfo(track: TrackDetailsDto?, startsWith: TrackDetailsDto?,
                         textAlign = TextAlign.Center
                     )
                     Text(
-                        text = shown.artists.joinToString { it.name ?: "" },
+                        text = shown.artists.joinToString { it.name },
                         color = Color.White.copy(alpha = 0.70f),
                         fontSize = 17.sp,
                         lineHeight = 22.sp,
@@ -467,7 +448,7 @@ private fun WaveShelf(
     wave: Boolean,
     shimmer: Boolean,
     onOpenPlayer: (() -> Unit)?,
-    onClick: (TrackDetailsDto) -> Unit,
+    onClick: (Track) -> Unit,
     horizontalPadding: Dp,
     cardSize: Dp
 ) {
@@ -496,7 +477,7 @@ private fun WaveShelf(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // Keyed by place, not by track: a queue of the user's own may hold the same track twice
-                itemsIndexed(state.shelf, key = { index, track -> "$index:${track.idString}" }, contentType = { _, _ -> "up_next" }) { _, track ->
+                itemsIndexed(state.shelf, key = { index, track -> "$index:${track.id}" }, contentType = { _, _ -> "up_next" }) { _, track ->
                     UpNextCard(track, cardSize) { onClick(track) }
                 }
             }
@@ -505,7 +486,7 @@ private fun WaveShelf(
 }
 
 @Composable
-private fun UpNextCard(track: TrackDetailsDto, size: Dp, onClick: () -> Unit) {
+private fun UpNextCard(track: Track, size: Dp, onClick: () -> Unit) {
     val context = LocalContext.current
     Column(
         modifier = Modifier
@@ -514,7 +495,7 @@ private fun UpNextCard(track: TrackDetailsDto, size: Dp, onClick: () -> Unit) {
     ) {
         AsyncImage(
             model = ImageRequest.Builder(context).cover(track.coverUri, CoverSize.Medium).crossfade(true).size(320).build(),
-            contentDescription = track.title,
+            contentDescription = track.title.ifEmpty { null },
             contentScale = ContentScale.Crop,
             modifier = Modifier
                 .size(size)
@@ -523,8 +504,8 @@ private fun UpNextCard(track: TrackDetailsDto, size: Dp, onClick: () -> Unit) {
                 .background(HiFi.Placeholder)
         )
         Spacer(Modifier.height(8.dp))
-        Text(track.title ?: stringResource(R.string.bez_nazvaniya), color = Color.White, fontSize = 14.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(track.artists.joinToString { it.name ?: "" }, color = HiFi.TextSecondary, fontSize = 13.sp, lineHeight = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(track.title.ifEmpty { stringResource(R.string.bez_nazvaniya) }, color = Color.White, fontSize = 14.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(track.artists.joinToString { it.name }, color = HiFi.TextSecondary, fontSize = 13.sp, lineHeight = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

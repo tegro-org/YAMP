@@ -40,9 +40,12 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import org.tegro.yamp.R
-import org.tegro.yamp.data.dto.TrackDetailsDto
 import org.tegro.yamp.data.player.PlaylistSource
 import org.tegro.yamp.data.player.SleepTimerState
+import org.tegro.yamp.domain.media.Track
+import org.tegro.yamp.presentation.common.coverUri
+import org.tegro.yamp.presentation.common.id
+import org.tegro.yamp.presentation.common.isRadio
 import org.tegro.yamp.presentation.hifi.HiFi
 import org.tegro.yamp.presentation.hifi.HiFiBackdrop
 import org.tegro.yamp.presentation.hifi.HiFiLiveLine
@@ -53,14 +56,14 @@ import org.tegro.yamp.utils.toCoverUrl
 import kotlinx.coroutines.launch
 
 /** The queue around the current track: what plays now and what follows it. */
-data class QueueSplit(val current: TrackDetailsDto?, val next: List<TrackDetailsDto>, val nextEntryIds: List<Long> = emptyList())
+data class QueueSplit(val current: Track?, val next: List<Track>, val nextEntryIds: List<Long> = emptyList())
 
 /**
  * Pure; unit-tested. A current track missing from the queue leaves the whole queue as "next". [cursorIndex]
  * names the current row when the queue knows it (a track in the queue twice); [entryIds] run alongside [queue].
  */
-fun queueSplitOf(queue: List<TrackDetailsDto>, currentId: String, entryIds: List<Long> = emptyList(), cursorIndex: Int = -1): QueueSplit {
-    val i = if (cursorIndex in queue.indices && queue[cursorIndex].idString == currentId) cursorIndex else queue.indexOfFirst { it.idString == currentId }
+fun queueSplitOf(queue: List<Track>, currentId: String, entryIds: List<Long> = emptyList(), cursorIndex: Int = -1): QueueSplit {
+    val i = if (cursorIndex in queue.indices && queue[cursorIndex].id == currentId) cursorIndex else queue.indexOfFirst { it.id == currentId }
     return if (i == -1) QueueSplit(null, queue, entryIds) else QueueSplit(queue[i], queue.drop(i + 1), entryIds.drop(i + 1))
 }
 
@@ -100,11 +103,11 @@ object PlayerGesture {
 @Suppress("ModifierParameter")
 @Composable
 fun FullScreenPlayer(
-    track: TrackDetailsDto,
+    track: Track,
     isPlaying: Boolean,
     isLiked: Boolean,
     progress: () -> Long,
-    queue: List<TrackDetailsDto>,
+    queue: List<Track>,
     onPlayPauseClick: () -> Unit,
     onToggleLike: () -> Unit,
     onNextClick: () -> Unit,
@@ -147,10 +150,10 @@ fun FullScreenPlayer(
     val back = rememberPredictiveBack(enabled = !showQueue, onBack = onCollapse)
 
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-    val split = remember(queue, track.idString, queueEntryIds, queueCursorIndex) { queueSplitOf(queue, track.idString, queueEntryIds, queueCursorIndex) }
+    val split = remember(queue, track.id, queueEntryIds, queueCursorIndex) { queueSplitOf(queue, track.id, queueEntryIds, queueCursorIndex) }
     val nextTrack = if (track.isRadio) null else split.next.firstOrNull()
     val durationMs = (track.durationMs ?: 0L).coerceAtLeast(0L)
-    val direction = rememberTrackDirection(track.idString, queue.indexOfFirst { it.idString == track.idString })
+    val direction = rememberTrackDirection(track.id, queue.indexOfFirst { it.id == track.id })
 
     // Pull-down to close, following the finger; the offset is read only in the layer
     val pull = remember { Animatable(0f) }

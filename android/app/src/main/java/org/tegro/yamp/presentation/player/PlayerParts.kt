@@ -99,7 +99,11 @@ import androidx.compose.ui.unit.min
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import org.tegro.yamp.R
-import org.tegro.yamp.data.dto.TrackDetailsDto
+import org.tegro.yamp.domain.media.Track
+import org.tegro.yamp.presentation.common.artistNames
+import org.tegro.yamp.presentation.common.coverUri
+import org.tegro.yamp.presentation.common.id
+import org.tegro.yamp.presentation.common.isRadio
 import org.tegro.yamp.data.player.SleepTimerState
 import org.tegro.yamp.presentation.hifi.GlassCircleButton
 import org.tegro.yamp.presentation.hifi.HiFi
@@ -274,7 +278,7 @@ internal fun SleepTimerCaption(state: SleepTimerState?) {
 @Suppress("ModifierParameter")
 @Composable
 internal fun PlayerCover(
-    track: TrackDetailsDto,
+    track: Track,
     direction: Int,
     isPlaying: Boolean,
     coverModifier: Modifier,
@@ -320,7 +324,7 @@ internal fun PlayerCover(
             if (track.isRadio) {
                 RadioCoverCard(
                     coverUrl = track.coverUri.toCoverUrl(CoverSize.Large) ?: "",
-                    stationName = track.title.orEmpty(),
+                    stationName = track.title,
                     modifier = Modifier.fillMaxSize()
                 )
             } else {
@@ -335,7 +339,7 @@ internal fun PlayerCover(
                     // A new track's cover slides in from the side it came from, inside the same frame
                     AnimatedContent(
                         targetState = track,
-                        contentKey = { it.idString },
+                        contentKey = { it.id },
                         transitionSpec = { trackChange(direction, lite) },
                         label = "cover_change"
                     ) { shown ->
@@ -382,7 +386,7 @@ internal fun PlayerCover(
 
 @Composable
 internal fun TitleRow(
-    track: TrackDetailsDto,
+    track: Track,
     direction: Int,
     compact: Boolean,
     onAddToPlaylist: () -> Unit,
@@ -393,14 +397,14 @@ internal fun TitleRow(
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         AnimatedContent(
             targetState = track,
-            contentKey = { it.idString },
+            contentKey = { it.id },
             transitionSpec = { trackChange(direction, lite) },
             label = "title_change",
             modifier = Modifier.weight(1f)
         ) { track ->
         Column(Modifier.fillMaxWidth()) {
             Text(
-                text = track.title ?: stringResource(R.string.bez_nazvaniya),
+                text = track.title.ifEmpty { stringResource(R.string.bez_nazvaniya) },
                 color = Color.White,
                 fontSize = if (compact) 22.sp else 26.sp,
                 lineHeight = if (compact) 28.sp else 32.sp,
@@ -410,7 +414,7 @@ internal fun TitleRow(
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                text = track.artists.joinToString(", ") { it.name ?: "" }.ifEmpty { stringResource(if (track.isRadio) R.string.car_source_radio else R.string.player_unknown_artist) },
+                text = track.artistNames.ifEmpty { stringResource(if (track.isRadio) R.string.car_source_radio else R.string.player_unknown_artist) },
                 color = Color.White.copy(alpha = 0.70f),
                 fontSize = if (compact) 15.sp else 17.sp,
                 lineHeight = 22.sp,
@@ -475,7 +479,7 @@ internal fun QualityChip(isRadio: Boolean, onClick: () -> Unit) {
 internal fun PlayerTimeline(progress: () -> Long, durationMs: Long, isPlaying: Boolean, onSeek: (Long) -> Unit) {
     var scrub by remember(durationMs) { mutableStateOf<Float?>(null) }
     Column(Modifier.fillMaxWidth()) {
-        HiFiTimeline(progress, durationMs, isPlaying, onSeek, height = 44f, onScrub = { scrub = it })
+        HiFiTimeline(progress, durationMs, isPlaying, onSeek, height = 44f, onScrub = { scrub = it }, buffered = LocalPlaybackAux.current.buffered)
         TimeReadout(progress, durationMs, scrub)
     }
 }
@@ -503,10 +507,10 @@ private fun TimeReadout(progress: () -> Long, durationMs: Long, scrub: Float?) {
 
 /** What plays next, on a glass plate; information only — a tap opens the queue. */
 @Composable
-internal fun NextPlate(next: TrackDetailsDto, onClick: () -> Unit) {
+internal fun NextPlate(next: Track, onClick: () -> Unit) {
     val context = LocalContext.current
-    val title = next.title ?: stringResource(R.string.bez_nazvaniya)
-    val artist = next.artists.joinToString(", ") { it.name ?: "" }
+    val title = next.title.ifEmpty { stringResource(R.string.bez_nazvaniya) }
+    val artist = next.artistNames
     Row(
         modifier = Modifier
             .fillMaxWidth()

@@ -7,7 +7,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.tegro.yamp.data.network.TrackDownloadManager
 import org.tegro.yamp.data.network.TrackPreloadManager
-import org.tegro.yamp.data.network.YandexMusicApi
+import org.tegro.yamp.data.provider.yandex.network.YandexMusicApi
 import org.tegro.yamp.data.player.PlaybackWakeLockHelper
 import org.tegro.yamp.data.repository.PlayerRepositoryImpl
 import org.tegro.yamp.domain.model.UserAccount
@@ -52,19 +52,12 @@ class PlayerEngineInstrumentedTest {
 
     @Before
     fun setUp() {
-        val okHttp = OkHttpClient()
-        val api = retrofit2.Retrofit.Builder().baseUrl("https://localhost/").build().create(YandexMusicApi::class.java)
-        val downloads = TrackDownloadManager(context, okHttp)
-        val auth = NoAuth()
-        val preload = TrackPreloadManager(
-            OneApiClients(api, okHttp), downloads, auth,
-            org.tegro.yamp.data.player.SoundMode(kotlinx.coroutines.flow.flowOf(false), {}, { true }),
-            org.tegro.yamp.data.account.AccountContext(auth)
-        )
+        // The engine plays what it is handed (D74): no resolver in its setup any more
+        val downloads = TrackDownloadManager(context, OkHttpClient())
         onMain {
             playerA = newPlayer()
             playerB = newPlayer()
-            repo = PlayerRepositoryImpl(playerA, playerB, downloads, preload, PlaybackWakeLockHelper(context))
+            repo = PlayerRepositoryImpl(playerA, playerB, downloads, PlaybackWakeLockHelper(context))
         }
     }
 
@@ -84,7 +77,7 @@ class PlayerEngineInstrumentedTest {
     }
 
     private fun play(id: String, url: String, crossfade: Boolean) = onMain {
-        repo.playTrack(id, url, id, "test", null, crossfade, 0L)
+        repo.playTrack(id, org.tegro.yamp.domain.provider.ResolvedStream(url), id, "test", null, crossfade, 0L)
     }
 
     private fun startAndSettle(id: String, url: String) {
@@ -154,7 +147,7 @@ class PlayerEngineInstrumentedTest {
     @Test
     fun playAfterStopWithPreloadedStandbyProducesSound() {
         startAndSettle("A", STREAM_A)
-        onMain { repo.prepareNextTrack("B", STREAM_B, "B", "test", null) }
+        onMain { repo.prepareNextTrack("B", org.tegro.yamp.domain.provider.ResolvedStream(STREAM_B), "B", "test", null) }
         Thread.sleep(3000)
         onMain { repo.stop() }
 

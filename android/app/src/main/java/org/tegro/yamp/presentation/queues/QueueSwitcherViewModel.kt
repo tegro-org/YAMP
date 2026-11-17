@@ -137,7 +137,7 @@ class QueueSwitcherViewModel @Inject constructor(
     fun startRadioIn(queueId: Long?, keepHistory: Boolean, account: String? = null) {
         val request = mode.value as? QueueSwitcherRequest.StartRadio ?: return
         val target = if (queueId == null) RadioTarget.New else RadioTarget.Replace(queueId)
-        playbackController.startRadio(request.seed, target, keepHistory, request.track, account.takeIf { queueId == null })
+        playbackController.startRadioFrom(request.seed, target, keepHistory, request.track, account.takeIf { queueId == null })
     }
 
     fun setKeepHistory(queueId: Long, on: Boolean) = playbackController.setKeepHistory(queueId, on)

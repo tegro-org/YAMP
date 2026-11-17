@@ -112,7 +112,10 @@ import coil3.request.ImageRequest
 import org.tegro.yamp.R
 import org.tegro.yamp.presentation.account.AccountMark
 import org.tegro.yamp.presentation.account.AccountTag
-import org.tegro.yamp.data.dto.TrackDetailsDto
+import org.tegro.yamp.domain.media.Track
+import org.tegro.yamp.presentation.common.artistNames
+import org.tegro.yamp.presentation.common.coverUri
+import org.tegro.yamp.presentation.common.id
 import org.tegro.yamp.presentation.hifi.GlassCircleButton
 import org.tegro.yamp.presentation.hifi.HiFiMotion
 import org.tegro.yamp.presentation.hifi.LocalHiFiLite
@@ -198,9 +201,9 @@ private fun QueueSheetContent(
     val reorder = rememberReorderState(listState)
     // Rows are keyed by their queue entry, so a track that is in the queue twice is two rows (E2); lists that
     // come without entries (the screenshots) fall back to the track id
-    val rowKeys = remember(split) { split.next.mapIndexed { i, t -> split.nextEntryIds.getOrNull(i)?.let { "e$it" } ?: t.idString } }
+    val rowKeys = remember(split) { split.next.mapIndexed { i, t -> split.nextEntryIds.getOrNull(i)?.let { "e$it" } ?: t.id } }
     val nextIds = remember(rowKeys) { rowKeys.toHashSet() }
-    val trackIdOf = remember(split, rowKeys) { rowKeys.zip(split.next.map { it.idString }).toMap() }
+    val trackIdOf = remember(split, rowKeys) { rowKeys.zip(split.next.map { it.id }).toMap() }
     val fetching by rememberUpdatedState(isFetchingMore)
     val loadMore by rememberUpdatedState(onLoadMore)
     // Prefetch as soon as the list is within 12 rows of its end
@@ -312,7 +315,7 @@ private fun QueueSheetContent(
                 }
             }
             itemsIndexed(split.next, key = { i, _ -> rowKeys[i] }) { index, item ->
-                val id = item.idString
+                val id = item.id
                 val key = rowKeys[index]
                 val entryId = split.nextEntryIds.getOrNull(index)
                 val dragged = reorder.draggedKey == key
@@ -325,8 +328,8 @@ private fun QueueSheetContent(
                         .reorderHandle(reorder, key, canMoveTo = { it in nextIds }, afterLongPress = true) { from, to ->
                             onMove(trackIdOf.getValue(from as String), trackIdOf.getValue(to as String))
                         },
-                    moveUp = split.next.getOrNull(index - 1)?.let { prev -> { onMove(id, prev.idString) } },
-                    moveDown = split.next.getOrNull(index + 1)?.let { nxt -> { onMove(id, nxt.idString) } },
+                    moveUp = split.next.getOrNull(index - 1)?.let { prev -> { onMove(id, prev.id) } },
+                    moveDown = split.next.getOrNull(index + 1)?.let { nxt -> { onMove(id, nxt.id) } },
                     onClick = {
                         if (entryId != null) onEntrySelect(entryId) else onTrackSelect(id)
                         onDismiss()
@@ -409,7 +412,7 @@ private fun ModeToggle(icon: androidx.compose.ui.graphics.vector.ImageVector, on
 }
 
 @Composable
-private fun QueueCover(track: TrackDetailsDto) {
+private fun QueueCover(track: Track) {
     val context = LocalContext.current
     AsyncImage(
         model = ImageRequest.Builder(context).cover(track.coverUri, CoverSize.Small).build(),
@@ -424,10 +427,10 @@ private fun QueueCover(track: TrackDetailsDto) {
 }
 
 @Composable
-private fun QueueTexts(track: TrackDetailsDto, bold: Boolean, modifier: Modifier) {
+private fun QueueTexts(track: Track, bold: Boolean, modifier: Modifier) {
     Column(modifier) {
         Text(
-            track.title ?: stringResource(R.string.bez_nazvaniya),
+            track.title.ifEmpty { stringResource(R.string.bez_nazvaniya) },
             color = Color.White,
             fontSize = 15.sp,
             lineHeight = 20.sp,
@@ -436,7 +439,7 @@ private fun QueueTexts(track: TrackDetailsDto, bold: Boolean, modifier: Modifier
             overflow = TextOverflow.Ellipsis
         )
         Text(
-            track.artists.joinToString(", ") { it.name ?: "" },
+            track.artistNames,
             color = Color.White.copy(alpha = 0.62f),
             fontSize = 13.sp,
             lineHeight = 18.sp,
@@ -447,7 +450,7 @@ private fun QueueTexts(track: TrackDetailsDto, bold: Boolean, modifier: Modifier
 }
 
 @Composable
-private fun NowPlayingRow(track: TrackDetailsDto, isPlaying: Boolean) {
+private fun NowPlayingRow(track: Track, isPlaying: Boolean) {
     Row(
         Modifier
             .padding(horizontal = 12.dp)
@@ -466,7 +469,7 @@ private fun NowPlayingRow(track: TrackDetailsDto, isPlaying: Boolean) {
 
 @Composable
 private fun QueueRow(
-    item: TrackDetailsDto,
+    item: Track,
     modifier: Modifier,
     moveUp: (() -> Unit)?,
     moveDown: (() -> Unit)?,

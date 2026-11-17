@@ -52,7 +52,10 @@ import coil3.request.allowHardware
 import coil3.toBitmap
 import org.tegro.yamp.MainActivity
 import org.tegro.yamp.R
-import org.tegro.yamp.data.dto.TrackDetailsDto
+import org.tegro.yamp.domain.media.Track
+import org.tegro.yamp.presentation.common.artistNames
+import org.tegro.yamp.presentation.common.coverUri
+import org.tegro.yamp.presentation.common.id
 import org.tegro.yamp.data.player.PlaybackController
 import org.tegro.yamp.utils.toCoverUrl
 import dagger.hilt.EntryPoint
@@ -80,12 +83,12 @@ class NowPlayingWidget : GlanceAppWidget() {
             val track by controller.currentTrack.collectAsState()
             val isPlaying by controller.isPlaying.collectAsState()
             var cover by remember { mutableStateOf<Bitmap?>(null) }
-            LaunchedEffect(track?.idString) { cover = track?.let { loadCover(context, it) } }
-            NowPlayingContent(track?.title, track?.artists?.joinToString { it.name.orEmpty() }, isPlaying, cover)
+            LaunchedEffect(track?.id) { cover = track?.let { loadCover(context, it) } }
+            NowPlayingContent(track?.title?.ifEmpty { null }, track?.artistNames, isPlaying, cover)
         }
     }
 
-    private suspend fun loadCover(context: Context, track: TrackDetailsDto): Bitmap? {
+    private suspend fun loadCover(context: Context, track: Track): Bitmap? {
         val uri = track.coverUri ?: return null
         val data = if (uri.startsWith("android.resource") || uri.startsWith("http")) uri else uri.toCoverUrl(CoverSize.Small)
         val request = ImageRequest.Builder(context).data(data).size(200).allowHardware(false).build()

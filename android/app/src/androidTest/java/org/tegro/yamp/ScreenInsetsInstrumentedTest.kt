@@ -1,5 +1,6 @@
 package org.tegro.yamp
 
+import org.tegro.yamp.data.provider.yandex.toTrack
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
@@ -91,7 +92,7 @@ class ScreenInsetsInstrumentedTest {
     fun search() {
         show {
             SearchScreen(
-                query = "", onQueryChange = {}, results = emptyList(), weeklyHits = tracks, trendTracks = tracks,
+                query = "", onQueryChange = {}, results = emptyList(), weeklyHits = tracks.map { it.toTrack() }, trendTracks = tracks.map { it.toTrack() },
                 isSearching = false, currentTrackId = null, isPlaying = false, likedTrackIds = emptySet(),
                 onTrackClick = { _, _ -> }, onToggleLike = {}
             )
@@ -103,7 +104,7 @@ class ScreenInsetsInstrumentedTest {
     fun library() {
         show {
             LibraryScreen(
-                tracks = tracks, isLoading = false, currentTrackId = null, isPlaying = false, likedTrackIds = setOf("1", "2"), downloadedTrackIds = emptySet(),
+                tracks = tracks.map { it.toTrack() }, isLoading = false, currentTrackId = null, isPlaying = false, likedTrackIds = setOf("1", "2"), downloadedTrackIds = emptySet(),
                 downloadProgress = null, onTrackClick = {}, onPlayAllClick = {}, onShuffleClick = {},
                 onDownloadAllClick = {}, onCancelDownload = {}, onToggleLike = {}
             )
@@ -128,7 +129,7 @@ class ScreenInsetsInstrumentedTest {
     fun carStaysClearOfBothSystemBars() {
         show {
             CarScreen(
-                currentTrack = tracks[0], isPlaying = true, likedTrackIds = emptySet(), onPlayPauseClick = {}, onNextClick = {},
+                currentTrack = tracks[0].toTrack(), isPlaying = true, likedTrackIds = emptySet(), onPlayPauseClick = {}, onNextClick = {},
                 onPrevClick = {}, onToggleLike = {}, onDislikeClick = {}, onPlayMyVibe = {}, onPlayFavorites = {}, onPlayHits = {},
                 onPlayDownloaded = {}, onPlayRadio = {}, onExit = {}, progress = { 60_000L }, durationMs = 215_000
             )

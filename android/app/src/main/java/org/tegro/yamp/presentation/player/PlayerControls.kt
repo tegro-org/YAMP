@@ -81,12 +81,20 @@ internal fun PlayerControls(
             HiFiKnob(onClick = onPlayPause, contentDescription = stringResource(R.string.cd_vosproizvedenie_ili_pauza), size = 96.dp * k) {
                 PlayPauseGlyph(isPlaying = isPlaying, isLoading = isLoading, size = 40.dp * k)
             }
-            HiFiKnob(
-                onClick = onNext,
-                contentDescription = stringResource(if (isRadio) R.string.cd_next_station else R.string.cd_sleduyuschiy_trek),
-                size = 68.dp * k
-            ) {
-                Icon(Icons.Rounded.SkipNext, contentDescription = null, tint = HiFi.OnMetal, modifier = Modifier.size(30.dp * k))
+            // Never disabled (D81): loading / failed only decorate it; the whole knob stays the tap target
+            val look = if (isRadio) NextLook.READY else LocalPlaybackAux.current.next()
+            NextStateDecor(look, size = 68.dp * k) {
+                HiFiKnob(
+                    onClick = onNext,
+                    contentDescription = if (look == NextLook.READY) {
+                        stringResource(if (isRadio) R.string.cd_next_station else R.string.cd_sleduyuschiy_trek)
+                    } else {
+                        nextLookLabel(look)
+                    },
+                    size = 68.dp * k
+                ) {
+                    Icon(Icons.Rounded.SkipNext, contentDescription = null, tint = HiFi.OnMetal, modifier = Modifier.size(30.dp * k))
+                }
             }
             LikeHeartButton(isLiked = isLiked, onToggleLike = onLike, size = 52.dp * k)
         }

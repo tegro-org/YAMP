@@ -1,5 +1,6 @@
 package org.tegro.yamp
 
+import org.tegro.yamp.data.provider.yandex.toTrack
 import android.graphics.Bitmap
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.background
@@ -65,11 +66,11 @@ class GlassSurfacesInstrumentedTest {
                     verticalArrangement = Arrangement.spacedBy(32.dp)
                 ) {
                     Box(Modifier.testTag("mini")) {
-                        MiniPlayer(track = track, isPlaying = false, progress = { 0L }, onPlayPauseClick = {}, onNextClick = {}, onClick = {}, onDismiss = {})
+                        MiniPlayer(track = track.toTrack(), isPlaying = false, progress = { 0L }, onPlayPauseClick = {}, onNextClick = {}, onClick = {}, onDismiss = {})
                     }
                     // "Волна" selected: its highlight stays at the left end, away from the point measured at 42 %
                     Box(Modifier.testTag("bar")) { FloatingGlassBottomBar(currentRoute = "home", onNavigate = {}) }
-                    Box(Modifier.testTag("track").fillMaxWidth()) { TrackItem(track = track, isPlaying = false, isLiked = true, onClick = {}) }
+                    Box(Modifier.testTag("track").fillMaxWidth()) { TrackItem(track = track.toTrack(), isPlaying = false, isLiked = true, onClick = {}) }
                     Box(Modifier.testTag("round")) {
                         GlassCircleButton(onClick = {}, contentDescription = "x", size = 56.dp) {
                             Icon(Icons.Rounded.Tune, contentDescription = null, tint = Color.Transparent)

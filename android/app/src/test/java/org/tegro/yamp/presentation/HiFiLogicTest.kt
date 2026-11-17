@@ -1,5 +1,7 @@
 package org.tegro.yamp.presentation
 
+import org.tegro.yamp.presentation.common.id
+import org.tegro.yamp.data.provider.yandex.toTrack
 import org.tegro.yamp.data.player.PlaylistSource
 import org.tegro.yamp.domain.model.RadioCategory
 import org.tegro.yamp.domain.model.RadioStation
@@ -250,23 +252,23 @@ class HiFiLogicTest {
     @Test
     fun playerQueueSplitsCurrentAndNext() {
         val q = listOf(track("1"), track("2"), track("3"), track("4"))
-        val split = org.tegro.yamp.presentation.player.queueSplitOf(q, "2")
-        assertEquals("2", split.current?.idString)
-        assertEquals(listOf("3", "4"), split.next.map { it.idString })
-        val unknown = org.tegro.yamp.presentation.player.queueSplitOf(q, "9")
+        val split = org.tegro.yamp.presentation.player.queueSplitOf(q.map { it.toTrack() }, "2")
+        assertEquals("2", split.current?.id)
+        assertEquals(listOf("3", "4"), split.next.map { it.id })
+        val unknown = org.tegro.yamp.presentation.player.queueSplitOf(q.map { it.toTrack() }, "9")
         assertEquals("current not in the queue: the whole queue is next", null, unknown.current)
         assertEquals(4, unknown.next.size)
-        assertEquals("last track: nothing next", 0, org.tegro.yamp.presentation.player.queueSplitOf(q, "4").next.size)
+        assertEquals("last track: nothing next", 0, org.tegro.yamp.presentation.player.queueSplitOf(q.map { it.toTrack() }, "4").next.size)
     }
 
     /** A track in the queue twice: the cursor says which one plays, and the entry ids follow the rows. */
     @Test
     fun playerQueueSplitFollowsTheCursorForDuplicates() {
         val q = listOf(track("1"), track("2"), track("1"), track("3"))
-        val split = org.tegro.yamp.presentation.player.queueSplitOf(q, "1", entryIds = listOf(10L, 11L, 12L, 13L), cursorIndex = 2)
-        assertEquals(listOf("3"), split.next.map { it.idString })
+        val split = org.tegro.yamp.presentation.player.queueSplitOf(q.map { it.toTrack() }, "1", entryIds = listOf(10L, 11L, 12L, 13L), cursorIndex = 2)
+        assertEquals(listOf("3"), split.next.map { it.id })
         assertEquals(listOf(13L), split.nextEntryIds)
-        val stale = org.tegro.yamp.presentation.player.queueSplitOf(q, "1", entryIds = listOf(10L, 11L, 12L, 13L), cursorIndex = 3)
+        val stale = org.tegro.yamp.presentation.player.queueSplitOf(q.map { it.toTrack() }, "1", entryIds = listOf(10L, 11L, 12L, 13L), cursorIndex = 3)
         assertEquals("a cursor on another track: the first occurrence", listOf(11L, 12L, 13L), stale.nextEntryIds)
     }
 
@@ -274,25 +276,27 @@ class HiFiLogicTest {
 
     private fun track(id: String) = TrackDetailsDto(id = kotlinx.serialization.json.JsonPrimitive(id), title = "T$id")
 
+    private fun shown(vararg ids: String) = ids.map { track(it).toTrack() }
+
     @Test
     fun playingWaveShowsWhatComesNext() {
-        val state = waveShelfOf(waveActive = true, upcoming = listOf(track("2"), track("3")), preview = listOf(track("9")))
+        val state = waveShelfOf(waveActive = true, upcoming = shown("2", "3"), preview = shown("9"))
         assertNull("the playing track is shown above, not a start track", state.startsWith)
-        assertEquals(listOf("2", "3"), state.shelf.map { it.idString })
+        assertEquals(listOf("2", "3"), state.shelf.map { it.id })
         assertFalse(state.loading)
     }
 
     @Test
     fun playingWaveAtTheEndOfItsBatchKeepsTheShelfAsPlaceholders() {
-        val state = waveShelfOf(waveActive = true, upcoming = emptyList(), preview = listOf(track("9")))
+        val state = waveShelfOf(waveActive = true, upcoming = emptyList(), preview = shown("9"))
         assertTrue(state.loading)
     }
 
     @Test
     fun idleWavePreviewsWhereItStarts() {
-        val state = waveShelfOf(waveActive = false, upcoming = listOf(track("x")), preview = listOf(track("1"), track("2"), track("3")))
-        assertEquals("1", state.startsWith?.idString)
-        assertEquals("the start track is not repeated on the shelf", listOf("2", "3"), state.shelf.map { it.idString })
+        val state = waveShelfOf(waveActive = false, upcoming = shown("x"), preview = shown("1", "2", "3"))
+        assertEquals("1", state.startsWith?.id)
+        assertEquals("the start track is not repeated on the shelf", listOf("2", "3"), state.shelf.map { it.id })
         assertFalse(state.loading)
     }
 
@@ -301,8 +305,8 @@ class HiFiLogicTest {
         val empty = waveShelfOf(waveActive = false, upcoming = emptyList(), preview = emptyList())
         assertNull(empty.startsWith)
         assertTrue(empty.loading)
-        val single = waveShelfOf(waveActive = false, upcoming = emptyList(), preview = listOf(track("1")))
-        assertEquals("1", single.startsWith?.idString)
+        val single = waveShelfOf(waveActive = false, upcoming = emptyList(), preview = shown("1"))
+        assertEquals("1", single.startsWith?.id)
         assertTrue(single.loading)
     }
 
@@ -311,11 +315,11 @@ class HiFiLogicTest {
     private fun activeQueue(kind: QueueKind, ids: List<String>, cursor: Int, name: String = "With family") = ActiveQueue(
         queue = PlayQueue(id = 1L, name = name, kind = kind),
         entries = ids.mapIndexed { i, id -> QueueEntry(entryId = 100L + i, queueId = 1L, position = i, originalPosition = i, ref = TrackRef.yandex(id), title = "T$id", artist = "") },
-        tracks = ids.map { track(it) },
+        tracks = ids.map { track(it).toTrack() },
         cursorIndex = cursor
     )
 
-    private fun now(track: TrackDetailsDto?, source: PlaylistSource) = NowPlaying(track, isPlaying = true, isBuffering = false, source = source, likedTrackIds = emptySet())
+    private fun now(track: TrackDetailsDto?, source: PlaylistSource) = NowPlaying(track?.toTrack(), isPlaying = true, isBuffering = false, source = source, likedTrackIds = emptySet())
 
     @Test
     fun theFirstTabIsTheWavePageWithoutAnotherActiveQueue() {
@@ -330,20 +334,20 @@ class HiFiLogicTest {
         val active = activeQueue(QueueKind.STATIC, listOf("1", "2", "3", "4"), cursor = 1)
         val playing = queueShelfOf(active, playing = true)
         assertNull(playing.startsWith)
-        assertEquals(listOf("3", "4"), playing.shelf.map { it.idString })
+        assertEquals(listOf("3", "4"), playing.shelf.map { it.id })
         assertFalse(playing.loading)
-        assertEquals("at most the limit", listOf("3"), queueShelfOf(active, playing = true, limit = 1).shelf.map { it.idString })
+        assertEquals("at most the limit", listOf("3"), queueShelfOf(active, playing = true, limit = 1).shelf.map { it.id })
     }
 
     @Test
     fun aQueuePageNotYetPlayingStartsWithItsCursorTrack() {
         val active = activeQueue(QueueKind.STATIC, listOf("1", "2", "3"), cursor = 1)
         val idle = queueShelfOf(active, playing = false)
-        assertEquals("2", idle.startsWith?.idString)
-        assertEquals(listOf("3"), idle.shelf.map { it.idString })
+        assertEquals("2", idle.startsWith?.id)
+        assertEquals(listOf("3"), idle.shelf.map { it.id })
         val noCursor = queueShelfOf(activeQueue(QueueKind.STATIC, listOf("1", "2"), cursor = -1), playing = false)
-        assertEquals("without a cursor the queue starts from its first entry", "1", noCursor.startsWith?.idString)
-        assertEquals(listOf("2"), noCursor.shelf.map { it.idString })
+        assertEquals("without a cursor the queue starts from its first entry", "1", noCursor.startsWith?.id)
+        assertEquals(listOf("2"), noCursor.shelf.map { it.id })
     }
 
     @Test

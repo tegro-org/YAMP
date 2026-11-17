@@ -1,5 +1,6 @@
 package org.tegro.yamp
 
+import org.tegro.yamp.data.provider.yandex.toTrack
 import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.performTouchInput
 import androidx.activity.ComponentActivity
@@ -57,7 +58,7 @@ class FullPlayerInstrumentedTest {
         compose.setContent {
             YandexMusicTheme {
                 FullScreenPlayer(
-                    track = queue[0], isPlaying = false, isLiked = true, progress = { position.longValue }, queue = queue,
+                    track = queue[0].toTrack(), isPlaying = false, isLiked = true, progress = { position.longValue }, queue = queue.map { it.toTrack() },
                     onPlayPauseClick = {}, onToggleLike = {}, onNextClick = {}, onPrevClick = {},
                     onSeekTo = { sought = it }, onTrackSelect = {}, onRemoveFromQueue = { removed = it },
                     onCollapse = { collapsed++ }, onCloseAndClear = {}, onDislikeClick = {}, sourceLabel = "Моя волна"
@@ -109,7 +110,7 @@ class FullPlayerInstrumentedTest {
         compose.setContent {
             YandexMusicTheme {
                 FullScreenPlayer(
-                    track = queue[0], isPlaying = false, isLiked = false, progress = { 0L }, queue = queue,
+                    track = queue[0].toTrack(), isPlaying = false, isLiked = false, progress = { 0L }, queue = queue.map { it.toTrack() },
                     onPlayPauseClick = {}, onToggleLike = {}, onNextClick = {}, onPrevClick = {},
                     onSeekTo = {}, onTrackSelect = {}, onRemoveFromQueue = {},
                     onCollapse = { collapsed++ }, onCloseAndClear = {}, onDislikeClick = {},

@@ -1,5 +1,6 @@
 package org.tegro.yamp.presentation
 
+import org.tegro.yamp.data.provider.yandex.toTrack
 import android.app.Application
 import android.os.Looper
 import androidx.compose.foundation.layout.Box
@@ -104,7 +105,7 @@ class HistoryScreenshotsTest {
         TrackDetailsDto(id = JsonPrimitive(id), title = title, artists = listOf(ArtistDto(name = artist)), durationMs = 215_000)
 
     private fun row(id: Long, title: String, artist: String, queue: String = "With family") =
-        HistoryRow(id, track(id.toString(), title, artist), queue)
+        HistoryRow(id, track(id.toString(), title, artist).toTrack(), queue)
 
     /** The canvas `useQueues()`: the active queue first, the others, one that lives on only here, "All". */
     private val filters = listOf(

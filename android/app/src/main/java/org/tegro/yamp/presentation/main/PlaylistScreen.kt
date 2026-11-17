@@ -1,5 +1,6 @@
 package org.tegro.yamp.presentation.main
 
+import org.tegro.yamp.presentation.common.id
 import org.tegro.yamp.presentation.hifi.HiFiWideHeader
 import androidx.compose.ui.platform.LocalContext
 import coil3.request.ImageRequest
@@ -90,7 +91,8 @@ import coil3.compose.AsyncImage
 import org.tegro.yamp.presentation.hifi.GlassPillButton
 import org.tegro.yamp.presentation.hifi.MetalPillButton
 import org.tegro.yamp.R
-import org.tegro.yamp.data.dto.UserPlaylistDto
+import org.tegro.yamp.domain.media.Playlist
+import org.tegro.yamp.presentation.common.coverUri
 import org.tegro.yamp.presentation.main.components.DeletePlaylistDialog
 import org.tegro.yamp.presentation.main.components.LocalTrackMenuPlaylist
 import org.tegro.yamp.presentation.main.components.PlaylistNameDialog
@@ -98,7 +100,7 @@ import org.tegro.yamp.presentation.main.components.TrackItem
 import org.tegro.yamp.utils.russianQuantityString
 
 @Composable
-internal fun PlaylistCover(playlist: UserPlaylistDto, modifier: Modifier) {
+internal fun PlaylistCover(playlist: Playlist, modifier: Modifier) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
@@ -132,17 +134,17 @@ fun PlaylistScreen(
     onBack: () -> Unit,
     onPlay: (shuffle: Boolean) -> Unit,
     onTrackClick: (String) -> Unit,
-    onToggleLike: (org.tegro.yamp.data.dto.TrackDetailsDto) -> Unit,
+    onToggleLike: (org.tegro.yamp.domain.media.Track) -> Unit,
     onRetry: () -> Unit,
     onRename: (String) -> Unit,
     onDelete: () -> Unit,
     onReorder: (shownOrder: List<String>, newOrder: List<String>) -> Unit = { _, _ -> },
     onSetPublic: (Boolean) -> Unit = {},
-    onAddToEnd: (List<org.tegro.yamp.data.dto.TrackDetailsDto>) -> Unit = {}
+    onAddToEnd: (List<org.tegro.yamp.domain.media.Track>) -> Unit = {}
 ) {
     val playlist = opened.playlist
     // Track order being edited (null — normal view); saved as one change with "Done"
-    var editedOrder by remember(opened.tracks) { mutableStateOf<List<org.tegro.yamp.data.dto.TrackDetailsDto>?>(null) }
+    var editedOrder by remember(opened.tracks) { mutableStateOf<List<org.tegro.yamp.domain.media.Track>?>(null) }
     // Back leaves the playlist (the page shrinks under the gesture); while reordering it only cancels that
     val back = rememberPredictiveBack(enabled = true, onBack = onBack)
     BackHandler(enabled = editedOrder != null) { editedOrder = null }
@@ -153,14 +155,14 @@ fun PlaylistScreen(
         PlaylistNameDialog(
             title = stringResource(R.string.playlist_rename),
             confirmLabel = stringResource(R.string.playlist_save),
-            initialName = playlist.title.orEmpty(),
+            initialName = playlist.title,
             onConfirm = { onRename(it); renaming = false },
             onDismiss = { renaming = false }
         )
     }
     if (deleting) {
         DeletePlaylistDialog(
-            playlistTitle = playlist.title.orEmpty(),
+            playlistTitle = playlist.title,
             onConfirm = { onDelete(); deleting = false },
             onDismiss = { deleting = false }
         )
@@ -193,7 +195,7 @@ fun PlaylistScreen(
                     modifier = Modifier
                         .clip(RoundedCornerShape(12.dp))
                         .clickable {
-                            onReorder(opened.tracks.map { it.idString }, order.map { it.idString })
+                            onReorder(opened.tracks.map { it.id }, order.map { it.id })
                             editedOrder = null
                         }
                         .padding(horizontal = 12.dp, vertical = 8.dp)
@@ -231,7 +233,7 @@ fun PlaylistScreen(
                             leadingIcon = { Icon(Icons.Rounded.Layers, contentDescription = null) },
                             onClick = {
                                 showMenu = false
-                                queueSwitcher?.open(org.tegro.yamp.presentation.queues.QueueSwitcherRequest.AddTo(opened.tracks, playlist.title.orEmpty()))
+                                queueSwitcher?.open(org.tegro.yamp.presentation.queues.QueueSwitcherRequest.AddTo(opened.tracks, playlist.title))
                             }
                         )
                     }
@@ -286,7 +288,7 @@ fun PlaylistScreen(
     ) {
         if (isLandscape) {
             HiFiWideHeader(
-                title = playlist.title.orEmpty(),
+                title = playlist.title,
                 modifier = Modifier
                     .statusBarsPadding()
                     .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 12.dp),
@@ -330,7 +332,7 @@ fun PlaylistScreen(
                 Spacer(modifier = Modifier.width(16.dp))
                 Column {
                     Text(
-                        text = playlist.title.orEmpty(),
+                        text = playlist.title,
                         style = HiFiType.LargeTitle.copy(fontSize = 26.sp, lineHeight = 32.sp),
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
@@ -357,7 +359,7 @@ fun PlaylistScreen(
         // The menu of a track listed here also offers "remove from playlist"
         CompositionLocalProvider(LocalTrackMenuPlaylist provides playlist) {
             val order = editedOrder
-            val appearance = rememberAppearance(playlist.kindString)
+            val appearance = rememberAppearance(playlist.ref.value)
             when {
                 order != null -> ReorderList(
                     tracks = order,
@@ -382,15 +384,15 @@ fun PlaylistScreen(
                         // Rows lie right on the backdrop, like on the album page (no lighter panel)
                         .padding(horizontal = 12.dp)
                 ) {
-                    itemsIndexed(opened.tracks, key = { _, t -> t.idString }, contentType = { _, _ -> "track" }) { index, track ->
-                        Box(Modifier.appearOnce(appearance, track.idString, index)) {
+                    itemsIndexed(opened.tracks, key = { _, t -> t.id }, contentType = { _, _ -> "track" }) { index, track ->
+                        Box(Modifier.appearOnce(appearance, track.id, index)) {
                         TrackItem(
                             track = track,
-                            isPlaying = isPlaying && track.idString == currentTrackId,
-                            isLiked = likedTrackIds.contains(track.idString),
-                            isDownloaded = downloadedTrackIds.contains(track.idString),
+                            isPlaying = isPlaying && track.id == currentTrackId,
+                            isLiked = likedTrackIds.contains(track.id),
+                            isDownloaded = downloadedTrackIds.contains(track.id),
                             onToggleLike = { onToggleLike(track) },
-                            onClick = { onTrackClick(track.idString) }
+                            onClick = { onTrackClick(track.id) }
                         )
                         }
                     }
@@ -406,7 +408,7 @@ fun PlaylistScreen(
  */
 @Composable
 private fun ReorderList(
-    tracks: List<org.tegro.yamp.data.dto.TrackDetailsDto>,
+    tracks: List<org.tegro.yamp.domain.media.Track>,
     contentBottom: androidx.compose.ui.unit.Dp,
     onMove: (from: Int, to: Int) -> Unit
 ) {
@@ -425,8 +427,8 @@ private fun ReorderList(
             .navigationBarsPadding()
             .padding(horizontal = 12.dp)
     ) {
-        itemsIndexed(tracks, key = { _, track -> track.idString }) { index, track ->
-            val dragged = track.idString == draggedId
+        itemsIndexed(tracks, key = { _, track -> track.id }) { index, track ->
+            val dragged = track.id == draggedId
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -444,9 +446,9 @@ private fun ReorderList(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(track.title.orEmpty(), color = Color.White, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(track.title, color = Color.White, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(
-                        track.artists.joinToString { it.name.orEmpty() },
+                        track.artists.joinToString { it.name },
                         color = Color.White.copy(alpha = 0.6f),
                         fontSize = 13.sp,
                         maxLines = 1,
@@ -460,16 +462,16 @@ private fun ReorderList(
                     modifier = Modifier
                         .size(48.dp)
                         .padding(12.dp)
-                        .pointerInput(track.idString) {
+                        .pointerInput(track.id) {
                             detectDragGestures(
-                                onDragStart = { draggedId = track.idString; dragOffset = 0f },
+                                onDragStart = { draggedId = track.id; dragOffset = 0f },
                                 onDragEnd = { draggedId = null; dragOffset = 0f },
                                 onDragCancel = { draggedId = null; dragOffset = 0f }
                             ) { change, amount ->
                                 change.consume()
                                 dragOffset += amount.y
                                 val items = listState.layoutInfo.visibleItemsInfo
-                                val current = items.firstOrNull { it.key == track.idString } ?: return@detectDragGestures
+                                val current = items.firstOrNull { it.key == track.id } ?: return@detectDragGestures
                                 val center = current.offset + current.size / 2 + dragOffset
                                 val target = items.firstOrNull {
                                     it.index != current.index && center.toInt() in it.offset until it.offset + it.size

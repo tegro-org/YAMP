@@ -1,5 +1,11 @@
 package org.tegro.yamp.presentation
 
+import org.tegro.yamp.data.provider.yandex.toArtist
+import org.tegro.yamp.data.provider.yandex.toAlbum
+import org.tegro.yamp.presentation.catalog.toArtistPage
+import org.tegro.yamp.data.provider.yandex.toArtistParts
+import org.tegro.yamp.data.provider.yandex.toPlaylist
+import org.tegro.yamp.data.provider.yandex.toTrack
 import org.tegro.yamp.presentation.main.components.DockScrim
 import androidx.compose.ui.Alignment
 import org.tegro.yamp.presentation.main.components.FloatingGlassDock
@@ -111,6 +117,9 @@ class ScreenshotTest {
     private fun track(id: String, title: String, artist: String = "Исполнитель") =
         TrackDetailsDto(id = JsonPrimitive(id), title = title, artists = listOf(ArtistDto(name = artist)), durationMs = 215_000)
 
+    /** The fixture tracks as screens show them (phase 3 step 12–15). */
+    private val shown get() = tracks.map { it.toTrack() }
+
     private val tracks = listOf(
         track("1", "Первая песня", "Группа"),
         track("2", "Очень длинное название трека, которое не помещается в одну строку", "Исполнитель с длинным именем"),
@@ -120,7 +129,7 @@ class ScreenshotTest {
     private val playlists = listOf(
         UserPlaylistDto(kind = JsonPrimitive(1003), title = "В дорогу", trackCount = 42, revision = 7),
         UserPlaylistDto(kind = JsonPrimitive(1004), title = "Спокойное", trackCount = 1, revision = 2)
-    )
+    ).mapNotNull { it.toPlaylist() }
 
     /** A fixed blue cover tint, so the living background is the same on every machine. */
     private val tint = ArtworkTint(Color(0xFF3F6FC4), Color(0xFF1B2A6B))
@@ -163,11 +172,11 @@ class ScreenshotTest {
     fun trackItems() {
         show {
             Column(Modifier.padding(8.dp)) {
-                TrackItem(track = tracks[0], isPlaying = false, onClick = {})
-                TrackItem(track = tracks[1], isPlaying = true, isLiked = true, isDownloaded = true, onClick = {})
+                TrackItem(track = shown[0], isPlaying = false, onClick = {})
+                TrackItem(track = shown[1], isPlaying = true, isLiked = true, isDownloaded = true, onClick = {})
                 // With a track menu, every row gets the "⋮" button
                 CompositionLocalProvider(LocalTrackMenu provides TrackMenuLauncher { _, _ -> }) {
-                    TrackItem(track = tracks[2], isPlaying = false, isLiked = true, onClick = {})
+                    TrackItem(track = shown[2], isPlaying = false, isLiked = true, onClick = {})
                 }
             }
         }
@@ -178,7 +187,7 @@ class ScreenshotTest {
     fun libraryWithPlaylists() {
         show {
             LibraryScreen(
-                tracks = tracks, isLoading = false, currentTrackId = "1", isPlaying = true, likedTrackIds = setOf("1", "2", "3"), downloadedTrackIds = setOf("2"),
+                tracks = shown, isLoading = false, currentTrackId = "1", isPlaying = true, likedTrackIds = setOf("1", "2", "3"), downloadedTrackIds = setOf("2"),
                 downloadProgress = null, onTrackClick = {}, onPlayAllClick = {}, onShuffleClick = {},
                 onDownloadAllClick = {}, onCancelDownload = {}, onToggleLike = {},
                 playlists = playlists, historyCount = 23
@@ -191,8 +200,8 @@ class ScreenshotTest {
     fun wavePlaying() {
         show {
             HomeScreen(
-                waveTrack = tracks[0], isPlaying = true, isLoading = false, isLiked = true, progress = { 70_000L },
-                shelf = waveShelfOf(true, tracks.drop(1), emptyList()), shimmer = false,
+                waveTrack = shown[0], isPlaying = true, isLoading = false, isLiked = true, progress = { 70_000L },
+                shelf = waveShelfOf(true, shown.drop(1), emptyList()), shimmer = false,
                 onPlayPause = {}, onLike = {}, onDislike = {}, onOpenPlayer = {}, onShelfClick = {}
             )
         }
@@ -203,8 +212,8 @@ class ScreenshotTest {
     fun wavePaused() {
         show {
             HomeScreen(
-                waveTrack = tracks[0], isPlaying = false, isLoading = false, isLiked = false, progress = { 70_000L },
-                shelf = waveShelfOf(true, tracks.drop(1), emptyList()), shimmer = false,
+                waveTrack = shown[0], isPlaying = false, isLoading = false, isLiked = false, progress = { 70_000L },
+                shelf = waveShelfOf(true, shown.drop(1), emptyList()), shimmer = false,
                 onPlayPause = {}, onLike = {}, onDislike = {}, onOpenPlayer = {}, onShelfClick = {}
             )
         }
@@ -216,7 +225,7 @@ class ScreenshotTest {
         show {
             HomeScreen(
                 waveTrack = null, isPlaying = false, isLoading = false, isLiked = false, progress = { 0L },
-                shelf = waveShelfOf(false, emptyList(), tracks), shimmer = false,
+                shelf = waveShelfOf(false, emptyList(), shown), shimmer = false,
                 onPlayPause = {}, onLike = {}, onDislike = {}, onOpenPlayer = {}, onShelfClick = {}
             )
         }
@@ -240,7 +249,7 @@ class ScreenshotTest {
     fun openedPlaylist() {
         show {
             PlaylistScreen(
-                opened = OpenedPlaylist(playlists[0], tracks, isLoading = false),
+                opened = OpenedPlaylist(playlists[0], shown, isLoading = false),
                 currentTrackId = null, isPlaying = false, likedTrackIds = setOf("1"), downloadedTrackIds = emptySet(),
                 contentBottom = 0.dp, onBack = {}, onPlay = {}, onTrackClick = {}, onToggleLike = {}, onRetry = {},
                 onRename = {}, onDelete = {}
@@ -253,7 +262,7 @@ class ScreenshotTest {
     fun trackMenu() {
         show {
             TrackContextMenu(
-                track = tracks[0], inPlaylist = playlists[0], playlists = playlists, isLiked = false,
+                track = shown[0], inPlaylist = playlists[0], playlists = playlists, isLiked = false,
                 startWithPlaylists = false, onDismiss = {}, onPlayNext = {}, onToggleLike = {}, onAddTo = {},
                 onCreatePlaylist = {}, onRemoveFromPlaylist = {}
             )
@@ -265,7 +274,7 @@ class ScreenshotTest {
     fun playlistPicker() {
         show {
             TrackContextMenu(
-                track = tracks[0], inPlaylist = null, playlists = playlists, isLiked = true,
+                track = shown[0], inPlaylist = null, playlists = playlists, isLiked = true,
                 startWithPlaylists = true, onDismiss = {}, onPlayNext = {}, onToggleLike = {}, onAddTo = {},
                 onCreatePlaylist = {}, onRemoveFromPlaylist = {}
             )
@@ -395,7 +404,7 @@ class ScreenshotTest {
         show {
             Column(Modifier.padding(top = 24.dp)) {
                 MiniPlayer(
-                    track = tracks[0], isPlaying = true, progress = { 60_000L },
+                    track = tracks[0].toTrack(), isPlaying = true, progress = { 60_000L },
                     onPlayPauseClick = {}, onNextClick = {}, onClick = {}, onDismiss = {}
                 )
                 FloatingGlassBottomBar(currentRoute = "library", onNavigate = {})
@@ -415,7 +424,7 @@ class ScreenshotTest {
     ) {
         CompositionLocalProvider(org.tegro.yamp.utils.LocalStreamQuality provides quality) {
             FullScreenPlayer(
-                track = track, isPlaying = isPlaying, isLiked = true, progress = { 82_000L }, queue = tracks,
+                track = track.toTrack(), isPlaying = isPlaying, isLiked = true, progress = { 82_000L }, queue = tracks.map { it.toTrack() },
                 onPlayPauseClick = {}, onToggleLike = {}, onNextClick = {}, onPrevClick = {}, onSeekTo = {},
                 onTrackSelect = {}, onRemoveFromQueue = {}, onCollapse = {}, onCloseAndClear = {}, onDislikeClick = {},
                 sourceLabel = source, isFetchingMoreQueue = fetchingMore, initialQueueOpen = queueOpen
@@ -487,7 +496,7 @@ class ScreenshotTest {
     fun searchScrolled() {
         show {
             SearchScreen(
-                query = "", onQueryChange = {}, results = emptyList(), weeklyHits = tracks, trendTracks = tracks,
+                query = "", onQueryChange = {}, results = emptyList(), weeklyHits = shown, trendTracks = shown,
                 isSearching = false, currentTrackId = null, isPlaying = false, likedTrackIds = emptySet(),
                 onTrackClick = { _, _ -> }, onToggleLike = {}, history = listOf("кино")
             )
@@ -500,7 +509,7 @@ class ScreenshotTest {
     fun libraryScrolled() {
         show {
             LibraryScreen(
-                tracks = tracks, isLoading = false, currentTrackId = "1", isPlaying = true, likedTrackIds = setOf("1", "2", "3"), downloadedTrackIds = setOf("2"),
+                tracks = shown, isLoading = false, currentTrackId = "1", isPlaying = true, likedTrackIds = setOf("1", "2", "3"), downloadedTrackIds = setOf("2"),
                 downloadProgress = null, onTrackClick = {}, onPlayAllClick = {}, onShuffleClick = {},
                 onDownloadAllClick = {}, onCancelDownload = {}, onToggleLike = {},
                 playlists = playlists
@@ -530,8 +539,8 @@ class ScreenshotTest {
         show {
             CompositionLocalProvider(LocalLinkState provides LinkState.WEAK) {
                 HomeScreen(
-                    waveTrack = tracks[0], isPlaying = true, isLoading = false, isLiked = true, progress = { 70_000L },
-                    shelf = waveShelfOf(true, tracks.drop(1), emptyList()), shimmer = false,
+                    waveTrack = shown[0], isPlaying = true, isLoading = false, isLiked = true, progress = { 70_000L },
+                    shelf = waveShelfOf(true, shown.drop(1), emptyList()), shimmer = false,
                     onPlayPause = {}, onLike = {}, onDislike = {}, onOpenPlayer = {}, onShelfClick = {}
                 )
             }
@@ -571,7 +580,7 @@ class ScreenshotTest {
                 modifier = Modifier.align(Alignment.BottomCenter).padding(start = 16.dp, end = 16.dp, bottom = DockBottomGap),
                 player = {
                     if (mini) MiniPlayer(
-                        track = tracks[0], isPlaying = true, progress = { 60_000L },
+                        track = tracks[0].toTrack(), isPlaying = true, progress = { 60_000L },
                         onPlayPauseClick = {}, onNextClick = {}, onClick = {}, onDismiss = {}
                     )
                 }
@@ -585,7 +594,7 @@ class ScreenshotTest {
                 CatalogPageScreen(
                     state = CatalogPageState(
                         CatalogPage.Artist("7", "Кино"),
-                        artist = ArtistBriefDto(ArtistDto(id = JsonPrimitive(7), name = "Кино"), longList, listOf(album)),
+                        artist = ArtistBriefDto(ArtistDto(id = JsonPrimitive(7), name = "Кино"), longList, listOf(album)).toArtistParts().toArtistPage(),
                         isLoading = false
                     ),
                     currentTrackId = "1", isPlaying = true, likedTrackIds = setOf("1"), contentBottom = DockClearance, actions = catalogActions
@@ -623,7 +632,7 @@ class ScreenshotTest {
 
     @Test
     @Config(qualifiers = HEAD_UNIT)
-    fun headUnitPlaylist() = dockedPlaylist("head_playlist", OpenedPlaylist(playlists[0], longList, isLoading = false))
+    fun headUnitPlaylist() = dockedPlaylist("head_playlist", OpenedPlaylist(playlists[0], longList.map { it.toTrack() }, isLoading = false))
 
     @Test
     @Config(qualifiers = HEAD_UNIT)
@@ -636,8 +645,8 @@ class ScreenshotTest {
         show {
             Docked("home", mini = false) {
                 HomeScreen(
-                    waveTrack = tracks[0], isPlaying = true, isLoading = false, isLiked = true, progress = { 70_000L },
-                    shelf = waveShelfOf(true, tracks.drop(1), emptyList()), shimmer = false,
+                    waveTrack = shown[0], isPlaying = true, isLoading = false, isLiked = true, progress = { 70_000L },
+                    shelf = waveShelfOf(true, shown.drop(1), emptyList()), shimmer = false,
                     onPlayPause = {}, onLike = {}, onDislike = {}, onOpenPlayer = {}, onShelfClick = {},
                     contentBottom = DockClearance
                 )
@@ -660,7 +669,7 @@ class ScreenshotTest {
         show {
             Docked("library") {
                 LibraryScreen(
-                    tracks = longList, isLoading = false, currentTrackId = "1", isPlaying = true, likedTrackIds = setOf("1"), downloadedTrackIds = emptySet(),
+                    tracks = longList.map { it.toTrack() }, isLoading = false, currentTrackId = "1", isPlaying = true, likedTrackIds = setOf("1"), downloadedTrackIds = emptySet(),
                     downloadProgress = null, onTrackClick = {}, onPlayAllClick = {}, onShuffleClick = {},
                     onDownloadAllClick = {}, onCancelDownload = {}, onToggleLike = {}
                 )
@@ -675,7 +684,7 @@ class ScreenshotTest {
         show {
             Docked("search") {
                 SearchScreen(
-                    query = "", onQueryChange = {}, results = emptyList(), weeklyHits = longList, trendTracks = longList,
+                    query = "", onQueryChange = {}, results = emptyList(), weeklyHits = longList.map { it.toTrack() }, trendTracks = longList.map { it.toTrack() },
                     isSearching = false, currentTrackId = null, isPlaying = false, likedTrackIds = emptySet(),
                     onTrackClick = { _, _ -> }, onToggleLike = {}, history = listOf("кино")
                 )
@@ -706,7 +715,7 @@ class ScreenshotTest {
             CatalogPageScreen(
                 state = CatalogPageState(
                     CatalogPage.Artist("7", "Кино"),
-                    artist = ArtistBriefDto(ArtistDto(id = JsonPrimitive(7), name = "Кино"), tracks, listOf(album, album.copy(id = JsonPrimitive(3), title = "Звезда по имени Солнце", year = 1989))),
+                    artist = ArtistBriefDto(ArtistDto(id = JsonPrimitive(7), name = "Кино"), tracks, listOf(album, album.copy(id = JsonPrimitive(3), title = "Звезда по имени Солнце", year = 1989))).toArtistParts().toArtistPage(),
                     isLoading = false
                 ),
                 currentTrackId = "1", isPlaying = true, likedTrackIds = setOf("1"), contentBottom = 0.dp, actions = catalogActions
@@ -719,7 +728,7 @@ class ScreenshotTest {
     fun albumPage() {
         show {
             CatalogPageScreen(
-                state = CatalogPageState(CatalogPage.Album("2", "Группа крови"), album = album, isLoading = false),
+                state = CatalogPageState(CatalogPage.Album("2", "Группа крови"), album = album.toAlbum(), isLoading = false),
                 currentTrackId = null, isPlaying = false, likedTrackIds = emptySet(), contentBottom = 0.dp, actions = catalogActions
             )
         }
@@ -730,11 +739,11 @@ class ScreenshotTest {
     fun searchWithArtistsAndAlbums() {
         show {
             SearchScreen(
-                query = "кино", onQueryChange = {}, results = tracks, weeklyHits = emptyList(), trendTracks = emptyList(),
+                query = "кино", onQueryChange = {}, results = shown, weeklyHits = emptyList(), trendTracks = emptyList(),
                 isSearching = false, currentTrackId = null, isPlaying = false, likedTrackIds = emptySet(),
                 onTrackClick = { _, _ -> }, onToggleLike = {},
-                artists = listOf(ArtistDto(id = JsonPrimitive(7), name = "Кино"), ArtistDto(id = JsonPrimitive(8), name = "Кино и немцы")),
-                albums = listOf(album)
+                artists = listOf(ArtistDto(id = JsonPrimitive(7), name = "Кино"), ArtistDto(id = JsonPrimitive(8), name = "Кино и немцы")).mapNotNull { it.toArtist() },
+                albums = listOf(album).mapNotNull { it.toAlbum() }
             )
         }
         snap("search_results")
@@ -744,7 +753,7 @@ class ScreenshotTest {
     fun searchHistory() {
         show {
             SearchScreen(
-                query = "", onQueryChange = {}, results = emptyList(), weeklyHits = tracks, trendTracks = tracks,
+                query = "", onQueryChange = {}, results = emptyList(), weeklyHits = shown, trendTracks = shown,
                 isSearching = false, currentTrackId = null, isPlaying = false, likedTrackIds = emptySet(),
                 onTrackClick = { _, _ -> }, onToggleLike = {}, history = listOf("кино", "ария", "radio record")
             )
@@ -756,13 +765,85 @@ class ScreenshotTest {
     fun searchRecentPanelOpen() {
         show {
             SearchScreen(
-                query = "", onQueryChange = {}, results = emptyList(), weeklyHits = tracks, trendTracks = tracks,
+                query = "", onQueryChange = {}, results = emptyList(), weeklyHits = shown, trendTracks = shown,
                 isSearching = false, currentTrackId = null, isPlaying = false, likedTrackIds = emptySet(),
                 onTrackClick = { _, _ -> }, onToggleLike = {}, history = listOf("кино", "ария", "radio record"),
                 initiallyShowHistory = true
             )
         }
         snap("search_recent_open")
+    }
+
+    // --- Phase 3b (D81): the Next states and the buffered part (canvas: Design/yamp/buffering.jsx) ---
+
+    @Composable
+    private fun WithNext(look: org.tegro.yamp.presentation.player.NextLook, bufferedMs: Long, content: @Composable () -> Unit) =
+        CompositionLocalProvider(
+            org.tegro.yamp.presentation.player.LocalPlaybackAux provides
+                org.tegro.yamp.presentation.player.PlaybackAux(next = { look }, buffered = { bufferedMs }),
+            content = content
+        )
+
+    @Test
+    fun fullPlayerNextLoading() {
+        show { WithNext(org.tegro.yamp.presentation.player.NextLook.LOADING, 150_000L) { Player() } }
+        snap("next_full_player_loading")
+    }
+
+    @Test
+    fun fullPlayerNextFailed() {
+        show { WithNext(org.tegro.yamp.presentation.player.NextLook.FAILED, 150_000L) { Player() } }
+        snap("next_full_player_failed")
+    }
+
+    /** Ready, and the whole file is on disk: the bar's loaded part runs to the end. */
+    @Test
+    fun fullPlayerNextReadyOnDisk() {
+        show { WithNext(org.tegro.yamp.presentation.player.NextLook.READY, Long.MAX_VALUE) { Player() } }
+        snap("next_full_player_ready_disk")
+    }
+
+    @Test
+    fun miniPlayerNextStates() {
+        show {
+            Column(Modifier.padding(top = 24.dp)) {
+                listOf(
+                    org.tegro.yamp.presentation.player.NextLook.READY to 170_000L,
+                    org.tegro.yamp.presentation.player.NextLook.LOADING to 120_000L,
+                    org.tegro.yamp.presentation.player.NextLook.FAILED to 120_000L
+                ).forEach { (look, buffered) ->
+                    WithNext(look, buffered) {
+                        MiniPlayer(
+                            track = tracks[0].toTrack(), isPlaying = true, progress = { 60_000L },
+                            onPlayPauseClick = {}, onNextClick = {}, onClick = {}, onDismiss = {}
+                        )
+                    }
+                }
+            }
+        }
+        snap("next_mini_player_states")
+    }
+
+    @Test
+    @Config(qualifiers = WIDE_HEAD_UNIT)
+    fun carWideNextLoading() {
+        show { WithNext(org.tegro.yamp.presentation.player.NextLook.LOADING, 140_000L) { Car(isLandscape = true) } }
+        snap("next_car_wide_loading")
+    }
+
+    @Test
+    @Config(qualifiers = WIDE_HEAD_UNIT)
+    fun carWideNextFailed() {
+        show { WithNext(org.tegro.yamp.presentation.player.NextLook.FAILED, 140_000L) { Car(isLandscape = true) } }
+        snap("next_car_wide_failed")
+    }
+
+    /** A split pane on the head unit (1280 wide): the loading ring and the loaded part at the car's scale. */
+    @Test
+    @Config(qualifiers = HEAD_UNIT)
+    fun carSplitNextLoading() {
+        show { WithNext(org.tegro.yamp.presentation.player.NextLook.LOADING, 140_000L) { Car(isLandscape = true) } }
+        snap("next_car_split_loading")
     }
 
     private val catalogActions = CatalogActions({}, {}, { _, _ -> }, { _, _ -> }, { _, _, _ -> }, {})
@@ -821,10 +902,10 @@ class ScreenshotTest {
 
     @Composable
     private fun Car(isLandscape: Boolean, steeringWheelOnLeft: Boolean = true, track: TrackDetailsDto = tracks[0]) = CompositionLocalProvider(LocalCarClock provides { FIXED_TIME }) { CarScreen(
-        currentTrack = track, isPlaying = true, likedTrackIds = setOf("1"), onPlayPauseClick = {}, onNextClick = {},
+        currentTrack = track.toTrack(), isPlaying = true, likedTrackIds = setOf("1"), onPlayPauseClick = {}, onNextClick = {},
         onPrevClick = {}, onToggleLike = {}, onDislikeClick = {}, onPlayMyVibe = {}, onPlayFavorites = {}, onPlayHits = {},
         onPlayDownloaded = {}, onPlayRadio = {}, onExit = {}, isLandscape = isLandscape, steeringWheelOnLeft = steeringWheelOnLeft, progress = { 82_000L }, durationMs = 286_000,
-        upcoming = listOf(tracks[2], tracks[1], tracks[0]), source = org.tegro.yamp.data.player.PlaylistSource.VIBE
+        upcoming = listOf(tracks[2], tracks[1], tracks[0]).map { it.toTrack() }, source = org.tegro.yamp.data.player.PlaylistSource.VIBE
     ) }
 
     /** Radio in the car: no timeline, the on-air line instead. */

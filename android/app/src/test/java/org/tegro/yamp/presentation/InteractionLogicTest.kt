@@ -1,12 +1,14 @@
 package org.tegro.yamp.presentation
 
+import org.tegro.yamp.data.provider.yandex.toTrack
+import org.tegro.yamp.presentation.common.id
 import org.tegro.yamp.data.dto.TrackDetailsDto
 import org.tegro.yamp.data.player.PlaybackQueue
 import org.tegro.yamp.data.player.SessionButtons
 import org.tegro.yamp.presentation.update.UpdatePolicy
 import org.tegro.yamp.utils.CoverSize
 import org.tegro.yamp.utils.toCoverUrl
-import org.tegro.yamp.data.player.WaveQueue
+import org.tegro.yamp.data.provider.yandex.wave.WaveQueue
 import org.tegro.yamp.presentation.hifi.LoadState
 import org.tegro.yamp.presentation.main.components.MiniGesture
 import org.tegro.yamp.presentation.main.upcomingOf
@@ -73,8 +75,8 @@ class InteractionLogicTest {
 
     @Test
     fun upcomingIsWhatFollowsTheCurrentTrack() {
-        val q = (1..5).map { track("$it") }
-        assertEquals(listOf("3", "4"), upcomingOf(q, "2", limit = 2).map { it.idString })
+        val q = (1..5).map { track("$it").toTrack() }
+        assertEquals(listOf("3", "4"), upcomingOf(q, "2", limit = 2).map { it.id })
         assertTrue("current unknown", upcomingOf(q, "9").isEmpty())
         assertTrue("last track", upcomingOf(q, "5").isEmpty())
     }
@@ -116,9 +118,9 @@ class InteractionLogicTest {
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     @Test
     fun notificationShowsDislikeAndHeartForTracksAndOnlyTheHeartForStations() {
-        assertEquals(listOf(SessionButtons.Kind.DISLIKE, SessionButtons.Kind.LIKE), SessionButtons.kindsFor(track("1"), liked = false))
-        assertEquals(listOf(SessionButtons.Kind.DISLIKE, SessionButtons.Kind.UNLIKE), SessionButtons.kindsFor(track("1"), liked = true))
-        assertEquals(listOf(SessionButtons.Kind.UNLIKE), SessionButtons.kindsFor(track("radio_x").copy(isRadio = true), liked = true))
+        assertEquals(listOf(SessionButtons.Kind.DISLIKE, SessionButtons.Kind.LIKE), SessionButtons.kindsFor(track("1").toTrack(), liked = false))
+        assertEquals(listOf(SessionButtons.Kind.DISLIKE, SessionButtons.Kind.UNLIKE), SessionButtons.kindsFor(track("1").toTrack(), liked = true))
+        assertEquals(listOf(SessionButtons.Kind.UNLIKE), SessionButtons.kindsFor(track("radio_x").copy(isRadio = true).toTrack(), liked = true))
         assertTrue("nothing plays", SessionButtons.kindsFor(null, liked = false).isEmpty())
     }
 

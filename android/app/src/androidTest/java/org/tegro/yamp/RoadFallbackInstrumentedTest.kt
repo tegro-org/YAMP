@@ -1,5 +1,7 @@
 package org.tegro.yamp
 
+import org.tegro.yamp.data.provider.yandex.toTrack
+import org.tegro.yamp.presentation.common.id
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -9,7 +11,7 @@ import org.tegro.yamp.data.dto.TrackDetailsDto
 import org.tegro.yamp.data.network.TrackPreloadManager
 import org.tegro.yamp.data.player.LinkState
 import org.tegro.yamp.data.player.PlaylistSource
-import org.tegro.yamp.data.reserve.RoadReserve
+import org.tegro.yamp.data.provider.yandex.reserve.RoadReserve
 import org.tegro.yamp.presentation.main.MainViewModel
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonPrimitive
@@ -83,11 +85,11 @@ class RoadFallbackInstrumentedTest {
     }
 
     private fun play(track: TrackDetailsDto, queue: List<TrackDetailsDto>, source: PlaylistSource = PlaylistSource.SEARCH) {
-        instrumentation.runOnMainSync { vm.playTrack(track.idString, queue, source) }
+        instrumentation.runOnMainSync { vm.playTrack(track.idString, queue.map { it.toTrack() }, source) }
     }
 
     private fun assertPlaysAudibly(trackId: String) {
-        waitUntil(15_000, "$trackId is the current track") { vm.currentTrack.value?.idString == trackId }
+        waitUntil(15_000, "$trackId is the current track") { vm.currentTrack.value?.id == trackId }
         waitUntil(15_000, "$trackId is playing") { vm.isPlaying.value && !vm.isBuffering.value }
         val from = vm.progress.value
         waitUntil(8_000, "$trackId moves on: really sounds") { vm.progress.value > from + 300 }
@@ -152,7 +154,7 @@ class RoadFallbackInstrumentedTest {
         play(missing, queue)
 
         assertPlaysAudibly(a.idString)
-        assertEquals("the queue stays what it was", queue.map { it.idString }, vm.currentPlaylist.value.map { it.idString })
+        assertEquals("the queue stays what it was", queue.map { it.idString }, vm.currentPlaylist.value.map { it.id })
         assertEquals(PlaylistSource.SEARCH, vm.currentSource.value)
 
         instrumentation.runOnMainSync { vm.playNext() }
@@ -174,9 +176,9 @@ class RoadFallbackInstrumentedTest {
         goOnline()
         instrumentation.runOnMainSync { vm.playNext() }
 
-        waitUntil(10_000, "the music is back in its queue, after the track it left") { vm.currentTrack.value?.idString == y.idString }
+        waitUntil(10_000, "the music is back in its queue, after the track it left") { vm.currentTrack.value?.id == y.idString }
         assertEquals(PlaylistSource.SEARCH, vm.currentSource.value)
-        assertEquals(listOf(x, y).map { it.idString }, vm.currentPlaylist.value.map { it.idString })
+        assertEquals(listOf(x, y).map { it.idString }, vm.currentPlaylist.value.map { it.id })
     }
 
     @Test

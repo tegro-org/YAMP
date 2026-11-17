@@ -1,5 +1,6 @@
 package org.tegro.yamp.presentation.main.components
 
+import org.tegro.yamp.domain.repository.SettingsRepository
 import org.tegro.yamp.data.download.StorageStatus
 import androidx.compose.runtime.Immutable
 import org.tegro.yamp.domain.model.AnimationMode
@@ -44,6 +45,8 @@ data class SettingsUiState(
     val listeningHistory: Boolean = true,
     val reserveMb: Int = 100,
     val reserveUsedBytes: Long = 0L,
+    val streamCacheMb: Int = SettingsRepository.DEFAULT_STREAM_CACHE_MB,
+    val streamCacheUsedBytes: Long = 0L,
     val autoDownload: Boolean = false,
     val cacheSizeBytes: Long = 0L,
     val storage: StorageStatus = StorageStatus(),
@@ -87,6 +90,8 @@ data class SettingsActions(
     val onListeningHistoryChange: (Boolean) -> Unit = {},
     val onReserveChange: (Int) -> Unit = {},
     val onClearReserve: () -> Unit = {},
+    val onStreamCacheChange: (Int) -> Unit = {},
+    val onClearStreamCache: () -> Unit = {},
     val onAutoDownloadChange: (Boolean) -> Unit = {},
     val onDownloadAll: () -> Unit = {},
     val onUpgradeDownloads: () -> Unit = {},
