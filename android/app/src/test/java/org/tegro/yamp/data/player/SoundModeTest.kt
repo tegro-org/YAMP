@@ -5,7 +5,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import org.tegro.yamp.data.network.TrackDownloadManager
 import org.tegro.yamp.data.network.TrackPreloadManager
-import org.tegro.yamp.data.network.YandexMusicApi
+import org.tegro.yamp.data.provider.yandex.network.YandexMusicApi
 import org.tegro.yamp.data.player.fakes.FixedYandexClients
 import org.tegro.yamp.domain.model.UserAccount
 import org.tegro.yamp.domain.repository.AuthRepository

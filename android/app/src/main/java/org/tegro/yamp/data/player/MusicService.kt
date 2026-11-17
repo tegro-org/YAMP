@@ -43,6 +43,9 @@ class MusicService : MediaLibraryService() {
     lateinit var playerRepository: PlayerRepository
 
     @Inject
+    lateinit var sessionPlayers: SessionPlayers
+
+    @Inject
     lateinit var playbackController: PlaybackController
 
     @Inject
@@ -242,7 +245,7 @@ class MusicService : MediaLibraryService() {
 
         // Dynamically update MediaLibrarySession when active player swaps
         serviceScope.launch {
-            playerRepository.activePlayerState.collect { activePl ->
+            sessionPlayers.activePlayerState.collect { activePl ->
                 val forwardingPl = createForwardingPlayer(activePl)
                 if (mediaLibrarySession == null) {
                     setupMediaSession(forwardingPl)
@@ -303,7 +306,7 @@ class MusicService : MediaLibraryService() {
         }
     }
 
-    private fun setupMediaSession(forwardingPlayer: ForwardingPlayer = createForwardingPlayer(playerRepository.getPlayer())) {
+    private fun setupMediaSession(forwardingPlayer: ForwardingPlayer = createForwardingPlayer(sessionPlayers.getPlayer())) {
         // Tapping the notification opens the full-screen player, like Apple Music
         val intent = Intent(this, org.tegro.yamp.MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP

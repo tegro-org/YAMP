@@ -17,6 +17,7 @@ class FakeSettingsRepository : SettingsRepository {
     override val skippedUpdateVersion = MutableStateFlow<String?>(null)
     /** 0: the reserve keeper stays idle; the road reserve has its own tests. */
     override val roadReserveMb = MutableStateFlow(0)
+    override val streamCacheMb = MutableStateFlow(SettingsRepository.DEFAULT_STREAM_CACHE_MB)
     override val compatibleSound = MutableStateFlow<Boolean?>(null)
     override val startMusic = MutableStateFlow(StartMusic.OFF)
     override val startPage = MutableStateFlow(StartPage.LAST)
@@ -45,6 +46,7 @@ class FakeSettingsRepository : SettingsRepository {
     override suspend fun setUiScaleManual(scale: Float) { uiScaleManual.value = scale }
     override suspend fun setSkippedUpdateVersion(version: String?) { skippedUpdateVersion.value = version }
     override suspend fun setRoadReserveMb(megabytes: Int) { roadReserveMb.value = megabytes }
+    override suspend fun setStreamCacheMb(megabytes: Int) { streamCacheMb.value = megabytes }
     override suspend fun setCompatibleSound(enabled: Boolean) { compatibleSound.value = enabled }
     override suspend fun setStartMusic(value: StartMusic) { startMusic.value = value }
     override suspend fun setStartPage(value: StartPage) { startPage.value = value }

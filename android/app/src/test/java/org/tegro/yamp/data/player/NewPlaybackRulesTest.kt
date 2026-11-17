@@ -14,6 +14,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.abs
 import kotlin.math.log10
+import org.tegro.yamp.data.provider.yandex.wave.WaveQueue
 
 /** Loudness, the explicit skip, the wave's settings and the mini-player's locked swipe. Pure rules. */
 class NewPlaybackRulesTest {

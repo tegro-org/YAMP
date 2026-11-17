@@ -51,7 +51,11 @@ class PlaybackJournal(
         /** A user action: next / prev / pick; [Event.title] is the track it aimed at (or the current one). */
         TAP,
         /** The device's mixer: native output rate and frames per buffer; [Event.detail]. */
-        AUDIO
+        AUDIO,
+        /** The next track's state changed: loading / ready / failed (D80); [Event.detail] says how and why. */
+        NEXT,
+        /** The on-disk stream cache: a track found, missed or written in full (D86); [Event.detail]. */
+        CACHE
     }
 
     data class Event(val atMs: Long, val kind: Kind, val title: String? = null, val detail: String? = null, val valueMs: Long = 0L)

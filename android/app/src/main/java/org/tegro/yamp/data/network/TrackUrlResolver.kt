@@ -13,7 +13,7 @@ import java.io.File
  * subscription, and a link resolved for one account is never handed to another. `account = null` means the
  * account context (Home, Library, Search) — with one account, that account.
  */
-interface TrackUrlResolver {
+internal interface TrackUrlResolver {
     /** The quality of the link last resolved for the track, if any. */
     fun qualityOf(trackId: String): TrackPreloadManager.StreamQuality?
 

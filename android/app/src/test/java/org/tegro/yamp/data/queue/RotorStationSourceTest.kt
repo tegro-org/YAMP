@@ -16,11 +16,13 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import org.tegro.yamp.data.network.YandexMusicApi
+import org.tegro.yamp.data.provider.yandex.network.YandexMusicApi
 import org.tegro.yamp.domain.queue.MediaRef
 import org.tegro.yamp.domain.queue.TrackRef
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
+import org.tegro.yamp.data.provider.yandex.queue.RotorStations
+import org.tegro.yamp.data.provider.yandex.queue.RotorStationSource
 
 /** A radio's source: two rotor requests merged and de-duplicated, the queue and the recent list honoured. */
 @RunWith(RobolectricTestRunner::class)
@@ -68,7 +70,7 @@ class RotorStationSourceTest {
         answers[null] = listOf("5", "6")
         val source = RotorStationSource("track:1", { api }, heardLately = { false })
         val batch = source.fetchTracks(refs("1", "2", "3"))
-        assertEquals(listOf("4", "5", "6"), batch.map { it.idString })
+        assertEquals(listOf("4", "5", "6"), batch.map { it.ref.id })
         assertEquals(2, requests.size)
         assertTrue(requests.all { it.url.encodedPath == "/rotor/station/track:1/tracks" })
         assertEquals(setOf("3", null), requests.map { it.url.queryParameter("queue") }.toSet())
@@ -79,18 +81,18 @@ class RotorStationSourceTest {
         answers["2"] = listOf("2", "3", "4")
         answers[null] = listOf("5")
         val source = RotorStationSource("album:9", { api }, heardLately = { it == "3" }, keep = { it.idString != "4" })
-        assertEquals(listOf("5"), source.fetchTracks(refs("1", "2")).map { it.idString })
+        assertEquals(listOf("5"), source.fetchTracks(refs("1", "2")).map { it.ref.id })
         answers["2"] = listOf("7", "8")
         answers[null] = listOf("7")
         val allHeard = RotorStationSource("album:9", { api }, heardLately = { true })
-        assertEquals("all heard lately: still the ones not queued", listOf("7", "8"), allHeard.fetchTracks(refs("1", "2")).map { it.idString })
+        assertEquals("all heard lately: still the ones not queued", listOf("7", "8"), allHeard.fetchTracks(refs("1", "2")).map { it.ref.id })
     }
 
     @Test
     fun oneRequestFailingLeavesTheOther() = runBlocking {
         answers[null] = listOf("4")
         val source = RotorStationSource("track:1", { api }, heardLately = { false })
-        assertEquals(listOf("4"), source.fetchTracks(refs("1")).map { it.idString })
+        assertEquals(listOf("4"), source.fetchTracks(refs("1")).map { it.ref.id })
         answers.clear()
         assertEquals("both failing: an empty batch, no exception", emptyList<TrackRef>(), source.fetchBatch(setOf(TrackRef.yandex("9"))))
     }

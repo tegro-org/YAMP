@@ -6,7 +6,6 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.CommandButton
 import androidx.media3.session.SessionCommand
 import org.tegro.yamp.R
-import org.tegro.yamp.data.dto.TrackDetailsDto
 
 /**
  * The player's own buttons in the notification shade, on the lock screen and in the car: "Не нравится"
@@ -22,13 +21,13 @@ internal object SessionButtons {
     enum class Kind { DISLIKE, LIKE, UNLIKE }
 
     /** Which buttons to show, left to right. Pure; unit-tested. */
-    fun kindsFor(track: TrackDetailsDto?, liked: Boolean): List<Kind> = when {
+    fun kindsFor(track: org.tegro.yamp.domain.media.Track?, liked: Boolean): List<Kind> = when {
         track == null -> emptyList()
         track.isRadio -> listOf(if (liked) Kind.UNLIKE else Kind.LIKE)
         else -> listOf(Kind.DISLIKE, if (liked) Kind.UNLIKE else Kind.LIKE)
     }
 
-    fun buttonsFor(context: Context, track: TrackDetailsDto?, liked: Boolean): List<CommandButton> =
+    fun buttonsFor(context: Context, track: org.tegro.yamp.domain.media.Track?, liked: Boolean): List<CommandButton> =
         kindsFor(track, liked).map { kind ->
             val station = track?.isRadio == true
             when (kind) {

@@ -6,9 +6,10 @@ import android.util.Log
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.launchIn
 import org.tegro.yamp.data.download.DownloadScheduler
-import org.tegro.yamp.data.dto.TrackDetailsDto
+import org.tegro.yamp.data.provider.yandex.toYandexTrack
+import org.tegro.yamp.domain.media.Track
 import org.tegro.yamp.data.network.TrackDownloadManager
-import org.tegro.yamp.data.repository.LibraryRepository
+import org.tegro.yamp.data.provider.yandex.repository.LibraryRepository
 import org.tegro.yamp.data.repository.RadioRepository
 import org.tegro.yamp.domain.repository.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
@@ -50,18 +51,18 @@ class TrackReactions @Inject constructor(
         .stateIn(scope, SharingStarted.Eagerly, emptySet())
 
     /** Whether the heart of [track] is filled: a liked track, or a favourite station. */
-    fun isLiked(track: TrackDetailsDto): Boolean =
+    fun isLiked(track: Track): Boolean =
         if (track.isRadio) stationId(track) in favoriteStationIds.value else track.idString in likedTrackIds.value
 
     /** The heart: like / unlike a track (a new like is downloaded when auto-download is on), favourite a station. */
-    fun toggleLike(track: TrackDetailsDto) {
+    fun toggleLike(track: Track) {
         if (track.isRadio) {
             scope.launch { radioRepository.toggleFavorite(stationId(track)) }
             return
         }
         val trackId = track.idString
         val like = trackId !in likedTrackIds.value
-        libraryRepository.setLiked(track, like) { ok ->
+        libraryRepository.setLiked(track.toYandexTrack(), like) { ok ->
             if (!ok) return@setLiked
             scope.launch {
                 if (!like) downloadManager.removeTrack(trackId)
@@ -71,12 +72,12 @@ class TrackReactions @Inject constructor(
     }
 
     /** "Не нравится": the track leaves the wave and the next one plays; a station leaves the favourites. */
-    fun dislike(track: TrackDetailsDto) {
+    fun dislike(track: Track) {
         if (track.isRadio) {
             scope.launch { radioRepository.removeFavorite(stationId(track)) }
             return
         }
-        libraryRepository.dislike(track)
+        libraryRepository.dislike(track.toYandexTrack())
         playbackController.onTrackDisliked(track.idString)
         scope.launch { downloadManager.removeTrack(track.idString) }
     }
@@ -91,7 +92,7 @@ class TrackReactions @Inject constructor(
         }
     }
 
-    private fun stationId(track: TrackDetailsDto) = track.idString.removePrefix("radio_")
+    private fun stationId(track: Track) = track.idString.removePrefix("radio_")
 
     private companion object {
         const val TAG = "TrackReactions"

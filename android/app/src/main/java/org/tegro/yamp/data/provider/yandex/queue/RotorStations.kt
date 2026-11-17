@@ -1,4 +1,4 @@
-package org.tegro.yamp.data.queue
+package org.tegro.yamp.data.provider.yandex.queue
 
 import org.tegro.yamp.data.dto.TrackDetailsDto
 import org.tegro.yamp.domain.queue.MediaRef

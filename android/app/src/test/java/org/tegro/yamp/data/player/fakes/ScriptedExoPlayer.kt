@@ -50,6 +50,14 @@ class ScriptedExoPlayer(sessionId: Int) : NoErrorExoPlayer() {
 
     fun becomeReady() = setState(Player.STATE_READY)
 
+    /** The stream broke: the listeners hear the error (the player's own error state stays unset). */
+    fun failStream() {
+        val error = androidx.media3.common.PlaybackException(
+            "dead link", null, androidx.media3.common.PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED
+        )
+        listeners.toList().forEach { it.onPlayerError(error) }
+    }
+
     /** The item has been played up to [ms] (a kept player still holding a track where it was left). */
     fun playedTo(ms: Long) { position = ms }
 

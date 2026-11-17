@@ -1,4 +1,4 @@
-package org.tegro.yamp.data.queue
+package org.tegro.yamp.data.provider.yandex.queue
 
 import android.util.Log
 import kotlinx.coroutines.Deferred
@@ -7,7 +7,9 @@ import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.tegro.yamp.data.dto.TrackDetailsDto
-import org.tegro.yamp.data.network.YandexMusicApi
+import org.tegro.yamp.data.provider.yandex.toTrack
+import org.tegro.yamp.domain.media.Track
+import org.tegro.yamp.data.provider.yandex.network.YandexMusicApi
 import org.tegro.yamp.domain.queue.DynamicSource
 import org.tegro.yamp.domain.queue.TrackRef
 import retrofit2.HttpException
@@ -31,15 +33,15 @@ internal class RotorStationSource(
     private val fetching = Mutex()
 
     override suspend fun fetchBatch(exclude: Set<TrackRef>): List<TrackRef> =
-        fetchTracks(exclude.toList()).map { TrackRef.yandex(it.idString) }
+        fetchTracks(exclude.toList()).map { TrackRef.yandex(it.ref.id) }
 
     /**
-     * [fetchBatch] with the provider's track objects, which the player still works with in Phase 1–2; [queued]
-     * is the queue in play order, its last entry is where the station continues from.
+     * [fetchBatch] with the tracks themselves (the queue stores them); [queued] is the queue in play order, its
+     * last entry is where the station continues from.
      */
-    suspend fun fetchTracks(queued: List<TrackRef>): List<TrackDetailsDto> = fetching.withLock {
+    suspend fun fetchTracks(queued: List<TrackRef>): List<Track> = fetching.withLock {
         val batch = fetchBoth(queued.lastOrNull()?.id).filter(keep)
-        RotorStations.freshOf(batch, queued.map { it.id }.toSet(), heardLately)
+        RotorStations.freshOf(batch, queued.map { it.id }.toSet(), heardLately).map { it.toTrack() }
     }
 
     override suspend fun feedback(ref: TrackRef, event: String, playedMs: Long) {

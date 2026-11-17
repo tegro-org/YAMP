@@ -1,4 +1,4 @@
-package org.tegro.yamp.data.reserve
+package org.tegro.yamp.data.provider.yandex.reserve
 
 import android.util.Log
 import org.tegro.yamp.data.dto.TrackDetailsDto

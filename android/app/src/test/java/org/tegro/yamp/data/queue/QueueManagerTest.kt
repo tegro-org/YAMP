@@ -13,25 +13,28 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.tegro.yamp.data.dto.ArtistDto
 import org.tegro.yamp.data.dto.TrackDetailsDto
+import org.tegro.yamp.data.provider.yandex.toTrack
+import org.tegro.yamp.domain.media.Track
 import org.tegro.yamp.di.DispatcherProvider
 import org.tegro.yamp.domain.queue.QueueEntry
 import org.tegro.yamp.domain.queue.QueueKind
 import org.tegro.yamp.domain.queue.RadioTarget
 import org.tegro.yamp.domain.queue.RepeatMode
 import org.tegro.yamp.domain.queue.TrackRef
+import org.tegro.yamp.data.provider.yandex.queue.QueueTrackBridgeApi
 
 /** The manager owns the active queue and writes every change through before returning (E3, E5). */
 @OptIn(ExperimentalCoroutinesApi::class)
 class QueueManagerTest {
     private val store = FakeQueueStore()
-    private val remembered = mutableListOf<TrackDetailsDto>()
+    private val remembered = mutableListOf<Track>()
     private val bridge = object : QueueTrackBridgeApi {
-        override suspend fun remember(tracks: List<TrackDetailsDto>) { remembered += tracks }
-        override suspend fun recall(entries: List<QueueEntry>): List<TrackDetailsDto> = entries.map { e -> dto(e.ref.id, e.title) }
+        override suspend fun remember(tracks: List<Track>) { remembered += tracks }
+        override suspend fun recall(entries: List<QueueEntry>): List<Track> = entries.map { e -> dto(e.ref.id, e.title) }
     }
 
-    private fun dto(id: String, title: String = "Track $id") =
-        TrackDetailsDto(id = JsonPrimitive(id), title = title, artists = listOf(ArtistDto(name = "Band")))
+    private fun dto(id: String, title: String = "Track $id"): Track =
+        TrackDetailsDto(id = JsonPrimitive(id), title = title, artists = listOf(ArtistDto(name = "Band"))).toTrack()
 
     private fun manager(dispatcher: kotlinx.coroutines.CoroutineDispatcher): QueueManager {
         val dispatchers = object : DispatcherProvider {
@@ -52,7 +55,7 @@ class QueueManagerTest {
         assertEquals(3, active.size)
         assertEquals("the cursor is on the chosen track", 1, active.cursorIndex)
         assertEquals("duplicates are two entries", 3, active.entries.map { it.entryId }.distinct().size)
-        assertEquals(listOf("1", "2", "1"), active.tracks.map { it.idString })
+        assertEquals(listOf("1", "2", "1"), active.tracks.map { it.ref.id })
         assertTrue("the DTOs were remembered for playback", remembered.size == 3)
         assertEquals(active.queue.id, store.queuesById.keys.single())
     }

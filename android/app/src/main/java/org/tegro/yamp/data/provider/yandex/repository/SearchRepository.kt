@@ -1,10 +1,11 @@
-package org.tegro.yamp.data.repository
+package org.tegro.yamp.data.provider.yandex.repository
 
 import org.tegro.yamp.data.dto.AlbumDto
 import org.tegro.yamp.data.dto.ArtistDto
 import org.tegro.yamp.data.dto.TrackDetailsDto
 import org.tegro.yamp.data.network.YandexClients
-import org.tegro.yamp.data.network.YandexMusicApi
+import org.tegro.yamp.data.provider.yandex.network.YandexMusicApi
+import org.tegro.yamp.domain.account.AccountId
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -19,9 +20,12 @@ class SearchRepository @Inject constructor(
     /** Throws on a network error. Lazy lists key items by id, so duplicates from the API are dropped. */
     suspend fun searchTracks(text: String): List<TrackDetailsDto> = search(text).tracks
 
-    /** Tracks, artists and albums for a query. Throws on a network error. */
-    suspend fun search(text: String): SearchResults {
-        val result = api.search(text).result
+    /**
+     * Tracks, artists and albums for a query. Throws on a network error. [account] names whose API asks (a
+     * provider's own, step 10); null: the account context.
+     */
+    suspend fun search(text: String, account: AccountId? = null): SearchResults {
+        val result = (account?.let(clients::api) ?: api).search(text).result
         return SearchResults(
             tracks = result?.tracks?.results.orEmpty().distinctBy { it.idString },
             artists = result?.artists?.results.orEmpty().filter { it.idString != null }.distinctBy { it.idString }.take(MAX_ROW),

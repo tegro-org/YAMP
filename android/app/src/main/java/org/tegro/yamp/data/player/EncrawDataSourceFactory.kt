@@ -17,7 +17,9 @@ import org.tegro.yamp.data.network.EncrawDecryptor
  */
 @UnstableApi
 class EncrawDataSourceFactory(
-    context: Context
+    context: Context,
+    /** The on-disk stream cache (D86), below the decryption: the cache keeps what the network sends. */
+    streamCache: StreamCache? = null
 ) : DataSource.Factory {
 
     /**
@@ -25,13 +27,21 @@ class EncrawDataSourceFactory(
      * in 4 s (connect) / 6 s (read) rather than 8 + 8. On a weak 4G link a live server still answers well within
      * that; a track that already has bytes buffered rides out the retries anyway (see [PlaybackBuffering]).
      */
-    private val defaultFactory = DefaultDataSource.Factory(
-        context,
-        androidx.media3.datasource.DefaultHttpDataSource.Factory()
-            .setConnectTimeoutMs(PlaybackBuffering.CONNECT_TIMEOUT_MS)
-            .setReadTimeoutMs(PlaybackBuffering.READ_TIMEOUT_MS)
-            .setAllowCrossProtocolRedirects(true)
-    )
+    private val defaultFactory: DataSource.Factory = DefaultDataSource.Factory(context, httpFactory()).let { plain ->
+        streamCache?.wrap(plain) ?: plain
+    }
+
+    companion object {
+        /** The stream host's HTTP source, also used to write the next track to disk ([NextTrackCacher]). */
+        fun httpFactory(): androidx.media3.datasource.DefaultHttpDataSource.Factory =
+            androidx.media3.datasource.DefaultHttpDataSource.Factory()
+                .setConnectTimeoutMs(PlaybackBuffering.CONNECT_TIMEOUT_MS)
+                .setReadTimeoutMs(PlaybackBuffering.READ_TIMEOUT_MS)
+                .setAllowCrossProtocolRedirects(true)
+
+        /** [uri] without the decryption key it may carry in its fragment: what the network (and the cache) sees. */
+        fun networkUri(uri: Uri): Uri = if (uri.fragment?.startsWith("encraw_key=") == true) uri.buildUpon().fragment(null).build() else uri
+    }
 
     override fun createDataSource(): DataSource {
         return EncrawDataSource(defaultFactory.createDataSource())

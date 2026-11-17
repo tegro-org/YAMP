@@ -4,8 +4,8 @@ import org.tegro.yamp.data.dto.TrackDetailsDto
 import org.tegro.yamp.data.network.TrackPreloadManager.StreamQuality
 import org.tegro.yamp.data.repository.PendingReaction
 import org.tegro.yamp.data.repository.PendingReactions
-import org.tegro.yamp.data.reserve.ReserveEntry
-import org.tegro.yamp.data.reserve.ReservePolicy
+import org.tegro.yamp.data.provider.yandex.reserve.ReserveEntry
+import org.tegro.yamp.data.provider.yandex.reserve.ReservePolicy
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

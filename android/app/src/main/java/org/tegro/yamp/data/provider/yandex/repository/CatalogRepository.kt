@@ -1,9 +1,10 @@
-package org.tegro.yamp.data.repository
+package org.tegro.yamp.data.provider.yandex.repository
 
 import org.tegro.yamp.data.dto.AlbumDto
 import org.tegro.yamp.data.dto.ArtistBriefDto
 import org.tegro.yamp.data.network.YandexClients
-import org.tegro.yamp.data.network.YandexMusicApi
+import org.tegro.yamp.data.provider.yandex.network.YandexMusicApi
+import org.tegro.yamp.domain.account.AccountId
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -18,15 +19,18 @@ class CatalogRepository @Inject constructor(
     private val artists = lruMap<String, ArtistBriefDto>()
     private val albums = lruMap<String, AlbumDto>()
 
+    /** [account]: whose API asks (a provider's own, step 10); null: the account context. */
+    private fun apiFor(account: AccountId?): YandexMusicApi = account?.let(clients::api) ?: api
+
     /** Throws on a network error. */
-    suspend fun artist(id: String): ArtistBriefDto =
-        synchronized(artists) { artists[id] } ?: (api.getArtistBriefInfo(id).result ?: error("Empty artist " + id))
+    suspend fun artist(id: String, account: AccountId? = null): ArtistBriefDto =
+        synchronized(artists) { artists[id] } ?: (apiFor(account).getArtistBriefInfo(id).result ?: error("Empty artist " + id))
             .let { brief -> brief.copy(popularTracks = brief.popularTracks.distinctBy { it.idString }) }
             .also { synchronized(artists) { artists[id] = it } }
 
     /** Throws on a network error. */
-    suspend fun album(id: String): AlbumDto =
-        synchronized(albums) { albums[id] } ?: (api.getAlbumWithTracks(id).result ?: error("Empty album " + id))
+    suspend fun album(id: String, account: AccountId? = null): AlbumDto =
+        synchronized(albums) { albums[id] } ?: (apiFor(account).getAlbumWithTracks(id).result ?: error("Empty album " + id))
             .also { synchronized(albums) { albums[id] = it } }
 
     private fun <K, V> lruMap(): MutableMap<K, V> = object : LinkedHashMap<K, V>(16, 0.75f, true) {

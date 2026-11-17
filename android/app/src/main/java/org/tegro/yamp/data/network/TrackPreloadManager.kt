@@ -17,6 +17,8 @@ import okhttp3.Request
 import org.tegro.yamp.data.account.AccountContext
 import org.tegro.yamp.domain.account.AccountId
 import org.tegro.yamp.domain.account.accountId
+import org.tegro.yamp.data.provider.yandex.network.YandexMusicApi
+import org.tegro.yamp.data.provider.yandex.network.StreamVariants
 
 @Singleton
 class TrackPreloadManager @Inject constructor(

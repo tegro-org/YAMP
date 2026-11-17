@@ -10,10 +10,11 @@ import androidx.media3.common.MediaMetadata
 import org.tegro.yamp.BuildConfig
 import org.tegro.yamp.R
 import org.tegro.yamp.data.network.TrackDownloadManager
-import org.tegro.yamp.data.dto.TrackDetailsDto
-import org.tegro.yamp.data.repository.LibraryRepository
-import org.tegro.yamp.data.repository.RadioRepository
-import org.tegro.yamp.data.repository.UserPlaylistsRepository
+import org.tegro.yamp.data.provider.yandex.toTrack
+import org.tegro.yamp.data.provider.yandex.repository.LibraryRepository
+import org.tegro.yamp.data.provider.radio.FmRadio
+import org.tegro.yamp.domain.media.Track
+import org.tegro.yamp.data.provider.yandex.repository.UserPlaylistsRepository
 import org.tegro.yamp.utils.toCoverUrl
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -30,10 +31,10 @@ import javax.inject.Singleton
 class MediaLibraryTree @Inject constructor(
     @param:ApplicationContext private val context: Context,
     private val libraryRepository: LibraryRepository,
-    private val radioRepository: RadioRepository,
+    private val fmRadio: FmRadio,
     private val downloadManager: TrackDownloadManager,
     private val playbackController: PlaybackController,
-    private val searchRepository: org.tegro.yamp.data.repository.SearchRepository,
+    private val searchRepository: org.tegro.yamp.data.provider.yandex.repository.SearchRepository,
     private val playlistsRepository: UserPlaylistsRepository,
     private val authRepository: org.tegro.yamp.domain.repository.AuthRepository,
     private val settingsRepository: org.tegro.yamp.domain.repository.SettingsRepository
@@ -72,7 +73,7 @@ class MediaLibraryTree @Inject constructor(
                     .withExtras(Bundle().apply { putInt(CONTENT_STYLE_PLAYABLE_HINT, CONTENT_STYLE_GRID) }),
                 folder(QUEUES_ID, context.getString(R.string.queue_switcher_title), MediaMetadata.MEDIA_TYPE_FOLDER_PLAYLISTS)
             )
-            LIKED_ID -> libraryRepository.likedTracks.value.map { trackItem(LIKED_PREFIX, it) }
+            LIKED_ID -> liked().map { trackItem(LIKED_PREFIX, it) }
             DOWNLOADED_ID -> downloaded().map { trackItem(DOWNLOADED_PREFIX, it) }
             PLAYLISTS_ID -> playlistsRepository.playlists.value.map { playlist ->
                 folder(PLAYLIST_PREFIX + playlist.kindString, playlist.title.orEmpty(), MediaMetadata.MEDIA_TYPE_PLAYLIST)
@@ -92,7 +93,7 @@ class MediaLibraryTree @Inject constructor(
                     queues.map { queueItem(it, names[it.queue.account].takeIf { names.size > 1 }) }
                 }
             }
-            RADIO_ID -> radioRepository.getBuiltinStations().map { station ->
+            RADIO_ID -> fmRadio.stations().map { station ->
                 playable(
                     RADIO_PREFIX + station.id, station.name, station.frequency,
                     artwork = station.iconRes?.let { resourceUri(it) } ?: station.logoUrl.takeIf { it.isNotEmpty() }?.let(Uri::parse),
@@ -127,7 +128,7 @@ class MediaLibraryTree @Inject constructor(
      */
     suspend fun startAction(mediaId: String, searchQuery: String? = null): (() -> Unit)? {
         libraryRepository.loadCached()
-        val liked = libraryRepository.likedTracks.value
+        val liked = liked()
         return when {
             mediaId.isEmpty() && !searchQuery.isNullOrBlank() -> searchAction(searchQuery.trim())
             mediaId.isEmpty() || mediaId == WAVE_ID -> ({ playbackController.playMyVibe() })
@@ -137,7 +138,7 @@ class MediaLibraryTree @Inject constructor(
                 val (kind, trackId) = mediaId.removePrefix(PLAYLIST_TRACK_PREFIX).split('/', limit = 2).let { it[0] to it.getOrElse(1) { "" } }
                 queueAction(trackId, playlistTracks(kind).orEmpty(), liked)
             }
-            mediaId.startsWith(RADIO_PREFIX) -> radioRepository.getBuiltinStations()
+            mediaId.startsWith(RADIO_PREFIX) -> fmRadio.stations()
                 .firstOrNull { it.id == mediaId.removePrefix(RADIO_PREFIX) }
                 ?.let { station -> { playbackController.playRadioStation(station) } }
             mediaId.startsWith(QUEUE_PREFIX) -> mediaId.removePrefix(QUEUE_PREFIX).toLongOrNull()
@@ -151,7 +152,7 @@ class MediaLibraryTree @Inject constructor(
 
     /** "Play <station>" picks the station, anything else the top search results; My Wave when nothing matches. */
     private suspend fun searchAction(query: String): () -> Unit {
-        radioRepository.getBuiltinStations().firstOrNull { it.name.contains(query, ignoreCase = true) }?.let { station ->
+        fmRadio.stations().firstOrNull { it.name.contains(query, ignoreCase = true) }?.let { station ->
             return { playbackController.playRadioStation(station) }
         }
         val found = try {
@@ -163,10 +164,10 @@ class MediaLibraryTree @Inject constructor(
             emptyList()
         }
         val first = found.firstOrNull() ?: return { playbackController.playMyVibe() }
-        return { playbackController.playTrack(first.idString, found, PlaylistSource.SEARCH) }
+        return { playbackController.playTrack(first.idString, found.map { it.toTrack() }, PlaylistSource.SEARCH) }
     }
 
-    private fun queueAction(trackId: String, playlist: List<TrackDetailsDto>, liked: List<TrackDetailsDto>): (() -> Unit)? {
+    private fun queueAction(trackId: String, playlist: List<Track>, liked: List<Track>): (() -> Unit)? {
         if (playlist.none { it.idString == trackId }) return null
         return {
             playbackController.updateLibrary(liked)
@@ -175,11 +176,11 @@ class MediaLibraryTree @Inject constructor(
     }
 
     /** Tracks of a playlist (cached per revision); null for an unknown playlist or a failed load. */
-    private suspend fun playlistTracks(kind: String): List<TrackDetailsDto>? {
+    private suspend fun playlistTracks(kind: String): List<Track>? {
         playlistsRepository.loadCached()
         val playlist = playlistsRepository.playlists.value.firstOrNull { it.kindString == kind } ?: return null
         return try {
-            playlistsRepository.tracks(playlist)
+            playlistsRepository.tracks(playlist).map { it.toTrack() }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -188,13 +189,15 @@ class MediaLibraryTree @Inject constructor(
         }
     }
 
-    private fun downloaded(): List<TrackDetailsDto> =
-        libraryRepository.likedTracks.value.filter { downloadManager.isKnownDownloaded(it.idString) }
+    /** The liked tracks as the provider maps them. */
+    private fun liked(): List<Track> = libraryRepository.likedTracks.value.map { it.toTrack() }
 
-    private fun trackItem(prefix: String, track: TrackDetailsDto): MediaItem = playable(
+    private fun downloaded(): List<Track> = liked().filter { downloadManager.isKnownDownloaded(it.idString) }
+
+    private fun trackItem(prefix: String, track: Track): MediaItem = playable(
         prefix + track.idString,
-        track.title.orEmpty(),
-        track.artists.joinToString(", ") { it.name.orEmpty() },
+        track.title,
+        track.artists.joinToString(", ") { it.name },
         artwork = track.coverUri.toCoverUrl(CoverSize.Medium)?.let(Uri::parse),
         mediaType = MediaMetadata.MEDIA_TYPE_MUSIC
     )

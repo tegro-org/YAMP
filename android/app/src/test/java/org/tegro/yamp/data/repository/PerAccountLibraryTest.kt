@@ -20,13 +20,15 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.tegro.yamp.data.account.AccountContext
-import org.tegro.yamp.data.cache.PlaylistCacheManager
+import org.tegro.yamp.data.provider.yandex.cache.PlaylistCacheManager
 import org.tegro.yamp.data.dto.TrackDetailsDto
 import org.tegro.yamp.data.network.AuthInterceptor
 import org.tegro.yamp.data.network.YandexClientsImpl
 import org.tegro.yamp.domain.account.accountId
 import org.tegro.yamp.domain.model.UserAccount
 import org.tegro.yamp.domain.repository.AuthRepository
+import org.tegro.yamp.data.provider.yandex.repository.LibraryRepository
+import org.tegro.yamp.data.provider.yandex.repository.UserPlaylistsRepository
 
 /**
  * Phase 2a step 4 (docs/phase-2a-accounts.md §4): likes and playlists are kept per account. A change of account

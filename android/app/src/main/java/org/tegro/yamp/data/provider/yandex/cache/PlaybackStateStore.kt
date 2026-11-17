@@ -1,4 +1,4 @@
-package org.tegro.yamp.data.cache
+package org.tegro.yamp.data.provider.yandex.cache
 
 import android.content.Context
 import org.tegro.yamp.data.dto.TrackDetailsDto

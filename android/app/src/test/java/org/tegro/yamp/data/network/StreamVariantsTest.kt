@@ -7,6 +7,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.tegro.yamp.data.provider.yandex.network.StreamVariants
 
 /** Choosing the stream to play from what `tracks/{id}/download-info` offers. */
 class StreamVariantsTest {

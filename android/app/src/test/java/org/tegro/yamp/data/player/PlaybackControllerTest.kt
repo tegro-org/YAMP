@@ -38,16 +38,19 @@ import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowNetworkCapabilities
 import org.tegro.yamp.R
 import org.tegro.yamp.data.cache.CacheDatabase
-import org.tegro.yamp.data.cache.PlaybackSnapshot
-import org.tegro.yamp.data.cache.PlaybackStateStore
-import org.tegro.yamp.data.cache.PlaylistCacheManager
+import org.tegro.yamp.data.provider.yandex.cache.PlaybackSnapshot
+import org.tegro.yamp.data.provider.yandex.cache.PlaybackStateStore
+import org.tegro.yamp.data.provider.yandex.cache.PlaylistCacheManager
 import org.tegro.yamp.data.diagnostics.DiagnosticLog
 import org.tegro.yamp.data.dto.ArtistDto
 import org.tegro.yamp.data.dto.TrackDetailsDto
+import org.tegro.yamp.data.provider.yandex.toTrack
+import org.tegro.yamp.data.provider.yandex.toYandexTrack
+import org.tegro.yamp.domain.media.Track
 import org.tegro.yamp.data.history.ListeningHistory
 import org.tegro.yamp.data.network.NetworkMonitor
 import org.tegro.yamp.data.network.TrackDownloadManager
-import org.tegro.yamp.data.network.YandexMusicApi
+import org.tegro.yamp.data.provider.yandex.network.YandexMusicApi
 import org.tegro.yamp.data.player.fakes.FixedYandexClients
 import org.tegro.yamp.data.player.fakes.FakeAuthRepository
 import org.tegro.yamp.data.player.fakes.FakePlayerRepository
@@ -55,12 +58,12 @@ import org.tegro.yamp.data.player.fakes.FakePlayerRepository.Call
 import org.tegro.yamp.data.player.fakes.FakeSettingsRepository
 import org.tegro.yamp.data.player.fakes.FakeTrackUrlResolver
 import org.tegro.yamp.data.player.fakes.TestThreadMain
-import org.tegro.yamp.data.queue.LegacySessionImport
+import org.tegro.yamp.data.provider.yandex.queue.LegacySessionImport
 import org.tegro.yamp.data.queue.QueueManager
-import org.tegro.yamp.data.queue.QueueTrackBridge
+import org.tegro.yamp.data.provider.yandex.queue.QueueTrackBridge
 import org.tegro.yamp.data.queue.RoomQueueStore
 import org.tegro.yamp.data.repository.RadioRepository
-import org.tegro.yamp.data.reserve.RoadReserve
+import org.tegro.yamp.data.provider.yandex.reserve.RoadReserve
 import org.tegro.yamp.di.DispatcherProvider
 import org.tegro.yamp.domain.queue.MediaRef
 import org.tegro.yamp.domain.queue.QueueKind
@@ -125,6 +128,7 @@ class PlaybackControllerTest {
     private val auth = FakeAuthRepository()
     private val settings = FakeSettingsRepository()
     private val engine = FakePlayerRepository(context)
+    private val nextFetch = org.tegro.yamp.data.player.fakes.FakeNextTrackFetch()
     private val resolver = FakeTrackUrlResolver()
     private val store = PlaybackStateStore(context, json)
     /**
@@ -201,11 +205,13 @@ class PlaybackControllerTest {
         val legacyImport = LegacySessionImport(store, cacheManager, RoomQueueStore(db.queueDao(), db.dao()), QueueTrackBridge(db.dao(), json))
         val controller = PlaybackController(
             context, clients, auth, engine,
-            TrackDownloadManager(context, client), resolver, cacheManager, RadioRepository(context),
+            TrackDownloadManager(context, client), resolver, cacheManager, org.tegro.yamp.data.provider.radio.FmRadio(context, RadioRepository(context)),
             queueManager, legacyImport, db.dao(),
             settings, NetworkMonitor(context), RoadReserve(context, client, json),
             journal, DiagnosticLog(context, settings), history,
-            org.tegro.yamp.data.account.AccountContext(auth, queueManager)
+            org.tegro.yamp.data.account.AccountContext(auth, queueManager),
+            org.tegro.yamp.data.provider.StreamResolvers { account -> org.tegro.yamp.data.provider.yandex.YandexStreamResolver(resolver, dispatchers, { null }, account) },
+            nextFetch
         )
         controllers += controller
         await { controller.awaitRestoredSession() }
@@ -217,28 +223,30 @@ class PlaybackControllerTest {
     /** The queue operations asked for so far have run: the engine calls and the derived flows are settled. */
     private fun PlaybackController.settle() = await { awaitQueueIdle() }
 
-    private fun track(id: String) = TrackDetailsDto(
+    private fun dto(id: String) = TrackDetailsDto(
         id = JsonPrimitive(id),
         title = "Track $id",
         artists = listOf(ArtistDto(id = JsonPrimitive("a$id"), name = "Artist $id")),
         durationMs = 200_000
     )
 
+    private fun track(id: String): Track = dto(id).toTrack()
+
     /** Tracks by id, each with a stream link the resolver knows. */
-    private fun playlist(vararg ids: String): List<TrackDetailsDto> {
+    private fun playlist(vararg ids: String): List<Track> {
         ids.forEach { resolver.urls[it] = resolver.url(it) }
         return ids.map(::track)
     }
 
     /** Starts [id] from a library queue, lets it sound and forgets the engine calls so far. */
-    private fun PlaybackController.playing(id: String, queue: List<TrackDetailsDto>) {
+    private fun PlaybackController.playing(id: String, queue: List<Track>) {
         playTrack(id, queue, PlaylistSource.LIBRARY)
         settle()
         engine.sounds()
         engine.calls.clear()
     }
 
-    private val List<TrackDetailsDto>.ids get() = map { it.idString }
+    private val List<Track>.ids get() = map { it.idString }
 
     @Test
     fun playingATrackStreamsItsLinkAndWarmsUpWhatFollows() {
@@ -258,6 +266,98 @@ class PlaybackControllerTest {
         engine.sounds()
         assertFalse(controller.isStarting.value)
         assertTrue(controller.isPlaying.value)
+    }
+
+    /** D80/D86: the next track loads right after the current one starts, its file goes to disk, then it is ready. */
+    @Test
+    fun theNextTrackIsFetchedEarlyAndReadyOnceItsFileIsOnDisk() {
+        val controller = controller()
+        controller.playTrack("1", playlist("1", "2", "3"), PlaylistSource.LIBRARY)
+        controller.settle()
+
+        assertEquals(org.tegro.yamp.domain.player.NextTrack.Loading("2"), controller.nextTrack.value)
+        assertEquals("the whole file goes to disk", listOf("2"), nextFetch.prefetched)
+
+        nextFetch.finish("2", NextTrackFetch.Outcome.WRITTEN)
+        controller.settle()
+        assertEquals(org.tegro.yamp.domain.player.NextTrack.Ready("2", onDisk = true), controller.nextTrack.value)
+    }
+
+    /** D80: a warm standby makes the next track ready even before its file is all on disk. */
+    @Test
+    fun aWarmStandbyMakesTheNextTrackReady() {
+        val controller = controller()
+        controller.playTrack("1", playlist("1", "2"), PlaylistSource.LIBRARY)
+        controller.settle()
+
+        engine.warmTrackId.value = "2"
+        controller.settle()
+
+        assertEquals(org.tegro.yamp.domain.player.NextTrack.Ready("2", onDisk = false), controller.nextTrack.value)
+    }
+
+    /** D80/D81: a standby failing on the next track shows "failed"; a skip starts afresh and stops the write. */
+    @Test
+    fun aFailedNextTrackShowsFailedAndASkipStartsAfresh() {
+        val controller = controller()
+        controller.playTrack("1", playlist("1", "2", "3"), PlaylistSource.LIBRARY)
+        controller.settle()
+
+        engine.standbyFailedEvent.tryEmit("2" to "ERROR_CODE_IO_NETWORK_CONNECTION_FAILED")
+        controller.settle()
+        assertEquals(org.tegro.yamp.domain.player.NextTrack.Failed("2", "ERROR_CODE_IO_NETWORK_CONNECTION_FAILED"), controller.nextTrack.value)
+
+        val cancelsBefore = nextFetch.cancels
+        controller.playTrack("3", controller.currentPlaylist.value, PlaylistSource.LIBRARY)
+        controller.settle()
+        assertTrue("the write for another track stops", nextFetch.cancels > cancelsBefore)
+        assertEquals("nothing after the last track", org.tegro.yamp.domain.player.NextTrack.None, controller.nextTrack.value)
+    }
+
+    /** D81: Next on a failed next track is its retry — the spent link is dropped and the skip loads it afresh. */
+    @Test
+    fun nextOnAFailedNextTrackRetriesWithAFreshLink() {
+        val controller = controller()
+        controller.playTrack("1", playlist("1", "2", "3"), PlaylistSource.LIBRARY)
+        controller.settle()
+        engine.standbyFailedEvent.tryEmit("2" to "ERROR_CODE_IO_NETWORK_CONNECTION_FAILED")
+        controller.settle()
+        val evictedBefore = resolver.evicted.count { it == "2" }
+
+        controller.playNext()
+        controller.settle()
+
+        assertTrue("the failed link is dropped", resolver.evicted.count { it == "2" } > evictedBefore)
+        assertEquals("the skip goes to the failed track (load-first)", "2", controller.currentTrack.value?.idString)
+    }
+
+    /** D81: a track played from a file on disk shows its bar full. */
+    @Test
+    fun aTrackFromDiskReportsItsWholeFileAsBuffered() {
+        val controller = controller()
+        controller.playTrack("1", playlist("1", "2"), PlaylistSource.LIBRARY)
+        controller.settle()
+        engine.bufferedProgress.value = 12_000L
+        controller.settle()
+        assertEquals(12_000L, controller.bufferedProgress.value)
+
+        nextFetch.finish("2", NextTrackFetch.Outcome.WRITTEN)
+        controller.settle()
+        controller.playNext()
+        controller.settle()
+        assertEquals("on disk: the whole bar", Long.MAX_VALUE, controller.bufferedProgress.value)
+    }
+
+    /** F4/D80: during a burst of skips nothing is prepared for a passing track. */
+    @Test
+    fun nothingIsPreparedUntilTheEngineIsSettled() {
+        val controller = controller()
+        engine.unsettled = true
+        controller.playTrack("1", playlist("1", "2"), PlaylistSource.LIBRARY)
+        controller.settle()
+
+        assertTrue("held back during the burst", engine.prepared.isEmpty())
+        assertTrue(nextFetch.prefetched.isEmpty())
     }
 
     /** Phase 2a step 4: a stream is resolved under a named account — the active one until queues carry theirs. */
@@ -563,7 +663,7 @@ class PlaybackControllerTest {
     @Test
     fun theOldSessionFileBecomesTheMainQueueOnFirstStart() {
         val queue = playlist("1", "2", "3")
-        await { store.save(PlaybackSnapshot(userFolder = "driver", source = "LIBRARY", queue = queue, currentTrackId = "2", positionMs = 7_000L)) }
+        await { store.save(PlaybackSnapshot(userFolder = "driver", source = "LIBRARY", queue = queue.map { it.toYandexTrack() }, currentTrackId = "2", positionMs = 7_000L)) }
 
         val controller = controller()
 
@@ -616,6 +716,31 @@ class PlaybackControllerTest {
         // recoveryFor: already retried, one failed track in a row, no copy, good link → SKIP
         assertEquals(listOf("2"), engine.played.map { it.trackId })
         assertEquals("2", controller.currentTrack.value?.idString)
+    }
+
+    @Test
+    fun aStreamThatBrokeOnTheStandbyIsAskedAfreshNextTime() {
+        val controller = controller()
+        controller.playing("1", playlist("1", "2"))
+
+        // The engine never resolves (D74): it reports the spent link and the controller forgets it
+        engine.staleStreamEvent.tryEmit("2")
+        controller.settle()
+
+        assertEquals(listOf("2"), resolver.evicted)
+    }
+
+    @Test
+    fun aDownloadedTrackWhoseCopyIsGoneStreamsInstead() {
+        val controller = controller()
+        val queue = playlist("1", "2")
+        resolver.copies += "1" // counted as downloaded, but its file is gone (the card was taken out)
+
+        controller.playTrack("1", queue, PlaylistSource.LIBRARY)
+        controller.settle()
+
+        // The controller resolves (the engine used to): the network link, not an empty start
+        assertEquals(listOf(Call("playTrack", "1", resolver.url("1"), 0L)), engine.played)
     }
 
     @Test

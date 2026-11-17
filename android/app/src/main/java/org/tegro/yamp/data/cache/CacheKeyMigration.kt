@@ -1,5 +1,7 @@
 package org.tegro.yamp.data.cache
 
+import org.tegro.yamp.data.provider.yandex.cache.PlaylistCacheManager
+
 /**
  * A one-time rewrite of the account keys the cache rows are stored under, run before the cache is first read
  * (`PlaylistCacheManager`). Phase 2a's is `AccountKeyMigration`: folder names → `yandex:<uid>`.

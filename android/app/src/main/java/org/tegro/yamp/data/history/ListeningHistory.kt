@@ -8,8 +8,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.tegro.yamp.data.dto.TrackDetailsDto
-import org.tegro.yamp.data.queue.QueueTrackBridgeApi
+import org.tegro.yamp.data.provider.yandex.queue.QueueTrackBridgeApi
 import org.tegro.yamp.di.AppScope
 import org.tegro.yamp.di.DispatcherProvider
 import org.tegro.yamp.domain.queue.PlayQueue
@@ -20,7 +19,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /** A history row with the track object the rows' actions need (the Phase 1 bridge, as the queues do). */
-data class HistoryItem(val row: HistoryEntity, val track: TrackDetailsDto)
+data class HistoryItem(val row: HistoryEntity, val track: org.tegro.yamp.domain.media.Track)
 
 /**
  * The listening history (docs/phase-1b-history.md): every track that sounded, app-wide. The controller reports
@@ -54,13 +53,13 @@ class ListeningHistory(
     private var lastWrite: Job? = null
 
     /** [track] started sounding out of [queue] (null when it came from nowhere in particular). Stations are not kept. */
-    fun started(track: TrackDetailsDto, queue: PlayQueue?) {
-        if (track.isRadio) return
+    fun started(track: org.tegro.yamp.domain.media.Track, queue: PlayQueue?) {
+        if (track.ref.provider == org.tegro.yamp.domain.queue.MediaRef.PROVIDER_RADIO) return
         write {
             open = null
             if (!settings.listeningHistory.first()) return@write
             val time = now()
-            val last = dao.lastFor(track.idString)
+            val last = dao.lastFor(track.ref.id)
             open = if (last != null && time - last.startedAt < MERGE_WINDOW_MS) {
                 Open(last.id, last.playedMs)
             } else {
@@ -109,19 +108,19 @@ class ListeningHistory(
         job.start()
     }
 
-    private fun rowOf(track: TrackDetailsDto, queue: PlayQueue?, time: Long) = HistoryEntity(
-        ref = TrackRef.yandex(track.idString).value,
-        trackId = track.idString,
-        title = track.title.orEmpty(),
-        artist = track.artists.joinToString(", ") { it.name.orEmpty() },
-        coverUrl = track.coverUri,
+    private fun rowOf(track: org.tegro.yamp.domain.media.Track, queue: PlayQueue?, time: Long) = HistoryEntity(
+        ref = TrackRef.yandex(track.ref.id).value,
+        trackId = track.ref.id,
+        title = track.title,
+        artist = track.artists.joinToString(", ") { it.name },
+        coverUrl = track.cover?.key,
         durationMs = track.durationMs ?: 0L,
         startedAt = time,
         queueId = queue?.id,
         queueName = queue?.name
     )
 
-    /** The row as a queue entry, for the bridge's track lookup (the DTO, or a stub from the display columns). */
+    /** The row as a queue entry, for the track lookup (the stored track, or a stub from the display columns). */
     private fun HistoryEntity.toEntry() = QueueEntry(
         entryId = id, queueId = queueId ?: 0L, position = 0, originalPosition = 0,
         ref = TrackRef(ref), title = title, artist = artist, coverUrl = coverUrl, durationMs = durationMs

@@ -1,4 +1,4 @@
-package org.tegro.yamp.data.network
+package org.tegro.yamp.data.provider.yandex.network
 
 import org.tegro.yamp.data.dto.AccountStatusResponseDto
 import org.tegro.yamp.data.dto.DownloadInfoResponseDto
@@ -8,6 +8,7 @@ import org.tegro.yamp.data.dto.TrackDetailsDto
 import org.tegro.yamp.data.dto.TracksResponseDto
 import retrofit2.http.GET
 import retrofit2.http.Path
+import org.tegro.yamp.data.network.LosslessSigner
 
 interface YandexMusicApi {
 

@@ -1,9 +1,10 @@
-package org.tegro.yamp.data.queue
+package org.tegro.yamp.data.provider.yandex.queue
 
 import android.util.Log
-import org.tegro.yamp.data.cache.PlaybackStateStore
-import org.tegro.yamp.data.cache.PlaylistCacheManager
+import org.tegro.yamp.data.provider.yandex.cache.PlaybackStateStore
+import org.tegro.yamp.data.provider.yandex.cache.PlaylistCacheManager
 import org.tegro.yamp.data.dto.TrackDetailsDto
+import org.tegro.yamp.data.provider.yandex.toTrack
 import org.tegro.yamp.domain.queue.PlayQueue
 import org.tegro.yamp.domain.queue.QueueKind
 import org.tegro.yamp.domain.queue.QueueStore
@@ -38,7 +39,7 @@ class LegacySessionImport @Inject constructor(
         return result
     }
 
-    private suspend fun import(snapshot: org.tegro.yamp.data.cache.PlaybackSnapshot, mainName: String, waveName: String): Long? {
+    private suspend fun import(snapshot: org.tegro.yamp.data.provider.yandex.cache.PlaybackSnapshot, mainName: String, waveName: String): Long? {
         val isWave = snapshot.source == "VIBE"
         val isRadio = snapshot.source == "RADIO" || snapshot.currentTrackId.startsWith("radio_")
         if (isRadio) return null
@@ -53,7 +54,7 @@ class LegacySessionImport @Inject constructor(
             if (isWave) PlayQueue(0L, waveName, QueueKind.WAVE, account = account, seed = snapshot.waveSeed?.idString, sortOrder = -1)
             else PlayQueue(0L, mainName, QueueKind.STATIC, origin = snapshot.source.lowercase().replaceFirstChar { it.uppercase() })
         )
-        tracks.remember(list)
+        tracks.remember(list.map { it.toTrack() })
         val entries = store.replaceEntries(queue.id, list.map { it.toEntry() })
         val cursor = entries.firstOrNull { it.ref.id == snapshot.currentTrackId } ?: entries.first()
         store.saveCursor(queue.id, cursor.entryId, snapshot.positionMs)

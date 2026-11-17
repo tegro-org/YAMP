@@ -12,7 +12,11 @@ import org.tegro.yamp.data.network.TrackUrlResolver
 @InstallIn(SingletonComponent::class)
 abstract class ResolverModule {
     @Binds
-    abstract fun bindTrackUrlResolver(impl: TrackPreloadManager): TrackUrlResolver
+    internal abstract fun bindTrackUrlResolver(impl: TrackPreloadManager): TrackUrlResolver
+
+    /** The controller resolves through the resolver of the entry's account (D74, phase 3 step 10). */
+    @Binds
+    abstract fun bindStreamResolvers(impl: org.tegro.yamp.data.provider.ProviderRegistry): org.tegro.yamp.data.provider.StreamResolvers
 
     @Binds
     abstract fun bindQueueStore(impl: org.tegro.yamp.data.queue.RoomQueueStore): org.tegro.yamp.domain.queue.QueueStore
@@ -21,5 +25,5 @@ abstract class ResolverModule {
     abstract fun bindCacheKeyMigration(impl: org.tegro.yamp.data.account.AccountKeyMigration): org.tegro.yamp.data.cache.CacheKeyMigration
 
     @Binds
-    abstract fun bindQueueTrackBridge(impl: org.tegro.yamp.data.queue.QueueTrackBridge): org.tegro.yamp.data.queue.QueueTrackBridgeApi
+    abstract fun bindQueueTrackBridge(impl: org.tegro.yamp.data.provider.yandex.queue.QueueTrackBridge): org.tegro.yamp.data.provider.yandex.queue.QueueTrackBridgeApi
 }

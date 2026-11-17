@@ -28,6 +28,7 @@ class SettingsRepositoryImpl @Inject constructor(
         "auto_download_liked" to "false",
         "road_reserve_mb" to SettingsRepository.DEFAULT_ROAD_RESERVE_MB.toString(),
         "crossfade_seconds" to SettingsRepository.DEFAULT_CROSSFADE_SECONDS.toString(),
+        "stream_cache_mb" to SettingsRepository.DEFAULT_STREAM_CACHE_MB.toString(),
     )
 
     override val allSettings: Flow<Map<String, String>> = context.dataStore.data.map { prefs ->
@@ -38,6 +39,7 @@ class SettingsRepositoryImpl @Inject constructor(
     private val AUTO_DOWNLOAD_KEY = booleanPreferencesKey("auto_download_liked")
     private val ROAD_RESERVE_MB_KEY = androidx.datastore.preferences.core.intPreferencesKey("road_reserve_mb")
     private val CROSSFADE_SECONDS_KEY = androidx.datastore.preferences.core.intPreferencesKey("crossfade_seconds")
+    private val STREAM_CACHE_MB_KEY = androidx.datastore.preferences.core.intPreferencesKey("stream_cache_mb")
 
     override val isDarkTheme: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[DARK_THEME_KEY] ?: true
@@ -111,6 +113,16 @@ class SettingsRepositoryImpl @Inject constructor(
 
     override suspend fun setCompatibleSound(enabled: Boolean) {
         context.dataStore.edit { prefs -> prefs[COMPATIBLE_SOUND_KEY] = enabled }
+    }
+
+    override val streamCacheMb: Flow<Int> = context.dataStore.data.map { prefs ->
+        prefs[STREAM_CACHE_MB_KEY] ?: SettingsRepository.DEFAULT_STREAM_CACHE_MB
+    }
+
+    override suspend fun setStreamCacheMb(megabytes: Int) {
+        context.dataStore.edit { prefs ->
+            prefs[STREAM_CACHE_MB_KEY] = megabytes.coerceAtLeast(0)
+        }
     }
 
     override suspend fun setRoadReserveMb(megabytes: Int) {

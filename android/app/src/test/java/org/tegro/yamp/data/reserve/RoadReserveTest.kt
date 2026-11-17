@@ -25,6 +25,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
+import org.tegro.yamp.data.provider.yandex.reserve.RoadReserve
 
 /** The reserve on disk: what is saved plays, survives a restart, and a failed download leaves nothing. */
 @RunWith(RobolectricTestRunner::class)

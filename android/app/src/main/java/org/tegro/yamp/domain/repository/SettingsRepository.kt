@@ -39,6 +39,10 @@ interface SettingsRepository {
     suspend fun setSkippedUpdateVersion(version: String?)
     suspend fun setRoadReserveMb(megabytes: Int)
 
+    /** The on-disk stream cache in megabytes (D86), one of [STREAM_CACHE_SIZES_MB]; 0 turns it off. */
+    val streamCacheMb: Flow<Int>
+    suspend fun setStreamCacheMb(megabytes: Int)
+
     /** True: only the ordinary stream, for a device that plays FLAC in silence. Null: nothing chosen yet. */
     val compatibleSound: Flow<Boolean?>
     suspend fun setCompatibleSound(enabled: Boolean)
@@ -159,6 +163,8 @@ interface SettingsRepository {
         const val MIN_UI_SCALE = 0.5f
         const val MAX_UI_SCALE = 2.0f
         const val DEFAULT_ROAD_RESERVE_MB = 100
+        const val DEFAULT_STREAM_CACHE_MB = 500
+        val STREAM_CACHE_SIZES_MB = listOf(0, 250, 500, 1024, 2048)
         val ROAD_RESERVE_SIZES_MB = listOf(0, 100, 300, 500, 1024)
     }
 }

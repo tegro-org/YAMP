@@ -14,7 +14,7 @@ import org.tegro.yamp.domain.repository.PlayerRepository
  * engine's rules. [playTrack] loads the track and starts buffering (wants to play, no sound yet); [sounds]
  * is the moment audio renders, [fail] a player error on the loaded track.
  */
-class FakePlayerRepository(private val context: Context) : PlayerRepository {
+class FakePlayerRepository(private val context: Context) : PlayerRepository, org.tegro.yamp.data.player.SessionPlayers {
     data class Call(val name: String, val trackId: String? = null, val url: String? = null, val positionMs: Long? = null, val pick: Boolean = false)
 
     /** Tracks the standby holds ready ([isWarm]). */
@@ -28,6 +28,7 @@ class FakePlayerRepository(private val context: Context) : PlayerRepository {
     override val isBuffering = MutableStateFlow(false)
     override val soundingTrackId = MutableStateFlow<String?>(null)
     override val progress = MutableStateFlow(0L)
+    override val bufferedProgress = MutableStateFlow(0L)
 
     /** How far the loaded track is loaded: a test moves it to show a slow load still bringing data. */
     @Volatile
@@ -38,6 +39,14 @@ class FakePlayerRepository(private val context: Context) : PlayerRepository {
     override val skipNextEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
     override val skipPrevEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
     override val playbackErrorEvent = MutableSharedFlow<PlaybackFailure>(extraBufferCapacity = 8)
+    override val staleStreamEvent = MutableSharedFlow<String>(extraBufferCapacity = 8)
+    override val warmTrackId = MutableStateFlow<String?>(null)
+    override val standbyFailedEvent = MutableSharedFlow<Pair<String, String>>(extraBufferCapacity = 8)
+
+    /** A burst of skips still runs: the controller holds back the next track's preparation (F4, D80). */
+    @Volatile
+    var unsettled = false
+    override val settled: Boolean get() = !unsettled
 
     /** Only MusicService reads this; built on first use so the tests never pay for an ExoPlayer. */
     override val activePlayerState: StateFlow<ExoPlayer> by lazy { MutableStateFlow(ExoPlayer.Builder(context).build()) }
@@ -62,7 +71,7 @@ class FakePlayerRepository(private val context: Context) : PlayerRepository {
 
     override fun playTrack(
         trackId: String,
-        url: String,
+        stream: org.tegro.yamp.domain.provider.ResolvedStream?,
         title: String?,
         artist: String?,
         coverUrl: String?,
@@ -70,7 +79,7 @@ class FakePlayerRepository(private val context: Context) : PlayerRepository {
         startPositionMs: Long,
         pickAtMs: Long
     ) {
-        calls += Call("playTrack", trackId, url, startPositionMs, pick = pickAtMs > 0L)
+        calls += Call("playTrack", trackId, stream?.uri.orEmpty(), startPositionMs, pick = pickAtMs > 0L)
         currentTrackId.value = trackId
         soundingTrackId.value = null
         progress.value = startPositionMs
@@ -80,8 +89,8 @@ class FakePlayerRepository(private val context: Context) : PlayerRepository {
 
     override fun isWarm(trackId: String): Boolean = trackId in warm
 
-    override fun prepareNextTrack(trackId: String, url: String, title: String?, artist: String?, coverUrl: String?) {
-        calls += Call("prepareNextTrack", trackId, url)
+    override fun prepareNextTrack(trackId: String, stream: org.tegro.yamp.domain.provider.ResolvedStream, title: String?, artist: String?, coverUrl: String?) {
+        calls += Call("prepareNextTrack", trackId, stream.uri)
     }
 
     override fun setTrackGains(gains: Map<String, Float>) {

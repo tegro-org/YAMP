@@ -1,4 +1,4 @@
-package org.tegro.yamp.data.cache
+package org.tegro.yamp.data.provider.yandex.cache
 
 import android.content.Context
 import android.util.Log
@@ -13,6 +13,11 @@ import kotlinx.serialization.json.Json
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
+import org.tegro.yamp.data.cache.CacheDatabase
+import org.tegro.yamp.data.cache.CacheKeyMigration
+import org.tegro.yamp.data.cache.ListItemEntity
+import org.tegro.yamp.data.cache.TrackEntity
+import org.tegro.yamp.data.cache.ValueEntity
 
 /**
  * Offline copy of the user's lists — likes, playlists, the wave queue, history — and the shared charts,

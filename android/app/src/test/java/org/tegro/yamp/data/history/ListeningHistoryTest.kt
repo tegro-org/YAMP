@@ -24,8 +24,9 @@ import org.tegro.yamp.data.cache.TrackEntity
 import org.tegro.yamp.data.dto.ArtistDto
 import org.tegro.yamp.data.dto.TrackAlbumDto
 import org.tegro.yamp.data.dto.TrackDetailsDto
+import org.tegro.yamp.data.provider.yandex.toTrack
 import org.tegro.yamp.data.player.fakes.FakeSettingsRepository
-import org.tegro.yamp.data.queue.QueueTrackBridge
+import org.tegro.yamp.data.provider.yandex.queue.QueueTrackBridge
 import org.tegro.yamp.di.DispatcherProvider
 import org.tegro.yamp.domain.queue.PlayQueue
 import org.tegro.yamp.domain.queue.QueueKind
@@ -63,8 +64,10 @@ class ListeningHistoryTest {
         db.close()
     }
 
-    private fun track(id: String, title: String = "Track $id") =
+    private fun dto(id: String, title: String = "Track $id") =
         TrackDetailsDto(id = JsonPrimitive(id), title = title, artists = listOf(ArtistDto(name = "Band $id")), durationMs = 200_000, coverUri = "cover/$id")
+
+    private fun track(id: String, title: String = "Track $id") = dto(id, title).toTrack()
 
     private fun rows() = runBlocking {
         history.awaitIdle()
@@ -127,7 +130,7 @@ class ListeningHistoryTest {
         assertTrue(rows().isEmpty())
 
         settings.listeningHistory.value = true
-        history.started(track("radio_1").copy(isRadio = true), null)
+        history.started(dto("radio_1").copy(isRadio = true).toTrack(), null)
         history.stopped(10_000L)
         assertTrue(rows().isEmpty())
     }
@@ -163,23 +166,23 @@ class ListeningHistoryTest {
 
     @Test
     fun itemsCarryTheCachedTrackObjectOrAStubFromTheRow() = runBlocking {
-        val full = track("1", "Wish You Were Here").copy(albums = listOf(TrackAlbumDto(id = JsonPrimitive(5), title = "Wish You Were Here")))
+        val full = dto("1", "Wish You Were Here").copy(albums = listOf(TrackAlbumDto(id = JsonPrimitive(5), title = "Wish You Were Here")))
         db.dao().upsertTracks(listOf(TrackEntity("1", json.encodeToString(full))))
-        history.started(full, family)
+        history.started(full.toTrack(), family)
         history.stopped(1_000L)
         history.started(track("2", "Echoes"), family)
         history.stopped(1_000L)
         history.awaitIdle()
 
         val items = history.items(null).first()
-        assertEquals(listOf("2", "1"), items.map { it.track.idString })
+        assertEquals(listOf("2", "1"), items.map { it.track.ref.id })
         assertEquals("the stub shows what the row kept", "Echoes", items[0].track.title)
-        assertEquals("the cached DTO has what the row does not", "Wish You Were Here", items[1].track.albums.single().title)
+        assertEquals("the cached DTO has what the row does not", "Wish You Were Here", items[1].track.album?.title)
     }
 
     @Test
     fun theHistoryKeepsItsTracksCachedUntilItIsCleared() = runBlocking {
-        db.dao().upsertTracks(listOf(TrackEntity("1", json.encodeToString(track("1")))))
+        db.dao().upsertTracks(listOf(TrackEntity("1", json.encodeToString(dto("1")))))
         history.started(track("1"), family)
         history.stopped(1_000L)
         history.awaitIdle()

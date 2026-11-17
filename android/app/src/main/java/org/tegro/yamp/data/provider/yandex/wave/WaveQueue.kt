@@ -1,11 +1,11 @@
-package org.tegro.yamp.data.player
+package org.tegro.yamp.data.provider.yandex.wave
 
 import android.util.Log
-import org.tegro.yamp.data.cache.PlaylistCacheManager
+import org.tegro.yamp.data.provider.yandex.cache.PlaylistCacheManager
 import org.tegro.yamp.data.dto.TrackDetailsDto
 import org.tegro.yamp.data.network.TrackUrlResolver
-import org.tegro.yamp.data.network.YandexMusicApi
-import org.tegro.yamp.data.queue.RotorStations
+import org.tegro.yamp.data.provider.yandex.network.YandexMusicApi
+import org.tegro.yamp.data.provider.yandex.queue.RotorStations
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred

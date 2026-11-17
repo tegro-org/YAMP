@@ -27,6 +27,14 @@ import javax.inject.Singleton
 @Qualifier
 annotation class UpdateClient
 
+/**
+ * The networking base every provider builds its per-account clients on (C6, phase 3 step 10): the shared pool,
+ * dispatcher, timeouts and logging, but no credentials and no cache — each provider adds its own interceptor,
+ * scoped to its own hosts, and its own cache directory.
+ */
+@Qualifier
+annotation class ProviderBaseClient
+
 @Module
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
@@ -72,6 +80,15 @@ object NetworkModule {
     fun provideUpdateClient(client: OkHttpClient): OkHttpClient =
         client.newBuilder()
             .apply { interceptors().removeAll { it is AuthInterceptor } }
+            .build()
+
+    @Provides
+    @Singleton
+    @ProviderBaseClient
+    fun provideProviderBaseClient(client: OkHttpClient): OkHttpClient =
+        client.newBuilder()
+            .apply { interceptors().removeAll { it is AuthInterceptor } }
+            .cache(null)
             .build()
 
     /** Retrofit for the Yandex API over [client]; one per account (`YandexClients`). */

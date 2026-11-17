@@ -1,13 +1,14 @@
-package org.tegro.yamp.data.repository
+package org.tegro.yamp.data.provider.yandex.repository
 
 import android.util.Log
 import org.tegro.yamp.domain.account.AccountId
 import org.tegro.yamp.domain.account.accountId
-import org.tegro.yamp.data.cache.PlaylistCacheManager
+import org.tegro.yamp.data.provider.yandex.cache.PlaylistCacheManager
 import org.tegro.yamp.data.dto.TrackDetailsDto
+import org.tegro.yamp.data.provider.yandex.toYandexTrack
 import org.tegro.yamp.data.dto.UserPlaylistDto
 import org.tegro.yamp.data.network.YandexClients
-import org.tegro.yamp.data.network.YandexMusicApi
+import org.tegro.yamp.data.provider.yandex.network.YandexMusicApi
 import org.tegro.yamp.domain.repository.AuthRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -16,6 +17,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 import javax.inject.Singleton
+import org.tegro.yamp.data.repository.PlaylistDiff
 
 /**
  * The user's own playlists (besides "Liked", which [LibraryRepository] handles). The list and each
@@ -50,6 +52,9 @@ class UserPlaylistsRepository @Inject constructor(
     private suspend fun playlistsOf(folder: String): List<UserPlaylistDto> = playlistsByAccount[folder]
         ?: cacheManager.loadUserPlaylists(folder).let { playlistsByAccount.putIfAbsent(folder, it) ?: it }
 
+    /** [account]'s list from memory or its cache, whichever account the context is (a provider's own, step 10). */
+    suspend fun playlistsFor(account: AccountId): List<UserPlaylistDto> = playlistsOf(account.value)
+
     /** Shows the account context's list from memory or its cache; a change of context switches the view only. */
     suspend fun loadCached() {
         val folder = activeFolder
@@ -80,8 +85,8 @@ class UserPlaylistsRepository @Inject constructor(
      * Tracks in playlist order. When the server fails, the copy saved last, even of an older revision;
      * throws only when nothing was ever saved for this playlist.
      */
-    suspend fun tracks(playlist: UserPlaylistDto): List<TrackDetailsDto> {
-        val folder = activeFolder
+    suspend fun tracks(playlist: UserPlaylistDto, account: AccountId? = null): List<TrackDetailsDto> {
+        val folder = account?.value ?: activeFolder
         val kind = playlist.kindString
         cacheManager.loadPlaylistTracks(folder, kind, playlist.revision).takeIf { it.isNotEmpty() }?.let { return it }
 
@@ -146,6 +151,10 @@ class UserPlaylistsRepository @Inject constructor(
     }
 
     /** Adds [track] to the top of [playlist], like the official app. */
+    /** [addTrack] for a track as the screens show it. */
+    suspend fun addTrack(playlist: UserPlaylistDto, track: org.tegro.yamp.domain.media.Track): AddTrackResult =
+        addTrack(playlist, track.toYandexTrack())
+
     suspend fun addTrack(playlist: UserPlaylistDto, track: TrackDetailsDto): AddTrackResult = mutex.withLock {
         val folder = activeFolder
         val api = apiOf(folder)

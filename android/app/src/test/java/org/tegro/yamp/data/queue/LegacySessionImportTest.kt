@@ -11,13 +11,15 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import org.tegro.yamp.data.cache.PlaybackSnapshot
-import org.tegro.yamp.data.cache.PlaybackStateStore
-import org.tegro.yamp.data.cache.PlaylistCacheManager
+import org.tegro.yamp.data.provider.yandex.cache.PlaybackSnapshot
+import org.tegro.yamp.data.provider.yandex.cache.PlaybackStateStore
+import org.tegro.yamp.data.provider.yandex.cache.PlaylistCacheManager
 import org.tegro.yamp.data.dto.ArtistDto
 import org.tegro.yamp.data.dto.TrackDetailsDto
 import org.tegro.yamp.domain.queue.QueueEntry
 import org.tegro.yamp.domain.queue.QueueKind
+import org.tegro.yamp.data.provider.yandex.queue.QueueTrackBridgeApi
+import org.tegro.yamp.data.provider.yandex.queue.LegacySessionImport
 
 /** The old single session becomes the first queue, once, and the file goes. */
 @RunWith(RobolectricTestRunner::class)
@@ -28,8 +30,8 @@ class LegacySessionImportTest {
     private val stateStore = PlaybackStateStore(context, json)
     private val store = FakeQueueStore()
     private val bridge = object : QueueTrackBridgeApi {
-        override suspend fun remember(tracks: List<TrackDetailsDto>) = Unit
-        override suspend fun recall(entries: List<QueueEntry>): List<TrackDetailsDto> = emptyList()
+        override suspend fun remember(tracks: List<org.tegro.yamp.domain.media.Track>) = Unit
+        override suspend fun recall(entries: List<QueueEntry>): List<org.tegro.yamp.domain.media.Track> = emptyList()
     }
     private val import = LegacySessionImport(stateStore, PlaylistCacheManager(context, json), store, bridge)
 

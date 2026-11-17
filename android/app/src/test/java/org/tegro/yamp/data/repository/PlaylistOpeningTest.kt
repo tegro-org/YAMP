@@ -2,10 +2,10 @@ package org.tegro.yamp.data.repository
 
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
-import org.tegro.yamp.data.cache.PlaylistCacheManager
+import org.tegro.yamp.data.provider.yandex.cache.PlaylistCacheManager
 import org.tegro.yamp.data.dto.TrackDetailsDto
 import org.tegro.yamp.data.dto.UserPlaylistDto
-import org.tegro.yamp.data.network.YandexMusicApi
+import org.tegro.yamp.data.provider.yandex.network.YandexMusicApi
 import org.tegro.yamp.data.player.fakes.FixedYandexClients
 import org.tegro.yamp.domain.account.accountId
 import org.tegro.yamp.domain.model.UserAccount
@@ -32,6 +32,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
+import org.tegro.yamp.data.provider.yandex.repository.LibraryRepository
+import org.tegro.yamp.data.provider.yandex.repository.UserPlaylistsRepository
 
 /**
  * Playlists that would not open. The server in these tests answers the way the real one did when asked

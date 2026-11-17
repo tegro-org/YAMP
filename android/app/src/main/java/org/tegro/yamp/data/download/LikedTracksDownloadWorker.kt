@@ -13,9 +13,9 @@ import androidx.work.WorkerParameters
 import org.tegro.yamp.R
 import org.tegro.yamp.data.network.DownloadProgressInfo
 import org.tegro.yamp.data.network.TrackDownloadManager
-import org.tegro.yamp.data.network.StreamVariants
+import org.tegro.yamp.data.provider.yandex.network.StreamVariants
 import org.tegro.yamp.data.network.TrackPreloadManager
-import org.tegro.yamp.data.repository.LibraryRepository
+import org.tegro.yamp.data.provider.yandex.repository.LibraryRepository
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors

@@ -13,6 +13,7 @@ import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
+import org.tegro.yamp.data.provider.yandex.network.YandexMusicApi
 
 /**
  * One Yandex API per account (docs/phase-2a-accounts.md §3, D60): every call says whose it is, and only that
@@ -36,13 +37,14 @@ interface YandexClients {
 }
 
 /**
- * Clients made lazily from the shared one ([NetworkModule.provideOkHttpClient]): same connection pool, dispatcher,
- * timeouts and logging, but an [AuthInterceptor] bound to the account and a cache of its own in
+ * Clients made lazily from the providers' networking base ([org.tegro.yamp.di.ProviderBaseClient]): same connection
+ * pool, dispatcher, timeouts and logging as the shared client, plus an [AuthInterceptor] bound to the account and a
+ * cache of its own in
  * `http_cache_accounts/<id>` — beside, not inside, the shared `http_cache`, whose eviction deletes its directory.
  */
 @Singleton
 class YandexClientsImpl @Inject constructor(
-    private val shared: OkHttpClient,
+    @org.tegro.yamp.di.ProviderBaseClient private val shared: OkHttpClient,
     private val json: Json,
     private val authRepository: AuthRepository,
     private val accountContext: AccountContext,
@@ -74,7 +76,8 @@ class YandexClientsImpl @Inject constructor(
     private fun build(account: AccountId?): Client {
         val auth = AuthInterceptor { account?.let { authRepository.token(it) } }
         val http = shared.newBuilder()
-            .apply { interceptors().replaceAll { if (it is AuthInterceptor) auth else it } }
+            // First, as in the shared client; a base that already carries one (tests hand the shared client) loses it
+            .apply { interceptors().removeAll { it is AuthInterceptor }; interceptors().add(0, auth) }
             .cache(Cache(File(context.cacheDir, "$CACHE_ROOT/${cacheDirName(account)}"), CACHE_BYTES))
             .build()
         return Client(http, NetworkModule.yandexRetrofit(http, json).create(YandexMusicApi::class.java))

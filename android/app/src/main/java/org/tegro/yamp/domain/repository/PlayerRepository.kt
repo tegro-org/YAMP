@@ -1,7 +1,10 @@
 package org.tegro.yamp.domain.repository
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.emptyFlow
+import org.tegro.yamp.domain.provider.ResolvedStream
 
 /** Playback failure of the active track; [positionMs] lets the controller retry from the same place. */
 data class PlaybackFailure(val trackId: String, val positionMs: Long, val reason: String) {
@@ -24,20 +27,30 @@ interface PlayerRepository {
 
     /** How far the current track is loaded (ms into it): the controller tells a slow load from a dead one (D67). */
     fun bufferedPositionMs(): Long
+
+    /** [bufferedPositionMs] as a flow, ticking with [progress]: the progress bars draw it as a lighter part (D81). */
+    val bufferedProgress: StateFlow<Long>
     val trackEndedEvent: Flow<Unit>
     val prepareNextTrackEvent: Flow<Unit>
     val skipNextEvent: Flow<Unit>
     val skipPrevEvent: Flow<Unit>
     val playbackErrorEvent: Flow<PlaybackFailure>
-    val activePlayerState: StateFlow<androidx.media3.exoplayer.ExoPlayer>
 
     /**
-     * Starts [trackId]. With [crossfade] the currently audible track keeps playing until the new one
+     * A player failed on [trackId]'s stream (the active one, a warm standby or a fading tail): its link is spent
+     * and the controller asks the resolver afresh next time. The engine itself never resolves (D74).
+     */
+    val staleStreamEvent: Flow<String> get() = emptyFlow()
+
+    /**
+     * Starts [trackId] from [stream], resolved by the controller (D74). A null [stream] means "the warm standby or
+     * the gapless arrival holds it" ([isWarm]); if neither does any more, the start fails with `EMPTY_URL` and the
+     * controller resolves again. With [crossfade] the currently audible track keeps playing until the new one
      * is ready, then both are blended over [org.tegro.yamp.data.repository.PlayerRepositoryImpl.CROSSFADE_DURATION_MS].
      */
     fun playTrack(
         trackId: String,
-        url: String,
+        stream: ResolvedStream?,
         title: String?,
         artist: String?,
         coverUrl: String?,
@@ -53,12 +66,22 @@ interface PlayerRepository {
 
     /** The standby holds [trackId] ready to sound at once (a skip to it needs no load). */
     fun isWarm(trackId: String): Boolean
+
+    /** The track a warm standby holds ready right now ([isWarm]), or null: the Next button's "ready" (D80). */
+    val warmTrackId: StateFlow<String?> get() = MutableStateFlow(null)
+
+    /** A standby failed on the next track: (track id, error name). The Next button shows "failed" (D80). */
+    val standbyFailedEvent: Flow<Pair<String, String>> get() = emptyFlow()
+
+    /** No track change began within the last few seconds and none runs: a burst of skips is over (F4). */
+    val settled: Boolean get() = true
     /**
      * A start was asked for, before its stream link is looked up: the journal's TIMING line counts from here,
      * so the link lookup shows in "→link" instead of hiding in "skip→request". Diagnostics only.
      */
     fun noteStartRequested() {}
-    fun prepareNextTrack(trackId: String, url: String, title: String?, artist: String?, coverUrl: String?)
+    /** Readies [trackId] from [stream] (resolved by the controller) to follow the current track. */
+    fun prepareNextTrack(trackId: String, stream: ResolvedStream, title: String?, artist: String?, coverUrl: String?)
     /** Volume multipliers by track id (1 = unchanged), for normalization; a track not listed plays as is. */
     fun setTrackGains(gains: Map<String, Float>)
 
@@ -89,5 +112,4 @@ interface PlayerRepository {
     fun triggerSkipPrev()
     fun stop()
     fun release()
-    fun getPlayer(): androidx.media3.common.Player
 }

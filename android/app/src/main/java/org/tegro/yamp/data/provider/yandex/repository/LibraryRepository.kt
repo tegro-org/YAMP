@@ -1,12 +1,12 @@
-package org.tegro.yamp.data.repository
+package org.tegro.yamp.data.provider.yandex.repository
 
 import android.util.Log
 import org.tegro.yamp.domain.account.AccountId
 import org.tegro.yamp.domain.account.accountId
-import org.tegro.yamp.data.cache.PlaylistCacheManager
+import org.tegro.yamp.data.provider.yandex.cache.PlaylistCacheManager
 import org.tegro.yamp.data.dto.TrackDetailsDto
 import org.tegro.yamp.data.network.YandexClients
-import org.tegro.yamp.data.network.YandexMusicApi
+import org.tegro.yamp.data.provider.yandex.network.YandexMusicApi
 import org.tegro.yamp.domain.model.UserAccount
 import org.tegro.yamp.domain.repository.AuthRepository
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -24,6 +24,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 import javax.inject.Singleton
+import org.tegro.yamp.data.repository.PendingReaction
+import org.tegro.yamp.data.repository.PendingReactions
 
 /**
  * The user's library (liked tracks) and the catalog charts, shared by all screens.
@@ -101,6 +103,9 @@ class LibraryRepository @Inject constructor(
     private suspend fun likesOf(folder: String): Likes = likesByAccount[folder]
         ?: cacheManager.loadLikedTracks(folder).let { cached -> Likes(cached, cached.map { it.idString }.toSet()) }
             .let { loaded -> likesByAccount.putIfAbsent(folder, loaded) ?: loaded }
+
+    /** [account]'s liked tracks from memory or its cache, whichever account the context is (step 10). */
+    suspend fun likedTracksOf(account: AccountId): List<TrackDetailsDto> = likesOf(account.value).tracks
 
     /** Keeps [folder]'s likes and shows them when it is the account context. */
     private fun putLikes(folder: String, tracks: List<TrackDetailsDto>, ids: Set<String> = tracks.map { it.idString }.toSet()) {

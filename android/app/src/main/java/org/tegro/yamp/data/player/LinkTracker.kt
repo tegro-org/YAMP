@@ -1,6 +1,6 @@
 package org.tegro.yamp.data.player
 
-import org.tegro.yamp.data.network.StreamVariants
+import org.tegro.yamp.data.provider.yandex.network.StreamVariants
 import org.tegro.yamp.data.network.TrackPreloadManager.StreamQuality
 
 /** How well the music gets through: what the screens say and where the next track comes from. */

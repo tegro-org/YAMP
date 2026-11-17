@@ -10,8 +10,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import org.tegro.yamp.data.dto.TrackDetailsDto
 import org.tegro.yamp.di.AppScope
+import org.tegro.yamp.domain.media.Track
 import org.tegro.yamp.di.DispatcherProvider
 import org.tegro.yamp.domain.queue.PlayQueue
 import org.tegro.yamp.domain.queue.QueueEntry
@@ -25,21 +25,26 @@ import org.tegro.yamp.domain.queue.TrackRef
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.random.Random
+import org.tegro.yamp.data.provider.yandex.queue.QueueTrackBridgeApi
 
 /**
- * The active queue in memory: its entries in play order and, aligned with them, the provider's track objects
- * the player still works with in Phase 1. [cursorIndex] is -1 while nothing is current.
+ * The active queue in memory: its entries in play order and, aligned with them, the tracks the player works with
+ * (neutral since phase 3 step 11). [cursorIndex] is -1 while nothing is current.
  */
 data class ActiveQueue(
     val queue: PlayQueue,
     val entries: List<QueueEntry>,
-    val tracks: List<TrackDetailsDto>,
+    val tracks: List<Track>,
     val cursorIndex: Int
 ) {
     val cursorEntry: QueueEntry? get() = entries.getOrNull(cursorIndex)
-    val cursorTrack: TrackDetailsDto? get() = tracks.getOrNull(cursorIndex)
+    val cursorTrack: Track? get() = tracks.getOrNull(cursorIndex)
     val size: Int get() = entries.size
     fun indexOfEntry(entryId: Long): Int = entries.indexOfFirst { it.entryId == entryId }
+
+    /** True when [shown] is this queue's list as the screens got it (the same tracks in the same order). */
+    fun isShownAs(shown: List<Track>): Boolean =
+        entries.size == shown.size && entries.indices.all { entries[it].ref.id == shown[it].ref.id }
 }
 
 /**
@@ -149,7 +154,7 @@ class QueueManager @Inject constructor(
      * Replaces the content of the active queue (E5) — the only operation that replaces — and puts the cursor on
      * [startRef] (its first occurrence) or on the first entry. Creates the queue when none is active.
      */
-    suspend fun replaceActive(tracks: List<TrackDetailsDto>, origin: String?, startRef: TrackRef?, nameIfNew: String, accountIfNew: String? = null): ActiveQueue = mutation {
+    suspend fun replaceActive(tracks: List<Track>, origin: String?, startRef: TrackRef?, nameIfNew: String, accountIfNew: String? = null): ActiveQueue = mutation {
         val queueId = _active.value?.queue?.id ?: run {
             val order = (store.queues().maxOfOrNull { it.sortOrder } ?: -1) + 1
             val q = store.create(PlayQueue(id = 0L, name = nameIfNew, kind = QueueKind.STATIC, account = accountIfNew, sortOrder = order))
@@ -165,7 +170,7 @@ class QueueManager @Inject constructor(
     }
 
     /** Appends to any queue ("Add to end of queue"); in shuffle mode the newcomers land after the cursor. */
-    suspend fun appendTo(queueId: Long, tracks: List<TrackDetailsDto>) = mutation {
+    suspend fun appendTo(queueId: Long, tracks: List<Track>) = mutation {
         this.tracks.remember(tracks)
         val queue = store.queue(queueId) ?: return@mutation
         val existing = store.entries(queueId)
@@ -176,7 +181,7 @@ class QueueManager @Inject constructor(
     }
 
     /** "Play next": right after the cursor of the active queue. */
-    suspend fun insertAfterCursor(tracks: List<TrackDetailsDto>) = mutation {
+    suspend fun insertAfterCursor(tracks: List<Track>) = mutation {
         val active = _active.value ?: return@mutation
         this.tracks.remember(tracks)
         store.insertEntries(active.queue.id, active.cursorIndex + 1, tracks.map { entryOf(it) })
@@ -246,11 +251,11 @@ class QueueManager @Inject constructor(
      * Appends a fetched batch to a dynamic queue; what is already there is not added twice. A radio without
      * Keep drops its played head at the same time (D52), in the same mutation.
      */
-    suspend fun appendFetched(queueId: Long, tracks: List<TrackDetailsDto>) = mutation {
+    suspend fun appendFetched(queueId: Long, tracks: List<Track>) = mutation {
         val queue = store.queue(queueId) ?: return@mutation
         val existing = store.entries(queueId)
         val have = existing.map { it.ref.id }.toSet()
-        val fresh = tracks.filter { it.idString !in have }
+        val fresh = tracks.filter { it.ref.id !in have }
         if (fresh.isEmpty()) return@mutation
         this.tracks.remember(fresh)
         store.insertEntries(queueId, existing.size, fresh.map { entryOf(it) })
@@ -273,7 +278,7 @@ class QueueManager @Inject constructor(
      * cursor is on the first entry; the caller switches to the queue and plays it. A new radio is bound to [account]
      * (else the active queue's); a re-seeded one keeps its own (D61).
      */
-    suspend fun startRadio(target: RadioTarget, seed: String, name: String, keepHistory: Boolean, first: List<TrackDetailsDto>, account: String? = null): PlayQueue = mutation {
+    suspend fun startRadio(target: RadioTarget, seed: String, name: String, keepHistory: Boolean, first: List<Track>, account: String? = null): PlayQueue = mutation {
         val queue = when (target) {
             is RadioTarget.New -> {
                 val order = (store.queues().maxOfOrNull { it.sortOrder } ?: -1) + 1
@@ -303,7 +308,7 @@ class QueueManager @Inject constructor(
     }
 
     /** A dynamic queue switches its seed (wave by track, return to My Wave): new content after the cursor. */
-    suspend fun restartDynamic(queueId: Long, seed: String?, keepUpToCursor: Boolean, tracks: List<TrackDetailsDto>) = mutation {
+    suspend fun restartDynamic(queueId: Long, seed: String?, keepUpToCursor: Boolean, tracks: List<Track>) = mutation {
         val queue = store.queue(queueId) ?: return@mutation
         val active = _active.value?.takeIf { it.queue.id == queueId }
         val kept = if (keepUpToCursor && active != null) active.entries.take(active.cursorIndex + 1) else emptyList()
@@ -335,17 +340,17 @@ class QueueManager @Inject constructor(
     private suspend fun readActive(queueId: Long): ActiveQueue? {
         val queue = store.queue(queueId) ?: return null
         val entries = store.entries(queueId)
-        val dtos = tracks.recall(entries)
+        val shown = tracks.recall(entries)
         val cursor = queue.cursorEntryId?.let { id -> entries.indexOfFirst { it.entryId == id } } ?: -1
-        return ActiveQueue(queue, entries, dtos, cursor)
+        return ActiveQueue(queue, entries, shown, cursor)
     }
 
-    private fun entryOf(track: TrackDetailsDto) = QueueEntry(
+    private fun entryOf(track: Track) = QueueEntry(
         entryId = 0L, queueId = 0L, position = 0, originalPosition = 0,
-        ref = TrackRef.yandex(track.idString),
-        title = track.title.orEmpty(),
-        artist = track.artists.joinToString(", ") { it.name.orEmpty() },
-        coverUrl = track.coverUri,
+        ref = TrackRef.yandex(track.ref.id),
+        title = track.title,
+        artist = track.artists.joinToString(", ") { it.name },
+        coverUrl = track.cover?.key,
         durationMs = track.durationMs ?: 0L
     )
 }

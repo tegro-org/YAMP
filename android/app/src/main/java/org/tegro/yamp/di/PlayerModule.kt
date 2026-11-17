@@ -8,6 +8,11 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import org.tegro.yamp.data.player.FixedOutputRate
+import org.tegro.yamp.data.player.StreamCache
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -24,14 +29,16 @@ object PlayerModule {
         context: Context,
         audioSessionId: Int,
         card: org.tegro.yamp.data.download.CardStorage,
-        fixedOutput: FixedOutputRate
+        fixedOutput: FixedOutputRate,
+        streamCache: StreamCache
     ): ExoPlayer =
-        createConfiguredExoPlayer(context, card, fixedOutput).apply { if (audioSessionId > 0) setAudioSessionId(audioSessionId) }
+        createConfiguredExoPlayer(context, card, fixedOutput, streamCache).apply { if (audioSessionId > 0) setAudioSessionId(audioSessionId) }
 
     private fun createConfiguredExoPlayer(
         context: Context,
         card: org.tegro.yamp.data.download.CardStorage,
-        fixedOutput: FixedOutputRate
+        fixedOutput: FixedOutputRate,
+        streamCache: StreamCache
     ): ExoPlayer {
         val audioAttributes = AudioAttributes.Builder()
             .setUsage(C.USAGE_MEDIA)
@@ -63,7 +70,8 @@ object PlayerModule {
             .setEnableDecoderFallback(true)
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF)
 
-        val encrawDataSourceFactory = org.tegro.yamp.data.player.EncrawDataSourceFactory(context)
+        // The on-disk stream cache sits below the decryption (D86)
+        val encrawDataSourceFactory = org.tegro.yamp.data.player.EncrawDataSourceFactory(context, streamCache)
         // Encrypted tracks on the SD card are read through their own source; everything else as before
         val cardAware = org.tegro.yamp.data.download.CardAwareDataSourceFactory(encrawDataSourceFactory, card)
         val mediaSourceFactory = androidx.media3.exoplayer.source.DefaultMediaSourceFactory(cardAware)
@@ -88,6 +96,29 @@ object PlayerModule {
         }
     }
 
+    /** One on-disk stream cache for the process (D86); its size follows the setting, 0 = off. */
+    @Provides
+    @Singleton
+    fun provideStreamCache(
+        @ApplicationContext context: Context,
+        settings: org.tegro.yamp.domain.repository.SettingsRepository
+    ): StreamCache {
+        val cache = StreamCache.create(context)
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            settings.streamCacheMb.collect { cache.maxBytes = StreamCache.bytesOf(it) }
+        }
+        return cache
+    }
+
+    /** Writes the next track to disk ahead of time (D86), one at a time, off the main thread. */
+    @Provides
+    @Singleton
+    fun provideNextTrackFetch(cache: StreamCache): org.tegro.yamp.data.player.NextTrackFetch =
+        org.tegro.yamp.data.player.NextTrackCacher(cache, CoroutineScope(SupervisorJob()), Dispatchers.IO)
+
+    @Provides
+    fun provideCachedStreams(cache: StreamCache): org.tegro.yamp.data.player.CachedStreams = cache
+
     @Provides
     @Singleton
     fun provideFixedOutputRate(@ApplicationContext context: Context): FixedOutputRate =
@@ -95,31 +126,34 @@ object PlayerModule {
 
     @Provides
     @Singleton
-    fun providePlayerRepository(
+    fun providePlayerEngine(
         @ApplicationContext context: Context,
         fixedOutput: FixedOutputRate,
         downloadManager: org.tegro.yamp.data.network.TrackDownloadManager,
-        preloadManager: org.tegro.yamp.data.network.TrackUrlResolver,
         wakeLockHelper: org.tegro.yamp.data.player.PlaybackWakeLockHelper,
         equalizer: org.tegro.yamp.data.player.SystemEqualizer,
         card: org.tegro.yamp.data.download.CardStorage,
         settings: org.tegro.yamp.domain.repository.SettingsRepository,
-        journal: org.tegro.yamp.data.player.PlaybackJournal
-    ): org.tegro.yamp.domain.repository.PlayerRepository {
+        journal: org.tegro.yamp.data.player.PlaybackJournal,
+        streamCache: StreamCache
+    ): org.tegro.yamp.data.repository.PlayerRepositoryImpl {
         // Both players share one audio session for the whole process (D70): every AudioTrack they open, rebuild
         // or swap keeps it, so an equalizer app never sees the session close. The service announces it once.
-        val playerA = createConfiguredExoPlayer(context, equalizer.audioSessionId, card, fixedOutput)
-        val playerB = createConfiguredExoPlayer(context, equalizer.audioSessionId, card, fixedOutput)
+        val playerA = createConfiguredExoPlayer(context, equalizer.audioSessionId, card, fixedOutput, streamCache)
+        val playerB = createConfiguredExoPlayer(context, equalizer.audioSessionId, card, fixedOutput, streamCache)
         val parking = org.tegro.yamp.data.repository.PlayerRepositoryImpl.ParkingPolicy(
             keep = settings.keepAudioStreams,
             silenceUri = "android.resource://${context.packageName}/${org.tegro.yamp.R.raw.silence}",
             bothRunning = settings.keepBothPlayersRunning
         )
         return org.tegro.yamp.data.repository.PlayerRepositoryImpl(
-            playerA, playerB, downloadManager, preloadManager, wakeLockHelper, journal, parking
+            playerA, playerB, downloadManager, wakeLockHelper, journal, parking
         )
     }
 
+    @Provides
+    fun providePlayerRepository(engine: org.tegro.yamp.data.repository.PlayerRepositoryImpl): org.tegro.yamp.domain.repository.PlayerRepository = engine
+
+    @Provides
+    fun provideSessionPlayers(engine: org.tegro.yamp.data.repository.PlayerRepositoryImpl): org.tegro.yamp.data.player.SessionPlayers = engine
 }
-
-

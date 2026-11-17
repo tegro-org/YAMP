@@ -8,6 +8,7 @@ import java.time.Duration
 import okhttp3.OkHttpClient
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -15,7 +16,6 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.tegro.yamp.data.network.TrackDownloadManager
-import org.tegro.yamp.data.player.fakes.FakeTrackUrlResolver
 import org.tegro.yamp.data.player.fakes.ScriptedExoPlayer
 import org.tegro.yamp.data.repository.PlayerRepositoryImpl
 import org.tegro.yamp.domain.repository.PlaybackFailure
@@ -37,8 +37,7 @@ class PlayerEngineTest {
     private val app: Application = ApplicationProvider.getApplicationContext()
     private val a = ScriptedExoPlayer(SESSION)
     private val b = ScriptedExoPlayer(SESSION)
-    private val resolver = FakeTrackUrlResolver()
-    private val engine = PlayerRepositoryImpl(a, b, TrackDownloadManager(app, OkHttpClient()), resolver, PlaybackWakeLockHelper(app))
+    private val engine = PlayerRepositoryImpl(a, b, TrackDownloadManager(app, OkHttpClient()), PlaybackWakeLockHelper(app))
 
     @After
     fun tearDown() {
@@ -48,7 +47,7 @@ class PlayerEngineTest {
 
     private val looper get() = shadowOf(Looper.getMainLooper())
 
-    /** Runs the main thread until [done]; the engine resolves links on an IO thread first. */
+    /** Runs the main thread until [done]: the engine starts its work in coroutines on the main thread. */
     private fun settle(done: () -> Boolean) {
         repeat(400) {
             looper.idle()
@@ -61,7 +60,7 @@ class PlayerEngineTest {
     private fun advance(ms: Long) = looper.idleFor(Duration.ofMillis(ms))
 
     private fun play(id: String, pick: Boolean = false) =
-        engine.playTrack(id, "https://stream.example/$id.mp3", id.uppercase(), "Artist", null,
+        engine.playTrack(id, org.tegro.yamp.domain.provider.ResolvedStream("https://stream.example/$id.mp3"), id.uppercase(), "Artist", null,
             crossfade = true, startPositionMs = 0L, pickAtMs = if (pick) SystemClock.elapsedRealtime() else 0L)
 
     /** t1 sounds on player B: the first start goes to the standby slot and plays at once (nothing audible before). */
@@ -130,7 +129,7 @@ class PlayerEngineTest {
         settle { b.itemId == "t4" }
         b.becomeReady()
         advance(4_000) // t3 crossfades out under t4
-        engine.prepareNextTrack("t5", "https://stream.example/t5.mp3", "T5", "Artist", null)
+        engine.prepareNextTrack("t5", org.tegro.yamp.domain.provider.ResolvedStream("https://stream.example/t5.mp3"), "T5", "Artist", null)
         settle { a.itemId == "t5" }
         engine.dropStandby()
         looper.idle()
@@ -180,7 +179,7 @@ class PlayerEngineTest {
         val ended = collectTrackEnds()
         firstTrackSounds()
         val stopsBefore = b.stops
-        engine.prepareNextTrack("t2", "https://stream.example/t2.mp3", "T2", "Artist", null)
+        engine.prepareNextTrack("t2", org.tegro.yamp.domain.provider.ResolvedStream("https://stream.example/t2.mp3"), "T2", "Artist", null)
         settle { b.playlist == listOf("t1", "t2") }
 
         b.finishItem() // t1 played to its end: the player moves on to t2 by itself
@@ -201,7 +200,7 @@ class PlayerEngineTest {
     fun aSkipTakesTheQueuedTrackOffSoTheFadingOneCannotPlayIntoIt() {
         engine.setCrossfadeDuration(0L)
         firstTrackSounds()
-        engine.prepareNextTrack("t2", "https://stream.example/t2.mp3", "T2", "Artist", null)
+        engine.prepareNextTrack("t2", org.tegro.yamp.domain.provider.ResolvedStream("https://stream.example/t2.mp3"), "T2", "Artist", null)
         settle { b.playlist == listOf("t1", "t2") }
         engine.fadeOutForSkip()
         looper.idle()
@@ -211,7 +210,7 @@ class PlayerEngineTest {
     @Test
     fun aCrossfadeOpensOneAudioTrackAndStopsTheOutgoingPlayer() {
         firstTrackSounds()
-        engine.prepareNextTrack("t2", "https://stream.example/t2.mp3", "T2", "Artist", null)
+        engine.prepareNextTrack("t2", org.tegro.yamp.domain.provider.ResolvedStream("https://stream.example/t2.mp3"), "T2", "Artist", null)
         settle { a.itemId == "t2" }
         a.becomeReady()
         play("t2")
@@ -263,7 +262,7 @@ class PlayerEngineTest {
 
         // Warming the next track up behind the silence, then a pause: the clip stops too, and comes back on play
         engine.resume()
-        engine.prepareNextTrack("t2", "https://stream.example/t2.mp3", "T2", "Artist", null)
+        engine.prepareNextTrack("t2", org.tegro.yamp.domain.provider.ResolvedStream("https://stream.example/t2.mp3"), "T2", "Artist", null)
         settle { a.playlist == listOf(PlayerRepositoryImpl.PARKED_ID, "t2") }
         engine.pause()
         looper.idle()
@@ -298,7 +297,7 @@ class PlayerEngineTest {
     @Test
     fun aTrackPlayedEarlierStartsFromTheBeginningWhenSkippedBackTo() {
         firstTrackSounds()
-        engine.prepareNextTrack("t2", "https://stream.example/t2.mp3", "T2", "Artist", null)
+        engine.prepareNextTrack("t2", org.tegro.yamp.domain.provider.ResolvedStream("https://stream.example/t2.mp3"), "T2", "Artist", null)
         settle { a.itemId == "t2" || b.playlist.contains("t2") }
         val holder = if (a.itemId == "t2") a else b
         holder.becomeReady()
@@ -383,12 +382,12 @@ class PlayerEngineTest {
     // endregion
 
     private fun engineKeepingBothPlayersRunning() = PlayerRepositoryImpl(
-        a, b, TrackDownloadManager(app, OkHttpClient()), resolver, PlaybackWakeLockHelper(app),
+        a, b, TrackDownloadManager(app, OkHttpClient()), PlaybackWakeLockHelper(app),
         parking = PlayerRepositoryImpl.ParkingPolicy(kotlinx.coroutines.flow.flowOf(false), "asset:///silence.mp3", kotlinx.coroutines.flow.flowOf(true))
     )
 
     private fun playOn(engine: PlayerRepositoryImpl, id: String) =
-        engine.playTrack(id, "https://stream.example/$id.mp3", id.uppercase(), "Artist", null,
+        engine.playTrack(id, org.tegro.yamp.domain.provider.ResolvedStream("https://stream.example/$id.mp3"), id.uppercase(), "Artist", null,
             crossfade = true, startPositionMs = 0L, pickAtMs = 0L)
 
     private fun startAndSound(engine: PlayerRepositoryImpl, on: ScriptedExoPlayer, id: String) {
@@ -403,6 +402,44 @@ class PlayerEngineTest {
         val seen = java.util.concurrent.CopyOnWriteArrayList<Unit>()
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined).launch {
             engine.trackEndedEvent.collect { seen += it }
+        }.also { collectors += it }
+        return seen
+    }
+
+    // endregion
+
+    // region D74 — the engine plays what it is handed and never resolves
+
+    @Test
+    fun aStartWithoutAStreamAndNoWarmStandbyFailsInsteadOfResolving() {
+        val failures = collectFailures()
+
+        engine.playTrack("t9", null, "T9", "Artist", null, crossfade = true, startPositionMs = 0L, pickAtMs = 0L)
+        settle { failures.isNotEmpty() }
+
+        assertEquals("EMPTY_URL", failures.single().reason)
+        assertEquals(null, a.itemId)
+        assertEquals(null, b.itemId)
+    }
+
+    @Test
+    fun aStandbyWhoseStreamBrokeIsReportedSoItsLinkIsAskedAfresh() {
+        val stale = collectStaleStreams()
+        firstTrackSounds()
+        engine.prepareNextTrack("t2", org.tegro.yamp.domain.provider.ResolvedStream("https://stream.example/t2.mp3"), "T2", "Artist", null)
+        settle { a.itemId == "t2" }
+
+        a.failStream()
+        looper.idle()
+
+        assertEquals(listOf("t2"), stale.toList())
+        assertFalse("a broken standby is never handed to a transition", engine.isWarm("t2"))
+    }
+
+    private fun collectStaleStreams(): List<String> {
+        val seen = java.util.concurrent.CopyOnWriteArrayList<String>()
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined).launch {
+            engine.staleStreamEvent.collect { seen += it }
         }.also { collectors += it }
         return seen
     }

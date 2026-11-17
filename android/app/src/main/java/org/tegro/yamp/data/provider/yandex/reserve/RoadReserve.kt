@@ -1,4 +1,4 @@
-package org.tegro.yamp.data.reserve
+package org.tegro.yamp.data.provider.yandex.reserve
 
 import android.annotation.SuppressLint
 import kotlinx.coroutines.CompletableDeferred

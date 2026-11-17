@@ -8,8 +8,8 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import org.tegro.yamp.data.network.TrackDownloadManager
-import org.tegro.yamp.data.network.TrackUrlResolver
 import org.tegro.yamp.domain.repository.PlaybackFailure
+import org.tegro.yamp.domain.provider.ResolvedStream
 import org.tegro.yamp.domain.repository.PlayerRepository
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
@@ -27,7 +27,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -43,12 +42,11 @@ class PlayerRepositoryImpl(
     private val playerA: ExoPlayer,
     private val playerB: ExoPlayer,
     private val downloadManager: TrackDownloadManager,
-    private val preloadManager: TrackUrlResolver,
     private val wakeLockHelper: org.tegro.yamp.data.player.PlaybackWakeLockHelper,
     private val journal: org.tegro.yamp.data.player.PlaybackJournal? = null,
     /** "Keep audio streams open" (Settings → Playback) and the silent clip a parked player holds meanwhile. */
     private val parking: ParkingPolicy? = null
-) : PlayerRepository {
+) : PlayerRepository, org.tegro.yamp.data.player.SessionPlayers {
 
     /**
      * Instead of being stopped, a player that finished (the outgoing side of a crossfade, a skipped track, a
@@ -82,6 +80,8 @@ class PlayerRepositoryImpl(
 
     private val _progress = MutableStateFlow(0L)
     override val progress: StateFlow<Long> = _progress.asStateFlow()
+    private val _bufferedProgress = MutableStateFlow(0L)
+    override val bufferedProgress: StateFlow<Long> = _bufferedProgress.asStateFlow()
 
     // Buffered so that events are never dropped while the collector is busy.
     private val _trackEndedEvent = MutableSharedFlow<Unit>(extraBufferCapacity = EVENT_BUFFER)
@@ -98,6 +98,17 @@ class PlayerRepositoryImpl(
 
     private val _playbackErrorEvent = MutableSharedFlow<PlaybackFailure>(extraBufferCapacity = EVENT_BUFFER)
     override val playbackErrorEvent: Flow<PlaybackFailure> = _playbackErrorEvent.asSharedFlow()
+
+    private val _staleStreamEvent = MutableSharedFlow<String>(extraBufferCapacity = EVENT_BUFFER)
+    override val staleStreamEvent: Flow<String> = _staleStreamEvent.asSharedFlow()
+
+    private val _warmTrackId = MutableStateFlow<String?>(null)
+    override val warmTrackId: StateFlow<String?> = _warmTrackId.asStateFlow()
+
+    private val _standbyFailedEvent = MutableSharedFlow<Pair<String, String>>(extraBufferCapacity = EVENT_BUFFER)
+    override val standbyFailedEvent: Flow<Pair<String, String>> = _standbyFailedEvent.asSharedFlow()
+
+    override val settled: Boolean get() = !inTransition && calm()
 
     private val scope = CoroutineScope(
         SupervisorJob() + Dispatchers.Main.immediate + CoroutineExceptionHandler { _, e ->
@@ -249,6 +260,7 @@ class PlayerRepositoryImpl(
 
     private fun updateProgress(player: ExoPlayer) {
         val position = player.currentPosition
+        _bufferedProgress.value = player.bufferedPosition
         if (SystemClock.elapsedRealtime() - lastSeekTimestamp < 600L && pendingSeekPosition >= 0L) {
             // Ignore stale positions reported right after a seek until the player catches up.
             if (abs(position - pendingSeekPosition) < 400L) {
@@ -356,7 +368,8 @@ class PlayerRepositoryImpl(
                     return
                 }
                 note(org.tegro.yamp.data.player.PlaybackJournal.Kind.ERROR, player.mediaMetadata.title, "player ${error.errorCodeName}" + (if (player === outgoingPlayer) " (outgoing)" else if (playerIdx != activePlayerIndex) " (standby)" else ""))
-                player.currentMediaItem?.mediaId?.let { preloadManager.evictUrl(it) }
+                // The link is spent: the controller asks the resolver afresh next time (D74)
+                player.currentMediaItem?.mediaId?.let { _staleStreamEvent.tryEmit(it) }
                 when {
                     player === outgoingPlayer -> {
                         // The fading-out track broke; just drop it.
@@ -373,8 +386,11 @@ class PlayerRepositoryImpl(
                     }
                     else -> {
                         // A preloaded standby went stale — never hand it to a transition.
-                        if (preloadedTrackId == player.currentMediaItem?.mediaId) preloadedTrackId = null
+                        val failed = player.currentMediaItem?.mediaId
+                        if (preloadedTrackId == failed) preloadedTrackId = null
+                        failed?.let { _standbyFailedEvent.tryEmit(it to error.errorCodeName) }
                         clearPlayer(player)
+                        refreshWarm()
                     }
                 }
                 refreshPlaybackState()
@@ -394,6 +410,7 @@ class PlayerRepositoryImpl(
     }
 
     private fun refreshPlaybackState() {
+        refreshWarm()
         val p = activePlayer
         // The other player sounding a real track (not the silent clip, not held at volume 0, not a crossfade's
         // tail) also counts as playing: the screen and the session never say "paused" over audible music (F2)
@@ -420,18 +437,12 @@ class PlayerRepositoryImpl(
 
     override fun getPlayer(): Player = activePlayer
 
-    private suspend fun resolvePlayUri(trackId: String, url: String): String? {
-        val localFile = withContext(Dispatchers.IO) { preloadManager.playableCopy(trackId) }
-        if (localFile != null) return android.net.Uri.fromFile(localFile).toString()
-        // A copy from the road reserve was chosen on purpose: a resolved stream must not replace it
-        if (url.startsWith("file:")) return url
-        (preloadManager.getResolvedUrl(trackId) ?: url).takeIf { it.isNotBlank() }?.let { return it }
-        // No link was asked for because the track counted as downloaded, and its copy is gone (the card was
-        // taken out): it plays from the network instead of failing (upstream Н2)
-        return if (trackId.startsWith("radio_")) null else preloadManager.getOrFetchUrl(trackId)
-    }
+    /** The on-disk cache key the item was built with (D86). */
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    private fun MediaItem.cacheKey(): String? = localConfiguration?.customCacheKey
 
-    private fun buildMediaItem(trackId: String, uri: String, title: String?, artist: String?, coverUrl: String?): MediaItem {
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    private fun buildMediaItem(trackId: String, uri: String, title: String?, artist: String?, coverUrl: String?, cacheKey: String? = null): MediaItem {
         val mediaMetadata = MediaMetadata.Builder()
             .setTitle(title ?: "Unknown Track")
             .setDisplayTitle(title ?: "Unknown Track")
@@ -441,18 +452,20 @@ class PlayerRepositoryImpl(
         return MediaItem.Builder()
             .setMediaId(trackId)
             .setUri(uri)
+            // The on-disk cache finds the bytes by account + track + quality, not by the short-lived link (D86)
+            .setCustomCacheKey(cacheKey)
             .setMediaMetadata(mediaMetadata)
             .build()
     }
 
-    override fun prepareNextTrack(trackId: String, url: String, title: String?, artist: String?, coverUrl: String?) {
+    override fun prepareNextTrack(trackId: String, stream: ResolvedStream, title: String?, artist: String?, coverUrl: String?) {
         if (preloadedTrackId == trackId || outgoingPlayer != null) return
+        val playUri = stream.uri.takeIf { it.isNotBlank() } ?: return
         scope.launch {
-            val playUri = resolvePlayUri(trackId, url) ?: return@launch
-            // State may have changed while the URL was resolving.
+            // State may have changed since the controller asked.
             if (outgoingPlayer != null || _currentTrackId.value == trackId) return@launch
 
-            val item = buildMediaItem(trackId, playUri, title, artist, coverUrl)
+            val item = buildMediaItem(trackId, playUri, title, artist, coverUrl, stream.cacheKey)
             if (gaplessFits()) {
                 // Crossfade off: behind the playing track on its own player, no second AudioTrack (F4)
                 dropQueuedOnActive()
@@ -522,7 +535,7 @@ class PlayerRepositoryImpl(
 
     override fun playTrack(
         trackId: String,
-        url: String,
+        stream: ResolvedStream?,
         title: String?,
         artist: String?,
         coverUrl: String?,
@@ -538,22 +551,29 @@ class PlayerRepositoryImpl(
                 activePlayer.currentMediaItem?.let { startTransition(it, crossfade, startPositionMs, pickAtMs) }
                 return@launch
             }
-            // A warm standby already holds this track: its link is in hand, nothing to resolve or fetch
+            // A warm standby already holds this track: its link is in hand. The engine never resolves (D74): what
+            // it plays is the warm standby or the stream the controller resolved
             val warmUri = standbyPlayer.currentMediaItem?.localConfiguration?.uri?.toString()?.takeIf { isWarm(trackId) }
-            val playUri = warmUri ?: resolvePlayUri(trackId, url)
+            val playUri = warmUri ?: stream?.uri?.takeIf { it.isNotBlank() }
             if (playUri == null) {
                 Log.w(TAG, "playUri is blank for track $trackId")
                 note(org.tegro.yamp.data.player.PlaybackJournal.Kind.ERROR, title, "no stream URL")
                 _playbackErrorEvent.tryEmit(PlaybackFailure(trackId, startPositionMs, "EMPTY_URL"))
                 return@launch
             }
-            startTransition(buildMediaItem(trackId, playUri, title, artist, coverUrl), crossfade, startPositionMs, pickAtMs)
+            val cacheKey = if (warmUri != null) standbyPlayer.currentMediaItem?.cacheKey() else stream?.cacheKey
+            startTransition(buildMediaItem(trackId, playUri, title, artist, coverUrl, cacheKey), crossfade, startPositionMs, pickAtMs)
         }
     }
 
     override fun noteStartRequested() = diagnostics.requested()
 
     override fun bufferedPositionMs(): Long = activePlayer.bufferedPosition
+
+    /** Publishes which track a warm standby holds ready (the Next button, D80). */
+    private fun refreshWarm() {
+        _warmTrackId.value = preloadedTrackId?.takeIf { isWarm(it) }
+    }
 
     override fun isWarm(trackId: String): Boolean = gaplessArrived == trackId || standbyPlayer.let {
         preloadedTrackId == trackId && it.currentMediaItem?.mediaId == trackId && it.playbackState == Player.STATE_READY && it.playerError == null
@@ -585,6 +605,7 @@ class PlayerRepositoryImpl(
         lastSeekTimestamp = 0L
         _currentTrackId.value = trackId
         _progress.value = startPositionMs
+        _bufferedProgress.value = startPositionMs
         stalledSince = null
         val current = activePlayer
         val isCurrentAudible = current.isPlaying && current.playerError == null && !isParked(current)
@@ -670,6 +691,7 @@ class PlayerRepositoryImpl(
         preloadedTrackId = null
         _currentTrackId.value = item.mediaId
         _progress.value = p.currentPosition
+        _bufferedProgress.value = p.bufferedPosition
         note(org.tegro.yamp.data.player.PlaybackJournal.Kind.START, item.mediaMetadata.title, "gapless")
         if (p.currentMediaItemIndex > 0) p.removeMediaItems(0, p.currentMediaItemIndex)
         diagnostics.started(p, item.mediaMetadata.title, ready = true)
@@ -900,6 +922,7 @@ class PlayerRepositoryImpl(
             restoreVolumeLater(player)
             _currentTrackId.value = null
             _progress.value = 0L
+            _bufferedProgress.value = 0L
             if (tail != null && tail.isPlaying) {
                 skipFading = tail
                 skipFadeJob = scope.launch {
@@ -925,6 +948,7 @@ class PlayerRepositoryImpl(
             restoreVolumeLater(player)
             _currentTrackId.value = null
             _progress.value = 0L
+            _bufferedProgress.value = 0L
             refreshPlaybackState()
             return
         }
@@ -943,6 +967,7 @@ class PlayerRepositoryImpl(
             if (activePlayer === player) {
                 _currentTrackId.value = null
                 _progress.value = 0L
+                _bufferedProgress.value = 0L
             }
             clearPlayer(player)
             restoreVolumeLater(player)
@@ -1048,6 +1073,7 @@ class PlayerRepositoryImpl(
         wakeLockHelper.releaseTransitionLock()
         _currentTrackId.value = null
         _progress.value = 0L
+        _bufferedProgress.value = 0L
         refreshPlaybackState()
     }
 

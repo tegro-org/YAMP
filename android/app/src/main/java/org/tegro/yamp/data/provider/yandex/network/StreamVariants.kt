@@ -1,6 +1,7 @@
-package org.tegro.yamp.data.network
+package org.tegro.yamp.data.provider.yandex.network
 
 import org.tegro.yamp.data.dto.DownloadInfoResponseDto
+import org.tegro.yamp.data.network.TrackPreloadManager
 
 /**
  * Which of the streams `download-info` offers to play: the best first. A higher bitrate wins; at the

@@ -22,6 +22,7 @@ import org.tegro.yamp.data.player.fakes.FakeAuthRepository
 import org.tegro.yamp.di.NetworkModule
 import org.tegro.yamp.domain.account.AccountId
 import org.tegro.yamp.domain.model.UserAccount
+import org.tegro.yamp.data.provider.yandex.network.YandexMusicApi
 
 /** Phase 2a step 2 (D60): each account's calls carry that account's token, and only that one. */
 @RunWith(RobolectricTestRunner::class)

@@ -31,6 +31,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import java.util.Collections
+import org.tegro.yamp.data.provider.yandex.reserve.RoadReserve
+import org.tegro.yamp.data.provider.yandex.reserve.ReserveKeeper
 
 /** What gets saved along the way, in what order, and when it stops. */
 @RunWith(RobolectricTestRunner::class)
