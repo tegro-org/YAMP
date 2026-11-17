@@ -370,3 +370,120 @@ Workaround now: Poweramp Equalizer → Known Players → YAMP → "Fade" off.
       icon) for the most used queues. Open: open only, or open and start playing; a deleted / removed-account queue
       (shortcut disabled with a message); the queue's icon (cover / account marker); whether the head unit's launcher
       supports pinned shortcuts at all — check on the unit first.
+
+## Phase 3 + 3b — stage 1 (`docs/phase-3-providers.md`, branch `feature/phase-3-providers`)
+
+- [x] Step 1 done — `:core:domain` (pure Kotlin/JVM, `android/core/domain`): moved `domain/queue/*` (MediaRef, TrackRef,
+      PlayQueue, QueuePolicy, QueueStore, RadioSeed) and `domain/account/ProviderAccount.kt` (Provider, AccountId,
+      ProviderAccount); package names unchanged, so no import churn. `UserAccount.accountId()/toProviderAccount()` stay
+      in `:app` (`domain/account/UserAccountMappings.kt`, same package). New: `MediaRef.providerType`/`instance`
+      (`jellyfin@<serverId>`, D78), `provider/Outcome.kt` (Outcome, ProviderError, D73), `provider/Page.kt`.
+      `QueuePolicyTest` moved, `MediaRefTest` new. Gradle: `kotlin-jvm` plugin alias, `include(":core:domain")`,
+      `:app` depends on it; CI/release run `:core:domain:test`, detekt input adds `core/domain/src/main/kotlin`.
+- [x] Step 2 done — `ArchitectureTest`: `:core:domain` stays pure (build file + sources), the app's remaining
+      `domain/` leaks only the two known framework types, Yandex DTO users = shrink-only allow-list
+      (`app/src/test/resources/architecture/yandex-dto-users.txt`, 47 files).
+- [x] Step 3 done — neutral models in `:core:domain` (`domain/media/Media.kt`: `Track`, `Artist`, `Album`,
+      `Playlist`, `ArtistBrief`, `AlbumBrief`, `Cover`, `Loudness`); Yandex mappers `data/provider/yandex/YandexMappers.kt`
+      (`YandexCover` from the `%%` template; playlist ref `yandex:playlist:<owner>:<kind>`; FM stations get `radio:` refs);
+      `YandexMappersTest` (7) on recorded-shape JSON in `app/src/test/resources/yandex/`. `MusicProvider` stays in step 10.
+- [x] Step 4 done — `StreamResolver`/`ResolvedStream`/`StreamQuality`/`Decryption`/`StreamPrefs` in `:core:domain`
+      (`domain/provider/StreamResolver.kt`); `YandexStreamResolver` (copy → fresh link → network, encraw marker) bound
+      in `ResolverModule`; the controller resolves every start and standby and hands the engine a `ResolvedStream`;
+      `PlayerRepositoryImpl` has no resolver (null stream = the warm standby, else `EMPTY_URL`), reports
+      `staleStreamEvent`, the controller invalidates. Tests: `YandexStreamResolverTest` (6), 2 engine + 2 controller
+      tests; `LayoutSafetyTest` check updated. 599 app tests green, goldens unchanged.
+- [x] Step 6 done — early preload waits for the F4 calm window; `NextTrack` state (`PlaybackController.nextTrack`),
+      `NEXT` journal lines, failed → refetch with a fresh link on `LINK GOOD`. Files: `PlaybackController.kt`,
+      `PlayerRepository(Impl).kt` (`warmTrackId`, `standbyFailedEvent`, `settled`), `core/domain/.../player/NextTrack.kt`,
+      `PlaybackJournal(Dialog).kt` (NEXT, CACHE); tests in `PlaybackControllerTest` (+4), fakes (2026-11-17)
+- [x] Step 7 done — on-disk stream cache (D86): `StreamCache.kt`, `NextTrackCacher.kt`, `EncrawDataSourceFactory.kt`,
+      `YandexStreamResolver.kt` (cache key, offline fallback), `ResolvedStream.cacheKey`, `PlayerModule.kt`, settings
+      (`streamCacheMb`, rows, EN/RU), goldens `settings_playback`, `_narrow`, `_poweramp`; `StreamCacheTest` (7),
+      `YandexStreamResolverTest` (+2) — 612 unit tests green (2026-11-17)
+- [x] Step 8 done — Next never disabled (D81): `presentation/player/NextState.kt` (`NextLook`, `NextStateDecor`,
+      `NextCoverOverlay`, `LocalPlaybackAux`), phone `PlayerControls`, `MiniPlayer`, car knob and first next-track
+      card in `CarScreen` (whole knob / card = tap target); `PlaybackController.dropFailedNextLink` (Next or a pick
+      on a failed next track drops its link → load-first retry); strings `next_state_*` EN/RU; `MainScreen`
+      provides the state; Android Auto: Next stays enabled, no custom state (template)
+- [x] Step 9 done — buffered part: `PlayerRepository.bufferedProgress`, `PlaybackController.bufferedProgress`
+      (`Long.MAX_VALUE` = whole file on disk: a copy, a local file, or the next track written to disk),
+      `HiFiTimeline(buffered)` (phone + car), the mini player's hairline; 2 controller tests; 7 new goldens
+      `next_*` (no existing golden changed) — 621 unit tests green (2026-11-17)
+- [x] Step 10 done — `MusicProvider` + `Library`/`Search`/`Catalog` (`:core:domain` `domain/provider/MusicProvider.kt`),
+      `StreamResolver` without the account parameter (one resolver per account), `ProviderRegistry` +
+      `StreamResolvers` (`data/provider/ProviderRegistry.kt`), `YandexProvider` (`data/provider/yandex/YandexProvider.kt`,
+      errors → `ProviderError`), `YandexStreamResolver.Factory`, networking base `@ProviderBaseClient`
+      (`di/NetworkModule.kt`, `YandexClients` built on it); per-account reads in `SearchRepository`, `CatalogRepository`,
+      `UserPlaylistsRepository` (`playlistsFor`, `tracks(…, account)`), `LibraryRepository.likedTracksOf`; controller
+      resolves via `streams.forAccount(…)`; tests `ProviderRegistryTest` (4), resolver/controller/LayoutSafety tests
+      adapted — 625 unit tests green, no golden changed, DTO allow-list 47 (2026-11-17)
+- [ ] Step 11 — deferred until after step 15 (accepted 2026-11-17; see "As built" in `docs/phase-3-providers.md`): the
+      controller can't move onto `Track` while the screens still read its DTO flows
+- [x] Step 12 done — player UI on `Track`: `FullScreenPlayer` (+ `QueueSplit`/`queueSplitOf`), `PlayerParts`,
+      `PlayerQueueSheet`, `MiniPlayer`, `CarScreen`, `NowPlayingWidget`, `prefetchCovers` (`utils/CoverUrlHelper.kt`);
+      edge mapping in `MainScreen` / `MainTabs` (car taps looked up again among the shown service tracks) and in the
+      controller's `prefetchCovers` call; `presentation/common/TrackUi.kt` (`id`, `isRadio`, `coverUri`, `artistNames`);
+      `MediaRef.PROVIDER_RADIO` in `:core:domain`; tests mapped (`toTrack()`) in the screenshot / HiFiLogic /
+      instrumented tests (2026-11-17)
+- [x] Step 13 done — the playlist entity on `Playlist`: `PlaylistsViewModel` exposes `List<Playlist>` and takes
+      `Playlist` in every edit (the service's entry found again by ref; revision kept privately), `OpenedPlaylist.playlist`,
+      `LibraryScreen` (`PlaylistsPage`), `PlaylistScreen` (`PlaylistCover`), `TrackContextMenu` (picker,
+      `LocalTrackMenuPlaylist`), `MainDialogs`; track rows stay on the service track until the track menu moves (step 15);
+      `TrackUiTest` (4); 629 unit tests green, no golden changed, DTO allow-list 47 → 40 (2026-11-17)
+- [x] Step 14 done — Search on `Track` / `Artist` / `Album`: `SearchScreen`, `SearchParts` (results, hits, trends,
+      artists, albums, best result, `availableFilters`); `SearchTab` maps at the edge (`toTrack`, `toArtist`, `toAlbum`)
+      (2026-11-17)
+- [x] Step 15 done — track rows and the track menu on `Track`: `TrackItem`, `TrackContextMenu` (`TrackMenuLauncher`),
+      `MainDialogs` (`TrackMenuRequest`), `LibraryScreen` (+ `CoverCard`), `PlaylistScreen` / `OpenedPlaylist.tracks`,
+      `HistoryScreen` / `HistoryRow`, `HomeScreen` (`WaveShelfState`, `waveShelfOf`; `queueShelfOf` / `shelfEntryOf` moved
+      to `MainTabs`), `CatalogScreens` / `CatalogPageState` (`ArtistPage`, `Album`), `QueueSwitcherRequest.AddTo` /
+      `StartRadio`, `AddToQueueMenu`. Bridge back to the service objects: `data/provider/yandex/ServiceTracks.kt` (mapped
+      models remembered by ref, LRU 5000; rebuilt from the model on a miss); `Track` entry points on `MainViewModel`,
+      `PlaylistsViewModel`, `CatalogViewModel`, `PlaybackController` (`addToQueue`, `createQueueWith`, `startRadioFrom`).
+      629 unit tests green, no golden changed, DTO allow-list 40 → 27 (2026-11-17)
+- [x] Step 11a done — controller state and entry points on `Track` (service values kept as `serviceTrack`/
+      `serviceQueue`/`serviceWaveSeed`); `TrackReactions`, `UserPlaylistsRepository.addTrack` take `Track`; screens and
+      view models hand back `Track` only (`ServiceTracks` now data-layer only, capacity 20000); `ActiveQueue.isShownAs`.
+      Files: `PlaybackController`, `TrackReactions`, `UserPlaylistsRepository`, `QueueManager`, `ServiceTracks`,
+      `MusicService`, `NowPlayingWidget(Updater)`, `MainViewModel`, `SearchViewModel`, `PlaylistsViewModel`,
+      `CatalogViewModel`, `MainScreen`, `MainTabs`; tests (controller → `serviceTrack/serviceQueue`, `HiFiLogicTest`,
+      `InteractionLogicTest`, 2 instrumented). DTO allow-list 27 → 23; no golden changed (2026-11-17)
+- [x] Step 11b/11c done — the queue (`ActiveQueue.tracks`, `QueueManager`, `QueueTrackBridge`), the radio source's
+      output, History, the session buttons, the reactions and the controller's own state are on `Track`
+      (`currentTrack` / `currentPlaylist` / `waveSeed` only — the `service*` duplicates are gone); **`ServiceTracks`
+      removed**, replaced by the stateless reverse mapper `Track.toYandexTrack()` used only where a Yandex repository
+      or the rotor still takes the service shape (likes/dislikes, playlist add, the reserve's upcoming list, the wave
+      station switch, the `tracks` table rows). Still on the service shape inside the provider layer (step 17): the
+      wave's own list/preview (`WaveQueue`), the reserve (`RoadReserve`/`ReserveKeeper`), the library/playlist
+      repositories and caches, `PlaybackStateStore`, `MediaLibraryTree`'s item building. Files: `YandexMappers`
+      (+`toYandexTrack`), `ServiceTracks` (deleted), `TrackFields` (new), `QueueManager`, `QueueTrackBridge`,
+      `LegacySessionImport`, `RotorStationSource`, `ListeningHistory`, `PlaybackController`, `TrackReactions`,
+      `SessionButtons`, `MediaLibraryTree`, `MusicService`, `NowPlayingWidgetUpdater`, `UserPlaylistsRepository`,
+      `MainTabs`, `MainViewModel`, `HistoryViewModel`; tests (`YandexMappersTest` +2, controller, queue, history,
+      HiFi, interaction, queue screenshots). DTO allow-list 23 → 19; no golden changed; controller test 5/5 (2026-11-17)
+- [x] Step 16 done — composition and FM radio: `ProviderComposition` (`data/provider`) gives the composed providers in
+      the stable order (the account context's Yandex provider, then other services' accounts — D75, several Yandex
+      accounts never merge), `libraries()`, and a merged `search()` (`ComposedSearch`, `Sourced<T>`, badges only with
+      ≥ 2 providers); Search runs through it (`SearchViewModel`, `MainTabs`). FM radio is the built-in account-less
+      `FmRadio` source (`data/provider/radio`, D76): stations, a station as a `Track`, its stream; the controller and
+      `MediaLibraryTree` use it. Home and Library screens are not rewired yet (one provider: nothing to compose — the
+      Jellyfin sections come with P4). Tests: `FmRadioTest` (2), `ProviderRegistryTest` (+2 composition). (2026-11-17)
+- [x] Step 17 done — cleanup: **DTO allow-list empty** (19 → 0). The Yandex-only code moved under
+      `data/provider/yandex/` (`network/YandexMusicApi`, `network/StreamVariants`, `repository/{Catalog,Library,
+      Search,UserPlaylists}Repository`, `cache/{PlaylistCacheManager,PlaybackStateStore}`, `queue/{RotorStations,
+      RotorStationSource,QueueTrackBridge,LegacySessionImport}`, `wave/WaveQueue`, `reserve/{RoadReserve,
+      ReserveKeeper}`) — names kept (A3), stored formats unchanged (D72); `CatalogViewModel` reads `ArtistParts`,
+      `PlaylistsViewModel` edits by ref through `YandexPlaylists`, `MediaLibraryTree` builds items from `Track`;
+      `TrackUrlResolver` internal; `PlayerRepository` has no ExoPlayer types (the service reads `SessionPlayers`).
+      No golden changed; 635 unit tests; controller test 5/5 (2026-11-17)
+- [x] **Stage 1 (P3 + P3b) complete** — checkpoint build `YAMP-b85` + Diag; next: rides on the unit with Diag, fixes,
+      possibly v0.4.0; then Stage 2 (P4 Jellyfin)
+## Stage 1 checkpoint findings (b85, for the next build)
+
+- [ ] After a skip back, Next shows "loading" although the next track (the one just left) is on disk or buffered —
+      on every next-track change check the stream cache first: fully cached → READY at once; partly → LOADING and
+      the preload only fills the rest (don't wait for the calm window / 20 s buffer in that case).
+- [ ] Observe: YouTube Music started by itself while YAMP played (2026-11-17 08:28, phone SM-F946B); Android's
+      AudioHardening ignored its focus request, so both played — YAMP never lost focus. Idea if it recurs: pause or
+      duck when another app's music plays while YAMP plays (needs care: `isMusicActive()` doesn't say whose).

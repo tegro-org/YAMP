@@ -257,3 +257,190 @@ P4 screens (phone, narrow, 1920×720).
 3. A queue holds tracks of its own account only; multi-source queues stay a future item (D84).
 4. Development uses a local Jellyfin in Docker with free test music; the user's server is for the user's own
    testing only (D85).
+
+## As built
+
+**Steps 3–4 (2026-11-17)**
+- Models live in `:core:domain` package `org.tegro.yamp.domain.media` (not `domain.model`, which `:app` still uses for
+  its storage models). `Cover` is an interface (`key`, `url(sizePx)`); Yandex's is `YandexCover` (the `%%` template).
+  `Track.title` is non-null (empty when the service sent none); the R128 gain is `Track.loudness`.
+- `MusicProvider` and its capabilities are left to step 10, where `ProviderRegistry` and `YandexProvider` give them
+  their first implementation; step 3 is the models and mappers only.
+- `StreamResolver` takes the `AccountId` as a parameter until a provider exists per account (step 10); it has three
+  calls: `cached` (a fresh link, main-thread safe — no disk), `resolve` (copy → fresh link → network) and `invalidate`.
+- The engine plays only what it is handed: `playTrack(id, stream: ResolvedStream?)` — null means the warm standby or
+  the gapless arrival; without either the start fails with `EMPTY_URL` and the controller's recovery resolves again.
+  A player failing on a stream is reported as `staleStreamEvent`; the controller invalidates the link.
+- `ResolvedStream.headers` is carried but not yet applied by the engine (Yandex needs none); the Jellyfin step (23)
+  adds header-aware data sources. Yandex encraw keeps its key in the URI fragment (A3); `decryption` only marks it.
+- The reserve's "ordinary stream" lookup (`resolveOrdinaryStream`) and quality/offer details still go through
+  `TrackUrlResolver` in the controller; they move with the controller to `Track` (step 11).
+- No file stopped using DTOs in steps 3–4, so the allow-list is unchanged (47).
+
+**Steps 6–7 (2026-11-17)**
+- Early preload already ran at a track's start (`prepareStandbyWhenSettled`, upstream 1.14.3: once the current track
+  has `RESERVE_HEADROOM_MS` = 20 s in hand); step 6 adds the F4 calm window (`PlayerRepository.settled`: no preload
+  during a burst of skips), the next-track state `NextTrack` (None / Loading / Ready(onDisk) / Failed(reason), in
+  `:core:domain` `domain.player`) as `PlaybackController.nextTrack`, `NEXT` journal lines, and self-recovery: a failed
+  next track is fetched again with a fresh link when the link turns `GOOD` (D81). The engine's 60 s / 15 s
+  `prepareNextTrackEvent` stays as the fallback. Ready = a warm standby (`warmTrackId`) or the whole file on disk.
+- Step 7: `StreamCache` (Media3 `SimpleCache` in `cacheDir/stream_cache`, own LRU evictor so the limit changes live;
+  0 = off) sits **below** the decryption in `EncrawDataSourceFactory`: encrypted streams stay encrypted on disk.
+  The key comes from the provider: `ResolvedStream.cacheKey` = `account|track|codec-bitrate` (`YandexStreamResolver`),
+  set on the `MediaItem` as its custom cache key; requests without a key (copies on the device, radio) bypass it.
+  `NextTrackCacher` writes the next track in full (`CacheWriter`, one at a time, on IO); a track change cancels it
+  unless it is the track now starting; a queue change (`dropNext`) cancels it; what was written stays. The current
+  and previous tracks are cached as the players read them, so Back is instant. With no link at all the resolver falls
+  back to a stream whose bytes are all on disk (`CachedStreams`). `CACHE` journal lines (written / already on disk /
+  failed / cancelled).
+- Settings: "Stream cache" / «Кэш потока» rows in the playback-cache group (0 / 250 / 500 MB / 1 / 2 GB, default 500,
+  used size, Clear); the size applies at once.
+- Known limits: the warm standby and the writer may both fetch the next track's first seconds (the player reads past
+  spans the writer holds); with the link `NONE` the next track is not resolved (state "failed: offline" unless its file
+  is on disk — the start itself still falls back on the disk). The older road reserve (`RoadReserve`, "next tracks
+  saved ahead for a weak link") overlaps D86 in purpose; both stay, to be reconciled later.
+
+**Steps 8–9 (2026-11-17)**
+
+- The state reaches the screens through one composition local (`LocalPlaybackAux`, provided by `MainScreen`),
+  not through every screen's parameters; its default (ready, nothing loaded) keeps every existing golden as is.
+- A tap on a failed next track — Next or the car's first next-track card — drops that track's link first
+  (`dropFailedNextLink`), so the skip/pick resolves it afresh; it stays load-first (D67).
+- "Whole file on disk" for the bar: the started track came from a copy / a local file, or it was the last next
+  track reported ready on disk (`lastOnDiskId`). If the cache evicts it in between, the bar only overstates what
+  is loaded; playback is unaffected.
+- Only the first card of the car's "Next" row shows the state (the next track); the others stay plain.
+- Split panes: covered by the 1280-wide head-unit golden (`next_car_split_loading`); the slim pane has no
+  separate golden.
+- Android Auto: Next stays enabled; its template has no place for the state.
+
+**Step 10 (2026-11-17)**
+
+- `MusicProvider` carries `account`, `streams` and three capabilities so far — `Library` (liked tracks, playlists,
+  a playlist's tracks), `Search`, `Catalog` (album, artist page). Favorites, playlist editing, radio, home and
+  folders are added with the screens that use them (steps 12–16), not ahead of them.
+- `StreamResolver` lost its account parameter: one resolver per account. The controller asks
+  `StreamResolvers.forAccount(account)` (the `ProviderRegistry`); null keeps today's meaning — the account context
+  at the moment of the call — so stream-cache keys and link lookups are unchanged.
+- `YandexProvider` wraps the repositories as they are; each gained an optional `account` (default: the context, so
+  every existing caller behaves as before). Exceptions become `ProviderError` once, at the provider (D73).
+- Networking base: `@ProviderBaseClient` — the shared pool, timeouts and logging without credentials or cache;
+  `YandexClients` builds on it and adds its account's `AuthInterceptor` first, as before.
+- Providers exist for every account in `allAccounts` (sign-in order), hidden test accounts included.
+
+**Step 11 — blocked by the order of work.** The controller's queue, wave/radio, reserve and History all hand
+`TrackDetailsDto` to the screens (`currentTrack`, `currentPlaylist`, `waveSeed`, `wavePreview`) and take DTOs from
+them (`playFrom`, `addToQueue`, …); the queue bridge stores the full DTO JSON because the screens need fields a
+`Track` does not carry. Moving the controller first would need a lossy `Track → DTO` mapping back to the screens.
+Proposed order: steps 12–15 first — each screen reads `Track` mapped from the controller's DTO flows at the edge
+(`toTrack()`, always possible) — then step 11 flips the controller and drops those edge mappings.
+
+**Steps 12–13 (2026-11-17)**
+
+- Screens take `Track` / `Playlist`; the edge maps the controller's and the repositories' service objects
+  (`toTrack()`, `toPlaylist()`) — `MainScreen` (mini and full player, cover prefetch), `MainTabs` (car screen),
+  `NowPlayingWidget`, `PlaylistsViewModel`. Callbacks that need the service object back (the car's like, dislike,
+  radio) look it up among the shown service tracks by id; edits take a `Playlist` and the view model finds the
+  service's entry by ref (it keeps the opened playlist's revision privately to reload on a change).
+- `presentation/common/TrackUi.kt` reads what screens used off the DTO: `id` (from the ref text, "" without one),
+  `isRadio` (`MediaRef.PROVIDER_RADIO`, now in `:core:domain`), `coverUri` (the cover key = the old template),
+  `artistNames`. A missing title is "" on `Track`: the screens show their placeholder for "" as they did for null.
+- Step 13 moves the playlist entity only. Track rows (`TrackItem`) stay on the service track: the track menu acts on
+  it (like, queue, playlist add, radio), and moves with step 15; `LibraryScreen`, `PlaylistScreen`,
+  `TrackContextMenu`, `MainDialogs` therefore stay on the allow-list for now.
+- DTO allow-list 47 → 40; no golden changed.
+
+**Steps 14–15 (2026-11-17)**
+
+- Search, Home, the catalog pages, History, Library and playlist rows, the track menu and the queue switcher's
+  "Add to queue…" / "Start radio" requests take `Track` / `Artist` / `Album`; the tab wrappers (`MainTabs`,
+  `MainScreen`) and the view models map at the edge. `queueShelfOf` / `shelfEntryOf` read the controller's queue and
+  moved from `HomeScreen` to `MainTabs`; the artist page is `ArtistPage(artist, popularTracks, albums)` in
+  `CatalogViewModel` (albums without an id are dropped there, as the screen did).
+- Actions on a shown model need the service object back: `ServiceTracks` (`data/provider/yandex`) remembers every
+  mapped track, artist and album by ref (LRU 5000); `toServiceTrack()` finds it, or rebuilds a service track from the
+  model on a miss. `Track` entry points sit on `MainViewModel`, `PlaylistsViewModel`, `CatalogViewModel` and the
+  controller (`addToQueue`, `createQueueWith`, `startRadioFrom`) — the queue package keeps depending on the controller
+  only. The bridge goes with step 11 (controller on `Track`) and step 17.
+- Edge cases that change no golden: a title the service sent as "" now shows the placeholder (as `null` did); search
+  artists without an id are no longer listed (they could not be opened); an album id "0" no longer opens a page.
+- DTO allow-list 40 → 27; no golden changed.
+
+**Step 11 — 11a (2026-11-17)**
+
+- The controller's screen-facing state is neutral: `currentTrack`, `currentPlaylist`, `waveSeed`, `wavePreview`
+  and `trackWaveStarted` carry `Track`, mirrored in the same moment as the service values they come from (the
+  queue list is mapped only when its list object changes). The service values stay as `serviceTrack`,
+  `serviceQueue`, `serviceWaveSeed` for the data layer (the media session, the widget updater, the reserve gate)
+  and the tests.
+- Every entry point a screen uses takes `Track` (`playTrack`, `playFrom`, `playNowKeepQueue`, `enqueueNext`,
+  `addToEnd`, `playNextTracks`, `startTrackWave`, `addToQueue`, `createQueueWith`, `startRadioFrom`); so do the
+  reactions (`TrackReactions.toggleLike/dislike`) and `UserPlaylistsRepository.addTrack`. `MainViewModel`,
+  `SearchViewModel`, `PlaylistsViewModel`, `CatalogViewModel`, `MainScreen`, `MainTabs` and the widget read and
+  hand back `Track` only; the car screen's lookup of the service track by id is gone. `ActiveQueue.isShownAs`
+  replaces the queue sheet's `tracks == queue` check.
+- **Not done in this step (11b/11c):** the queue store, the wave/radio sources, the reserve, downloads and History
+  still keep the service's tracks, so the controller turns a shown `Track` back into its service object at its
+  entry points through `ServiceTracks` — which therefore stays, now used only inside the data layer (capacity
+  5000 → 20000 so the longest lists a screen shows find their originals, not a rebuild).
+- DTO allow-list 27 → 23 (`MainScreen`, `MainTabs`, `MainViewModel`, `SearchViewModel` off; `CatalogViewModel`
+  keeps `ArtistBriefDto`, `PlaylistsViewModel` keeps `UserPlaylistDto` until the repositories move behind the
+  provider); no golden changed.
+
+**Step 11 — 11b/11c (2026-11-17)**
+
+- The queue holds neutral tracks: `ActiveQueue.tracks`, every `QueueManager` operation, the radio source's batches
+  and History take and give `Track`. The `tracks` table keeps its rows in the service's shape (D72, no migration):
+  `QueueTrackBridge` writes `Track.toYandexTrack()` and reads back through `toTrack()`.
+- The controller works on `Track` throughout; its state is `currentTrack`, `currentPlaylist` and `waveSeed` only
+  (the `service*` mirrors are gone; the media session, Android Auto, the widget and the tests read the same flows).
+  The few facts the player code asks a track for (`idString`, `isRadio`, `isExplicit`, `coverUri`) are read through
+  `data/player/TrackFields.kt`, under the names the service object used, so a line that also reads the wave's
+  service list reads the same fact from both.
+- `ServiceTracks` (the lookup table) is removed. Where a Yandex repository or the rotor still takes the service
+  shape — likes and dislikes, adding to a playlist, the reserve's upcoming list, the wave's station switch — the
+  provider's stateless `Track.toYandexTrack()` gives it: lossless for every field the data layer reads (tested
+  round trip; only extra album entries and an artist's own cover inside a track are not carried, and nothing reads
+  them).
+- Still on the service shape, inside the provider layer, until step 17: the wave's own list and preview
+  (`WaveQueue`), the road reserve (`RoadReserve`, `ReserveKeeper`), the library and playlist repositories and their
+  caches, `PlaybackStateStore`'s snapshot and `MediaLibraryTree`'s item building — each maps at its edge.
+- DTO allow-list 23 → 19 (`ListeningHistory`, `SessionButtons`, `TrackReactions`, `QueueManager` off); no golden
+  changed; `PlaybackControllerTest` 5/5 on reruns.
+
+**Step 16 (2026-11-17)**
+
+- `ProviderComposition` (`data/provider`): the composed providers are the account context's Yandex provider (D56 —
+  several Yandex accounts never merge, one is the context) followed by other services' accounts in sign-in order
+  (none until P4); `libraries()` lists those with a Library; `search()` asks every composed provider at once and keeps
+  their order per type (`ComposedSearch` of `Sourced<T>`; `showBadges` only with ≥ 2 providers, so one provider looks
+  exactly as before). A failing provider is left out; when all fail the screen keeps what it showed (as before).
+- Search runs through the composition (`SearchViewModel.found` is a `ComposedSearch`). **Home and Library are not
+  rewired in this step:** with one provider there is nothing to compose, and their sections are Yandex-specific
+  (My Wave, hits, trends) or already per account; the Jellyfin sections arrive with P4, which wires them through
+  `ProviderComposition`.
+- FM radio is the built-in, account-less `FmRadio` source (`data/provider/radio`, D76): the stations, a station on air
+  as a `Track` (ref `radio:track:radio_<id>`, the frequency as an artist without a ref, the logo as a `FixedCover`),
+  and a `StreamResolver` returning the station's URL (never cached, D86). The controller (`playRadioStation`, station
+  stepping, the restored live station) and `MediaLibraryTree` use it; the controller no longer builds a Yandex DTO.
+
+**Step 17 (2026-11-17)**
+
+- **The DTO allow-list is empty.** Yandex-only code moved under `data/provider/yandex/` with its names kept (A3) and
+  its stored formats unchanged (D72): `network/` (`YandexMusicApi`, `StreamVariants`), `repository/` (catalog,
+  library, search, user playlists), `cache/` (`PlaylistCacheManager`, `PlaybackStateStore` — the session snapshot
+  keeps its JSON; the R8 keep rule follows the class), `queue/` (`RotorStations`, `RotorStationSource`,
+  `QueueTrackBridge`, `LegacySessionImport`), `wave/WaveQueue`, `reserve/` (`RoadReserve`, `ReserveKeeper` — the
+  reserve index keeps its JSON). What legitimately remains Yandex-shaped lives only there and in `data/dto`.
+- `CatalogViewModel` reads the provider's neutral `ArtistParts` (`toArtistParts()` in `YandexMappers`);
+  `PlaylistsViewModel` edits by `MediaRef` through `YandexPlaylists` (entries carry the service revision that says
+  when to reload); `MediaLibraryTree` builds its items from `Track`.
+- `TrackUrlResolver` is `internal`; the classes taking it (`PlaybackController`, `YandexStreamResolver` and its
+  factory) have internal constructors and the binding is internal.
+- `PlayerRepository` (domain) has no ExoPlayer types: the media session reads the players through `SessionPlayers`
+  (`data/player`), bound to the same engine instance (`PlayerModule`); `FakePlayerRepository` implements both.
+- Not done: the controller still reads stream facts (quality, offered variants, playable copies, the reserve's
+  ordinary stream) through `TrackUrlResolver` directly — Yandex-specific; it moves behind the provider when a second
+  provider's equivalents exist (P4).
+- No golden changed; 635 unit tests; `PlaybackControllerTest` 5/5 on reruns; checkpoint build b85.
+
