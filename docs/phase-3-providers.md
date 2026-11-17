@@ -623,3 +623,58 @@ there); `docs/multi-source-player.md` Phase 3 / 3b / 4 marked implemented; `kb/a
 Instant Mix P6); Library rows merged with badges (the per-account sections stay); Jellyfin downloads and offline play of
 a fully cached Jellyfin track; likes / favourites for Jellyfin (P5); Android Auto's browse tree not verified on a device.
 
+### After stage 2 — first start and Jellyfin only (as built, 2026-11-17)
+
+Canvas `wl-welcome`, `wl-welcome-head`, `wl-jf-home`, `wl-jf-library`, `wl-jf-car`.
+- **First start:** with no account of any provider the app opens `WelcomeScreen` (Yandex Music / Jellyfin) instead of
+  Yandex's sign-in; Yandex opens the existing `auth` route (Back returns to the chooser), Jellyfin the existing
+  sign-in sheet over it. The app is entered on *any* signed-in account (`MainViewModel.hasAnyAccount`, from
+  `SignedInAccounts`); signing out the last account of every provider returns to the chooser. `isAuthorized` stays
+  Yandex's (likes sync, My Wave, the reserve, wave/radio refills).
+- **Jellyfin only:** the first Jellyfin account's default queue becomes the active one when none is
+  (`PlaybackController.ensureDefaultQueue`); at start, a restore with no active queue and no Yandex account enters it
+  (`leaveStrandedQueue`). Sign-out fallback is provider-wide (`SignOutPlan.fallbackAny`, `fallbackAccount`): a
+  staying Yandex account first, else the first staying Jellyfin account — used by Yandex and Jellyfin sign-outs and
+  the stranded-queue check; a Jellyfin fallback gets its default queue, never a My Wave queue.
+- **Yandex-only UI hidden without a Yandex account:** Library's Listen/Shuffle, Liked, Downloaded and Playlists rows
+  (History and the Jellyfin sections stay); the car's My Wave / Favourites / Hits / Downloaded tiles (Radio stays);
+  Android Auto's My Wave / Liked / Downloaded / Playlists (Radio and Queues stay). Like/dislike are never offered for a
+  Jellyfin track in the media session (notification, car) and the custom commands refuse it; the car's
+  wave-by-track pill is hidden for it. "Music on launch" and Bluetooth autoplay run with any account (My Wave only
+  with Yandex).
+- **Empty queue:** Home shows "The queue is empty — Add music from Library or Search" with buttons to both tabs in
+  place of the track and shelf (`EmptyQueueCard`).
+- **Next after a skip back (b85 checkpoint):** on every next-track change the stream cache is asked first
+  (`StreamCache.cachedState` by "account|track|"): all of it on disk → ready (on disk) at once; at least its first
+  512 KB → ready, the preload fills the rest; nothing → as before. The warm player still waits for the calm window.
+- **Not changed:** the first tab is still labelled «Волна» with Jellyfin only; Settings → Accounts' profile card with
+  no Yandex account was not reworked; search with Jellyfin only was not smoke-tested.
+
+### After stage 2 — album / artist actions (as built, 2026-11-17)
+
+- One menu for an album or an artist (canvas `am-*`): a long press in search (album and artist tiles, the best-result
+  card), on the artist page's albums row and in Jellyfin's album / artist lists, and the ⋮ of the album and artist
+  pages (both providers; tests without the menu keep the old ⋮). Rows: Play now · Play next · Add to end ·
+  Add to queue… · Start radio (Yandex `album:` / `artist:` stations only). "Play next" and "Add to end" show only
+  when the active queue can take the tracks (`MediaRef.fitsQueueOf`, D84); otherwise "Add to queue…" offers the
+  item's own account's queues. `presentation/media/` (`MediaTarget`, `MediaActionsViewModel`, `MediaMenuHost`).
+- Tracks load through the item's own account (Yandex: the context account; Jellyfin: an account on its server) and
+  go to the queue in one operation; a journal `TAP` line per action ("add_to_end artist: 155 tracks").
+- An artist asks first: all albums in release order (proper albums; singles and compilations with a switch, shown
+  only when there are any) or the popular tracks, with live counts. `Album.kind` (ALBUM / SINGLE / COMPILATION) is
+  new in `:core:domain`; Yandex fills it from the album's `type` and gives the compilations the artist appears on
+  (`alsoAlbums`, not shown on the page). Jellyfin has no release types: every album counts as an album, the switch
+  doesn't show; its "popular" is the artist's most played tracks (the server's play count), as on its artist page.
+- The car's album long press isn't built: the car screen lists no albums yet.
+- Jellyfin only: the first tab reads "Home" (`LocalWaveTab`), the Settings card shows the active queue's Jellyfin
+  account and its server line.
+
+### After stage 2 — smooth seek / play / pause (as built, 2026-11-17)
+
+- Tied to the crossfade length X (off → no fades): pause fades out over X/2 and reports "paused" at once (a play during
+  the fade rises back from the current level); play/resume — including a restored track started from silence, a media
+  button, Bluetooth autoplay and the resume after a focus loss — rises over X/2 once the player sounds; a seek fades
+  out over X/3, jumps, rises over 2X/3 (a second seek while fading out only moves the target; one during the rise
+  jumps again and rises on from the current level). A focus loss, a call and "no data" pause at once; skips and picks
+  keep their 150 ms fade and load-first. Journal: `FADE pause|play|seek N ms`. Under Poweramp DVC the per-player
+  volume (so these fades) doesn't apply, as with the crossfade.

@@ -481,7 +481,7 @@ Workaround now: Poweramp Equalizer → Known Players → YAMP → "Fade" off.
       possibly v0.4.0; then Stage 2 (P4 Jellyfin)
 ## Stage 1 checkpoint findings (b85, for the next build)
 
-- [ ] After a skip back, Next shows "loading" although the next track (the one just left) is on disk or buffered —
+- [x] After a skip back, Next shows "loading" although the next track (the one just left) is on disk or buffered —
       on every next-track change check the stream cache first: fully cached → READY at once; partly → LOADING and
       the preload only fills the rest (don't wait for the calm window / 20 s buffer in that case).
 - [ ] Observe: YouTube Music started by itself while YAMP played (2026-11-17 08:28, phone SM-F946B); Android's
@@ -550,10 +550,40 @@ Workaround now: Poweramp Equalizer → Known Players → YAMP → "Fade" off.
 
 ## Album / artist actions (user, 2026-11-17; canvas first)
 
-- [ ] Menu for an album or artist: Play now (replace queue) · Play next · Add to end · Add to queue… (picker of
+- [x] Menu for an album or artist: Play now (replace queue) · Play next · Add to end · Add to queue… (picker of
       the account's queues + "New queue") · Start radio (Yandex `album:`/`artist:` stations; hidden for Jellyfin
       until P6). From a long press wherever albums/artists are listed (search, Library, catalog, artist page) and a
-      ⋮ button in the album and artist page headers; car: long press.
-- [ ] Artist "add" asks first, with a choice: all albums in release order / popular tracks; singles and
+      ⋮ button in the album and artist page headers. (2026-11-17, b103)
+- [ ] Car: long press on an album tile — the car screen lists no albums today (only sources and the Next row), so
+      there is nothing to hold; comes with car browsing.
+- [x] Artist "add" asks first, with a choice: all albums in release order / popular tracks; singles and
       compilations as an option; counts shown (e.g. «12 альбомов · 147 треков»).
-- [ ] Canvas boards approved before code.
+- [x] Canvas boards approved before code (`9e15022`).
+- [x] Jellyfin only: the first tab reads "Home" / «Главная»; the Settings card shows the Jellyfin account.
+- [ ] Seen in the smoke test, not fixed: with Jellyfin only, the Search page's start (charts) stays "loading" —
+      it is Yandex's discovery list.
+
+
+## First start with a provider choice; Jellyfin only (2026-11-17, branch `feature/album-artist-menu`)
+
+- [x] Welcome chooser (Yandex Music / Jellyfin) instead of forced Yandex sign-in; the app opens on any account
+- [x] Jellyfin only: its default queue active at start/sign-in; provider-wide sign-out fallback; Yandex-only rows,
+      tiles, Android Auto nodes and session like/dislike hidden; empty-queue card on Home
+- [x] Next ready from disk after a skip back (stream cache asked first)
+- [ ] Open: first tab label «Волна» with Jellyfin only; Settings profile card without Yandex; search smoke with
+      Jellyfin only
+
+
+## Smooth seek / play / pause, tied to the crossfade length (user, 2026-11-17)
+
+- [x] One rule, from the crossfade setting (interval X); crossfade off → no fades at all:
+      seek = fade-out X/3 → jump → rise 2X/3 (3 s: 1 s + 2 s); play/resume = rise X/2; pause = fade-out X/2.
+      The user shortens X if it feels slow.
+- [x] Exceptions (keep): skip/pick fade 150 ms and load-first; a focus loss or a call pauses immediately;
+      resume after a focus loss uses the play rise.
+- [x] Done 2026-11-17 (b105): engine `pauseSmoothly` / `resumeSmoothly` / `seekSmoothly` / `riseOnNextStart`
+      (`PlayerRepositoryImpl`), controller user/media-button pause smooth, focus loss / "no data" plain; journal
+      `FADE pause|play|seek N ms`; 7 engine + 2 controller tests.
+- [ ] Note: with Poweramp DVC on, per-player volume (and so these fades) don't apply — same as the crossfade.
+- [ ] Bug (found on b105): the full player shows like/dislike for a Jellyfin track — hide as on Home/car (`Track.supportsLikes`).
+- [ ] Search with Jellyfin only: the empty page stays on "loading" (starter charts are Yandex-only) — show a neutral empty state.
