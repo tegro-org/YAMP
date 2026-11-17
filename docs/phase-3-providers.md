@@ -158,11 +158,12 @@ D63's My Wave; re-sign-in of the same server + user restores it), and the accoun
 | D78 | Jellyfin account = server + user (`jellyfin:<serverId>/<userId>`); a duplicate sign-in is refused; refs name the server (`jellyfin@<serverId>:<kind>:<itemId>`) — revises C1's known limit. |
 | D79 | Jellyfin streams via `/Audio/{id}/universal` with device capabilities (codecs, max bitrate per link, max sample rate = mixer rate); token in a header; covers via `Images/Primary` with size and tag. |
 | D80 | P3b: the next track is resolved and prepared a few seconds after the current one starts (on the D74 path, the controller owns it); its state (ready / loading / failed) is part of the player state shown by Next. |
-| D81 | P3b: Next is never disabled; on loading/failed a tap retries under the load-first rule (D67); a failed next-track load retries by itself with a fresh link on `LINK NONE → GOOD`; the progress bar shows the buffered position. |
+| D81 | P3b: Next is never disabled; on loading/failed a tap retries under the load-first rule (D67) — the tap target is the **whole Next button** and, in the car, the **whole next-track artwork**; the badge/ring is only an indicator, never a separate small target; a failed next-track load retries by itself with a fresh link on `LINK NONE → GOOD`; the progress bar shows the buffered position. |
 | D82 | Step 1 moves the existing pure `domain/` code (refs, queue model, accounts) into `:core:domain` along with the new interfaces; B1 becomes compiler-enforced. |
 | D83 | A Jellyfin account gets an empty default queue at sign-in, its entry point in the switcher (like D63); re-sign-in of the same server + user restores it with the account's other queues (D62). |
 | D84 | A queue holds tracks of its own account only: "Add to queue" offers only queues of the track's account; an entry always resolves through its queue's account. Multi-source queues (D30) stay a future item, not in this milestone. |
 | D85 | Development and emulator tests run against a local Jellyfin in Docker with free test music (`scripts/jellyfin-dev/`, no secrets); the user's own server is used only by the user; no server URL or credentials in the repo. |
+| D86 | P3b: an on-disk stream cache (Media3 `SimpleCache` + `CacheDataSource`, per-provider data-source layer) keyed by account + track + quality, LRU, size limit in Settings (default 500 MB), separate from downloads/liked; the next track is fetched fully to disk early, the previous one stays cached. |
 
 ## Order of work
 
@@ -184,46 +185,54 @@ unchanged**; P3b changes only the goldens of the screens it redesigns. Sizes: S 
    phone player, car screen, car next-track artwork; reviewed and **approved by the user before UI code**.
 6. Early preload: the next track is resolved and prepared a few seconds after the current one starts (D80);
    next-track state exposed in the player state; journal lines. (M — engine, own ride.)
-7. Next never disabled: the UI per the canvas; a tap on loading/failed retries under load-first (D67, D81);
-   self-recovery of a failed next-track load on `LINK NONE → GOOD` with a fresh link. (M.)
-8. Buffered progress in the progress bars (phone, car); Android Auto as its template allows. (S.)
+7. **On-disk stream cache** (D86, KB `kb/players/00-conclusions-and-ideas.md` §2.4): Media3 `SimpleCache` +
+   `CacheDataSource` in the per-provider data-source layer (the D74 path); key = account + track + quality; LRU
+   eviction; size limit in Settings (default 500 MB), separate from downloads/liked (unchanged). The preloaded
+   next track is downloaded **fully** to disk early (Next is instant even after a dropout; FLAC on weak links
+   gains most); the previous track stays on disk (back is instant); a mid-track dropout is covered once the rest
+   is cached. Canvas impact: one Settings row (cache size). (M — engine, own ride.)
+8. Next never disabled: the UI per the canvas (`Design/yamp/buffering.jsx`, approved 2026-11-16); a tap on
+   loading/failed retries under load-first (D67, D81) — the target is the whole Next button and, in the car, the
+   whole next-track artwork (the ring/badge is only an indicator); self-recovery of a failed next-track load on
+   `LINK NONE → GOOD` with a fresh link. (M.)
+9. Buffered progress in the progress bars (phone, car); Android Auto as its template allows. (S.)
 
 **P3 — invisible, continued**
-9. `MusicProvider` + `ProviderRegistry` + networking base; `YandexProvider` over the repositories. (M.)
-10. Controller and queue on `Track` — 10a controller/bridge, 10b wave/radio, 10c reserve/downloads/History. (L.)
-11. Player UI, mini player, queue sheet, widget, car screen. (M.)
-12. Library and playlists. (M.)
-13. Search through the composed path. (M.)
-14. Home, catalog, History, queues, dialogs, context menu. (L.)
-15. Composition of Home/Library sections + FM radio source. (M.)
-16. Cleanup: allow-list empty, `TrackUrlResolver` internal, `PlayerRepository` without `ExoPlayer`. (S.)
+10. `MusicProvider` + `ProviderRegistry` + networking base; `YandexProvider` over the repositories. (M.)
+11. Controller and queue on `Track` — 11a controller/bridge, 11b wave/radio, 11c reserve/downloads/History. (L.)
+12. Player UI, mini player, queue sheet, widget, car screen. (M.)
+13. Library and playlists. (M.)
+14. Search through the composed path. (M.)
+15. Home, catalog, History, queues, dialogs, context menu. (L.)
+16. Composition of Home/Library sections + FM radio source. (M.)
+17. Cleanup: allow-list empty, `TrackUrlResolver` internal, `PlayerRepository` without `ExoPlayer`. (S.)
 
 **Checkpoint** — debug build, rides with Diag, fixes; possibly release **v0.4.0**. Phase 4 starts only after it.
 
-### Stage 2 — Phase 4 Jellyfin (visible from step 20) → v0.5.0
+### Stage 2 — Phase 4 Jellyfin (visible from step 21) → v0.5.0
 
-17. **Local test server**: `scripts/jellyfin-dev/` — docker-compose for Jellyfin, a script that fetches free test
+18. **Local test server**: `scripts/jellyfin-dev/` — docker-compose for Jellyfin, a script that fetches free test
     music (public-domain / CC0 sets) into a gitignored folder, setup notes (test user, Quick Connect on, HTTPS with
     a local certificate the emulator trusts); no secrets, no server URLs. (S.)
-18. `:provider:jellyfin` skeleton: API client, auth header, `/System/Info/Public`, DTOs, mappers; tests on
+19. `:provider:jellyfin` skeleton: API client, auth header, `/System/Info/Public`, DTOs, mappers; tests on
     JSON recorded from the local Docker server (D85). (M.)
-19. **Canvas**: Jellyfin sign-in (password + Quick Connect), provider chooser in Accounts, Jellyfin sections and
+20. **Canvas**: Jellyfin sign-in (password + Quick Connect), provider chooser in Accounts, Jellyfin sections and
     badges on Home/Library/Search — reviewed and approved by the user before UI code.
-20. Sign-in + accounts: password and Quick Connect, duplicate refusal, per-account database, default queue,
+21. Sign-in + accounts: password and Quick Connect, duplicate refusal, per-account database, default queue,
     sign-out per D62. (M.)
-21. Library: albums, artists, playlists, genres, their pages, paging. (L.)
-22. Streaming and covers: `JellyfinStreamResolver`, image auth for the server host only, downloads. Ride with
+22. Library: albums, artists, playlists, genres, their pages, paging. (L.)
+23. Streaming and covers: `JellyfinStreamResolver`, image auth for the server host only, downloads. Ride with
     the unit. (M.)
-23. Search merged with badges; Home/Library composition with two providers; car home and Android Auto. (M.)
-24. Queues and History with Jellyfin tracks: "Add to queue" offers only the track's account's queues (D84),
+24. Search merged with badges; Home/Library composition with two providers; car home and Android Auto. (M.)
+25. Queues and History with Jellyfin tracks: "Add to queue" offers only the track's account's queues (D84),
     binding, unavailable when signed out. (M.)
-25. Play reporting `/Sessions/Playing*` (optional). (S.)
-26. Docs/KB as built, release notes, **release v0.5.0**.
+26. Play reporting `/Sessions/Playing*` (optional). (S.)
+27. Docs/KB as built, release notes, **release v0.5.0**.
 
 ## Risks
 
 - **Upstream ports (A3):** hot files wrapped, mappers absorb DTO changes; UI ports are reimplemented anyway.
-- **Engine regressions** (steps 4, 6, 10, 22): the playback-stability fixes are fresh — scripted-player tests plus a
+- **Engine regressions** (steps 4, 6, 7, 11, 23): the playback-stability fixes are fresh — scripted-player tests plus a
   unit ride with Diag after each engine step.
 - **Head-unit performance:** map lists lazily per page/row, never on the main thread; measure list open times.
 - **Behaviour hidden in DTOs** (availability, `albums[0]`, cover templates) → mappers tested on real JSON.

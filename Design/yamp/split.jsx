@@ -18,7 +18,7 @@ function SplitWideQueues() {
 }
 
 // Slim pane: everything in one column, like the app's portrait car layout.
-function NarrowCarBody({ dim, pillLead }) {
+function NarrowCarBody({ dim, pillLead, nextState, played = 0.3, buffered }) {
   const t = useT();
   return (
     <React.Fragment>
@@ -43,10 +43,12 @@ function NarrowCarBody({ dim, pillLead }) {
         <GlassCircle icon="heart_broken" size={64} iconSize={30} />
         <Knob icon="skip_previous" size={88} />
         <SpectrumRing size={196} knob={140} />
-        <Knob icon="skip_next" size={88} />
+        {nextState ? <NextKnob state={nextState} size={88} /> : <Knob icon="skip_next" size={88} />}
         <GlassCircle icon="favorite" size={64} iconSize={30} color={HF.love} />
       </div>
-      <Slider value={0.3} style={{ position: 'absolute', left: 28, right: 28, top: 506 }} />
+      {buffered != null
+        ? <BufferSlider played={played} buffered={buffered} style={{ position: 'absolute', left: 28, right: 28, top: 506 }} />
+        : <Slider value={0.3} style={{ position: 'absolute', left: 28, right: 28, top: 506 }} />}
       {/* Four tiles fit; the fifth peeks in to show that the row scrolls. */}
       <div style={{ position: 'absolute', left: 28, right: 0, bottom: 24, overflow: 'hidden' }}><CarTileRow /></div>
       {dim && <Scrim opacity={0.6} />}

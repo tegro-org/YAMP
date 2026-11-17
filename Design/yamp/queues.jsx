@@ -302,7 +302,9 @@ function CarTileRow({ count = 5, active = 'folders', style }) {
 // Car mode. `w` = pane width (1920 full screen, 1280 wide split pane). `far` replaces the far column.
 // `weak` = the connection is weak or lost: the radio pill gives way to "play downloaded".
 // `pillLead` (Phase 2a, accounts.jsx): the account marker inside the active-queue pill (> 1 account).
-function CarHome({ dim, w = 1920, far, weak, activeTile, pillLead }) {
+// `nextState` / `played` / `buffered` (Phase 3b, buffering.jsx): Next knob state, buffered part of the slider, the
+// first next-track artwork's state. Omitted = the boards as before.
+function CarHome({ dim, w = 1920, far, weak, activeTile, pillLead, nextState, played = 0.3, buffered }) {
   const t = useT();
   const wide = w >= 1900, panel = wide ? 760 : 700;
   return (
@@ -327,10 +329,12 @@ function CarHome({ dim, w = 1920, far, weak, activeTile, pillLead }) {
           <GlassCircle icon="heart_broken" size={76} iconSize={34} />
           <Knob icon="skip_previous" size={100} />
           <SpectrumRing size={236} knob={168} />
-          <Knob icon="skip_next" size={100} />
+          {nextState ? <NextKnob state={nextState} size={100} /> : <Knob icon="skip_next" size={100} />}
           <GlassCircle icon="favorite" size={76} iconSize={34} color={HF.love} />
         </div>
-        <Slider value={0.3} style={{ marginTop: 18, width: panel - 60 }} />
+        {buffered != null
+          ? <BufferSlider played={played} buffered={buffered} style={{ marginTop: 18, width: panel - 60 }} />
+          : <Slider value={0.3} style={{ marginTop: 18, width: panel - 60 }} />}
       </div>
       <CarTileRow active={activeTile} style={{ position: 'absolute', left: 48, bottom: 28 }} />
       {/* far column */}
@@ -343,8 +347,8 @@ function CarHome({ dim, w = 1920, far, weak, activeTile, pillLead }) {
           <div style={{ position: 'absolute', left: wide ? 980 : 860, top: wide ? 96 : 120 }}>
             <Cover size={wide ? 320 : 300} hue="amber" radius={36} style={{ boxShadow: '0 0 90px rgba(224,160,80,0.45)' }} />
           </div>
-          {wide && <CarNext style={{ position: 'absolute', left: 1360, top: 110, width: 500 }} />}
-          {!wide && <CarNext rows={2} compact style={{ position: 'absolute', left: 860, top: 452, width: 380 }} />}
+          {wide && <CarNext firstState={nextState} style={{ position: 'absolute', left: 1360, top: 110, width: 500 }} />}
+          {!wide && <CarNext rows={2} compact firstState={nextState} style={{ position: 'absolute', left: 860, top: 452, width: 380 }} />}
         </React.Fragment>
       )}
       {dim && <Scrim opacity={0.6} />}
@@ -352,14 +356,16 @@ function CarHome({ dim, w = 1920, far, weak, activeTile, pillLead }) {
   );
 }
 const CAR_NEXT = [['Shine On You Crazy Diamond', 'Pink Floyd', 'amber'], ['Дороги', 'Мельница', 'green'], ['Comfortably Numb', 'Pink Floyd', 'violet']];
-function CarNext({ rows = 3, compact, style }) {
+function CarNext({ rows = 3, compact, firstState, style }) {
   const t = useT();
   return (
     <div style={style}>
       <div style={{ ...HFType.sectionCaps, fontSize: 15, color: HF.text2, marginBottom: compact ? 6 : 12 }}>{t('Next', 'Далее')}</div>
-      {CAR_NEXT.slice(0, rows).map(([a, b, hue]) => (
+      {CAR_NEXT.slice(0, rows).map(([a, b, hue], i) => (
         <div key={a} style={{ display: 'flex', alignItems: 'center', gap: 16, height: compact ? 76 : 92 }}>
-          <Cover size={compact ? 60 : 72} hue={hue} radius={16} />
+          {i === 0 && firstState
+            ? <NextCover state={firstState} size={compact ? 60 : 72} hue={hue} radius={16} />
+            : <Cover size={compact ? 60 : 72} hue={hue} radius={16} />}
           <div style={{ minWidth: 0 }}>
             <div className="hf-ellipsis" style={{ fontSize: compact ? 21 : 24, fontWeight: 700 }}>{a}</div>
             <div style={{ fontSize: compact ? 16 : 18, color: HF.text2 }}>{b}</div>

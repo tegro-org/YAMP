@@ -36,6 +36,7 @@
   <script src="yamp/history.jsx" type="text/babel"></script>
   <script src="yamp/radio.jsx" type="text/babel"></script>
   <script src="yamp/accounts.jsx" type="text/babel"></script>
+  <script src="yamp/buffering.jsx" type="text/babel"></script>
   <script src="yamp/folders.jsx" type="text/babel"></script>
   <script src="yamp/split.jsx" type="text/babel"></script>
   <script src="yamp/signin.jsx" type="text/babel"></script>
@@ -86,6 +87,11 @@
             { id: 'q-delete', label: 'Delete queue · confirm', ...sz(P), el: <PhoneQueueDelete /> },
             { id: 'q-player', label: 'Player · track list of the active queue → Queues', ...sz(P), el: <PhonePlayerQueue /> },
             { id: 'ac-player', label: 'Player · 2 accounts: the queue header carries the account', ...sz(P), el: <AcPhonePlayerQueue /> },
+            { id: 'nb-player-ready', label: 'Player (Phase 3b) · Next ready · buffered part ahead of the played part (D81)', ...sz(P), el: <PhonePlayerNext state="ready" /> },
+            { id: 'nb-player-loading', label: 'Player · Next loading · ring spins; a tap waits, the current track plays on (D67, D80)', ...sz(P), el: <PhonePlayerNext state="loading" /> },
+            { id: 'nb-player-failed', label: 'Player · Next failed · dimmed + retry badge; a tap retries with a fresh link; retries by itself when the connection returns', ...sz(P), el: <PhonePlayerNext state="failed" /> },
+            { id: 'nb-player-start', label: 'Player · track start · played 0, buffered part growing', ...sz(P), el: <PhonePlayerNext state="loading" start /> },
+            { id: 'nb-mini', label: 'Mini player · Next ready / loading / failed · buffered line', ...sz(P), el: <PhoneMiniNext /> },
             { id: 'q-track-menu', label: 'Track menu · queue actions', ...sz(P), el: <PhoneTrackMenu /> },
             { id: 'q-add', label: 'Add to queue… · pick a queue', ...sz(P), el: <PhoneAddToQueue /> },
             { id: 'ac-add-grouped', label: 'Add to queue… · 2 accounts, grouped like the switcher', ...sz(P), el: <AcPhoneAddToQueue grouped /> },
@@ -96,6 +102,10 @@
           boards: [
             { id: 'qc-home', label: 'Car mode · active queue pill', ...sz(H), el: <Frame kind="head" tint="#8A5A22" glowY="40%"><CarHome /></Frame> },
             { id: 'acc-home', label: 'Car mode · 2 accounts: the pill carries the account marker', ...sz(H), el: <Frame kind="head" tint="#8A5A22" glowY="40%"><CarHome pillLead={<AcAnnaMark />} /></Frame> },
+            { id: 'nbc-ready', label: 'Car mode (Phase 3b) · Next ready · buffered part in the slider', ...sz(H), el: <CarNextState state="ready" /> },
+            { id: 'nbc-loading', label: 'Car mode · Next loading · ring on the knob and on the next track’s artwork', ...sz(H), el: <CarNextState state="loading" /> },
+            { id: 'nbc-failed', label: 'Car mode · Next failed · knob and artwork dimmed with retry; a tap retries (load-first)', ...sz(H), el: <CarNextState state="failed" /> },
+            { id: 'nbc-start', label: 'Car mode · track start · played 0, buffered part growing', ...sz(H), el: <CarNextState state="loading" start /> },
             { id: 'qc-panel', label: 'Car mode · queues panel (tap = switch)', ...sz(H), el: <CarQueuePanel /> },
             { id: 'acc-panel-grouped', label: 'Car mode · 2 accounts: queues panel grouped (scrolls)', ...sz(H), el: <AcCarPanel grouped /> },
             { id: 'acc-panel-flat', label: 'Car mode · 2 accounts: queues panel flat, markers on rows', ...sz(H), el: <AcCarPanel /> },
@@ -123,10 +133,12 @@
           subtitle: 'With the navigator beside it the unit gives YAMP either the wide pane (about 1280×720 — the car grid the app is already designed on) or the slim pane (about 640×720, one column). Exact pane sizes still to be measured on the unit.',
           boards: [
             { id: 'sw-car', label: 'Wide pane 1280×720 · car mode', ...sz(SW), el: <SplitWideCar /> },
+            { id: 'nbs-wide-loading', label: 'Wide pane · Next loading (Phase 3b)', ...sz(SW), el: <SplitWideNextState state="loading" /> },
             { id: 'sw-queues', label: 'Wide pane · queues panel', ...sz(SW), el: <SplitWideQueues /> },
             { id: 'acc-sw-grouped', label: 'Wide pane · 2 accounts: queues grouped', ...sz(SW), el: <AcCarPanel grouped kind="splitW" w={1280} /> },
             { id: 'acc-sw-flat', label: 'Wide pane · 2 accounts: queues flat', ...sz(SW), el: <AcCarPanel kind="splitW" w={1280} /> },
             { id: 'sn-car', label: 'Slim pane 640×720 · car mode', ...sz(SN), el: <SplitNarrowCar /> },
+            { id: 'nbs-slim-failed', label: 'Slim pane · Next failed (Phase 3b)', ...sz(SN), el: <SplitNarrowNextState state="failed" /> },
             { id: 'sn-queues', label: 'Slim pane · queues panel', ...sz(SN), el: <SplitNarrowQueues /> },
             { id: 'acc-sn-grouped', label: 'Slim pane · 2 accounts: queues grouped', ...sz(SN), el: <AcCarPanel grouped kind="splitN" /> },
             { id: 'acc-sn-flat', label: 'Slim pane · 2 accounts: queues flat', ...sz(SN), el: <AcCarPanel kind="splitN" /> },
