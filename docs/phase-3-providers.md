@@ -1,6 +1,7 @@
 # Phase 3 + 3b + 4 — Provider abstraction, next-track buffering, Jellyfin
 
-Status: **design, awaiting approval** (2026-11-16). Roadmap: `docs/multi-source-player.md` §Phase 3, §Phase 3b,
+Status: **implemented** — stage 1 (P3 + P3b) 2026-11-17, checkpoint build b85; stage 2 (P4) 2026-11-17, not yet
+released. Design approved 2026-11-16; what changed on the way is under "As built". Roadmap: `docs/multi-source-player.md` §Phase 3, §Phase 3b,
 §Phase 4.
 Rules: `ARCHITECTURE.md` A1–A4, B1–B4, C1–C7, D, F3; decisions D4, D10–D13, D17, D19, D21, D25, D27, D30, D31.
 
@@ -443,4 +444,182 @@ Proposed order: steps 12–15 first — each screen reads `Track` mapped from th
   ordinary stream) through `TrackUrlResolver` directly — Yandex-specific; it moves behind the provider when a second
   provider's equivalents exist (P4).
 - No golden changed; 635 unit tests; `PlaybackControllerTest` 5/5 on reruns; checkpoint build b85.
+
+
+### Stage 2 — Phase 4 (as built)
+
+**Step 18 — local test server** (`scripts/jellyfin-dev/`, 2026-11-17)
+- `docker-compose.yml` pins `jellyfin/jellyfin:12.4.20261026-211555` (server 12.4.0), port 8096, runs as the host
+  user; config, cache, media and the generated dev password live in `scripts/jellyfin-dev/data/` (gitignored).
+- `fetch-test-music.sh`: six tracks by Kevin MacLeod (incompetech.com, CC BY 4.0) as two albums — "YAMP Test MP3"
+  (MP3 as published, no art) and "YAMP Test FLAC" (FLAC 16-bit transcodes, one at 48 kHz, embedded generated cover);
+  about 55 MB. Public-domain FLAC sets on the Internet Archive were 400–700 MB per track, so FLAC is transcoded
+  for format, rate and cover coverage, not quality. Attribution in the README.
+- `setup.sh`: starts the container, waits for `/health`, finishes the wizard through the API (user `yamp-dev`,
+  password generated locally), turns Quick Connect on, adds `/media` as the "Music" library, scans; idempotent.
+  The emulator reaches it at `http://10.0.2.2:8096`. **Deviation:** plain HTTP, no local HTTPS certificate — the
+  debug build will allow clear text to `10.0.2.2` in step 21; HTTPS against a real server is the user's own test.
+
+**Step 19 — `:provider:jellyfin` skeleton** (`android/provider/jellyfin`, pure Kotlin/JVM, 2026-11-17)
+- `JellyfinApi` (Retrofit + kotlinx.serialization, like the app): `System/Info/Public`, `Users/AuthenticateByName`,
+  `Users/{id}/Items`; `JellyfinApiFactory` builds one client per server on a shared base `OkHttpClient` (C6) and
+  normalises the server URL.
+- `JellyfinAuthHeader` (`MediaBrowser Client, Device, DeviceId, Version[, Token]`) and `JellyfinAuthInterceptor`,
+  which adds it only for the server's own host and port (C6, D79).
+- DTOs for the public info, authentication, items and pages; `JellyfinRefs` (`jellyfin@<serverId>:<kind>:<itemId>`,
+  D78); `JellyfinMappers` → `Track` / `Album` / `Artist` / `Playlist` with `JellyfinCover`
+  (`Items/{id}/Images/Primary?fillWidth&fillHeight&quality&tag`, falling back to the album's image).
+- `:core:domain`: `Provider.JELLYFIN` and `AccountId.jellyfin(serverId, userId)` = `jellyfin:<serverId>/<userId>`
+  (D78) with `AccountIdTest`.
+- Tests on JSON recorded from the dev server with every id scrubbed (`src/test/resources/jellyfin/`):
+  `JellyfinAuthTest` (5), `JellyfinMappersTest` (7). `ArchitectureTest.theJellyfinModuleDependsOnlyOnTheDomainModule`
+  pins D77. CI runs `:provider:jellyfin:test` (ci and release) and detekt covers the module.
+
+**Step 21 — Jellyfin sign-in and accounts** (2026-11-17, per the approved step-20 canvas, section 9)
+- `:provider:jellyfin`: Quick Connect endpoints (`Enabled`, `Initiate`, `Connect`, `AuthenticateWithQuickConnect`) and
+  `JellyfinSignIn` — the address check (`ServerCheck`: found name + version + Quick Connect / bad address / https only /
+  unreachable / not Jellyfin), name + password, Quick Connect (code, polls every 2 s, expires after 5 min);
+  `JellyfinSignInTest` (7).
+- `:app`, `data/provider/jellyfin/`: `JellyfinAccount` (server + user, D78; token, never the password) in its own
+  Keystore-encrypted store (`JellyfinAccountStore`, duplicates refused, `JellyfinAccountStoreTest`); `JellyfinClients`
+  — one client per account on the providers' base with its own HTTP cache in `http_cache_accounts/`, the auth header
+  only for its server (C6), a stable device id; `JellyfinAccountSession` — a completed sign-in is stored, an existing
+  server + user is refused, the account's removed-name is forgotten and its default queue made (D83,
+  `QueueManager.defaultQueue`: only when the account has no queue, so a re-sign-in restores its queues); sign-out
+  hides its queues under "Removed accounts" (D62), drops the token and the cache, and leaves its active queue for the
+  default Yandex account.
+- `SignedInAccounts` lists every provider's accounts for markers and groups (switcher, History, car, Android Auto);
+  `AccountContext.signedInAnyProvider` keeps a Jellyfin queue from being treated as a removed account's at start. The
+  context account (Home, likes, wave) stays Yandex-only until step 24.
+- UI: "Add account" → chooser (Yandex / Jellyfin) from Settings and from the accounts dialog; the sign-in sheet
+  (`JellyfinSignInSheet`, address check states, Quick Connect / name + password, "Already added"); Jellyfin rows in the
+  accounts dialog with sign-out. EN/RU strings. 11 new goldens (`jellyfin_*`), no existing one changed.
+- Debug builds only: `src/debug/res/xml/network_security_config.xml` allows plain HTTP to `10.0.2.2` / `localhost` for
+  the local test server; release stays HTTPS-only.
+- Deviation: the per-account Room database (D72) comes with the library in step 22 — step 21 has nothing to store in it;
+  the account's HTTP cache is its own from now.
+
+**Step 22 — Jellyfin library** (2026-11-17, per the step-20 canvas, sections 11b and 13)
+- `:core:domain`: `Genre`; the `Browse` capability (paged albums, artists, genres, playlists, a genre's albums, and the
+  library's counts); `Catalog.playlist` (default: not found — Yandex keeps its own playlist screen);
+  `MusicProvider.reachable` (null for Yandex).
+- `:provider:jellyfin`: `JellyfinLibrary` — the lists page by 100 (`Page.Cursor` = the next start index), the album page
+  (tracks in disc/track order), the artist page (10 most played tracks, albums newest first), the playlist page (playlist
+  order) and the favourite tracks for `Library.likedTracks`. Every answer goes to a `JellyfinListCache`; on a network
+  error or timeout the last visit is served from it and `reachable` turns false; a refusal (401, 404…) is an answer and
+  is not served from the cache. Errors map to `ProviderError` at the module boundary (D73).
+- `:app`: `JellyfinProvider` (Library, Catalog, Browse, `reachable`; no streams before step 23 — the resolver answers
+  "unavailable"); `JellyfinCacheDatabase` per account (`jellyfin-<server>-<user>.db`, table `cached_lists`, schema 1
+  exported), deleted on sign-out with the provider and the HTTP cache. `ProviderRegistry.provider()` covers Jellyfin;
+  `all()` stays Yandex-only until step 24 composes Home, Library and Search.
+- UI: each Jellyfin account adds a section to the Library tab (its name; Albums, Artists, Playlists, Genres with counts).
+  The lists and pages live on the catalog stack (`CatalogPage.Browse` / `.Playlist`, Album / Artist with an account), so
+  Back works as for Yandex pages; lists load the next page near their end. A page served from the cache shows the
+  "isn't reachable" banner with Retry and asks again every 15 s while it is on top.
+- Not yet (by plan): covers (the `Cover` key is not a URL until step 23's image path), playback (Play on a Jellyfin page
+  does nothing until step 23), likes and the track menu on Jellyfin rows (hidden: P5 / step 25), merged Library rows
+  with provider badges (step 24).
+- Dev server: `setup.sh` creates "YAMP Test Playlist" (4 tracks). Its genres come from the server's genre list but no
+  test item carries them, so a genre's album list is empty there — the query (`GenreIds` on albums) is the one
+  Jellyfin's web client uses.
+- 6 new goldens (`jellyfin_library_rows`, `jellyfin_browse_albums`, `_artists`, `_genres`, `jellyfin_album_page`,
+  `jellyfin_page_offline`); no existing golden changed. 659 app tests + module tests pass; smoke on the AVD (b92):
+  rows with counts, albums, album and artist pages, the playlist, genres, the banner with the server stopped.
+
+**Step 23 — Jellyfin streaming and covers** (2026-11-17)
+- `:provider:jellyfin`: `JellyfinStreamResolver` (D79) — `Audio/{id}/universal` with `UserId`, `DeviceId`,
+  `Container` (as-is: `flac,mp3,aac,m4a|aac,ogg|vorbis,oga|vorbis,opus,webm|opus,wav`; "compatible" sound: `mp3`),
+  `MaxStreamingBitrate` (as-is: no real cap; compatible: 320 kbit/s), `MaxSampleRate` = the device mixer's rate,
+  transcoding to MP3 over plain HTTP, `EnableRedirection=false`. The token goes in `ResolvedStream.headers`
+  (`Authorization: MediaBrowser … Token`), never in the URL. Cache key `account|item|direct` or `…|mp3-320`. A link
+  stays until `invalidate`; no token → `Unauthorized`. `JellyfinStreamResolverTest` (6).
+- `JellyfinCover.key` is now the image URL with a `{px}` placeholder (the same for every size, so the image cache keys
+  by it); the app's `toCoverUrl` fills the size in. It also survives the queue's Yandex-shaped track rows (below).
+- `:app`: headers applied in the shared HTTP source — `StreamHeaders` (by the stream's exact URL; the engine and the
+  next-track writer register what they are handed; every other URL, host and redirect target gets nothing; Yandex
+  streams carry none and are unchanged), wrapped into `EncrawDataSourceFactory.httpFactory()` below the disk cache.
+  `StreamHeadersTest` (3).
+- Covers: `JellyfinImageAuth` adds an account's header to the image loader's requests for that account's server host
+  and port only (Coil's own OkHttp client, `YandexMusicApp.newImageLoader`).
+- `ProviderRegistry` builds each Jellyfin provider with its resolver (profile: `SoundMode` → as-is / compatible,
+  `FixedOutputRate.mixerRateHz`).
+- Controller: the playback account of a Jellyfin queue is that account (`jellyfinQueueAccount`), so its entries resolve
+  through its provider; refs come from the queue's tracks (`refOf`), not `TrackRef.yandex`. The Yandex link prefetch
+  (`preloadTracks`) runs for Yandex accounts only; a Jellyfin stream shows its own quality (compatible: "MP3 · 320").
+  `playInAccount(account, tracks, start)` — Play on a Jellyfin page — plays in the account's own queue (active one if
+  it is the account's, else its latest, else its default; D84). Yandex tracks played while a Jellyfin queue is active
+  go to the context account's own queue, never into the Jellyfin one. One controller test covers both directions.
+- Queue entries keep the track's own ref (were always `TrackRef.yandex`); `QueueTrackBridge.recall` restores it on the
+  Yandex-shaped row. No migration: existing entries are Yandex refs already.
+- Not done in this step: downloads of Jellyfin tracks; offline play of a Jellyfin track fully on disk without a link
+  (the Yandex resolver's `completeStreamFor` path); the remaining Yandex-only helpers in the controller (`qualityOf`,
+  `hasPlayableCopy`, the reserve) are left as they are — for a Jellyfin id they find nothing and are skipped.
+- Checks: 663 app tests, 33 `:provider:jellyfin`, 14 `:core:domain`, 0 failures; no golden changed; lint, the
+  instrumented-test compile and detekt clean; `PlaybackControllerTest` 5/5 reruns. Smoke on the AVD (b93) against the
+  dev server: the FLAC album played as-is (`FORMAT audio/flac`, `CACHE written`, `NEXT ready (on disk)`), skip in
+  56 ms, a natural crossfade, the MP3 album (`audio/mpeg 320 kbps`), covers shown; then a Yandex liked track played
+  through the Yandex link (`audio/flac 960 kbps`); no crash.
+
+**Steps 24–25 — composition, queues and History with Jellyfin tracks** (2026-11-17)
+- `:provider:jellyfin`: `JellyfinLibrary.search` — tracks (30), albums (10) and album artists (10) by `SearchTerm`; not
+  cached (a search is typed, not revisited). `JellyfinProvider.search`. `JellyfinLibraryTest` (+2).
+- `ProviderComposition.providers()`: the context Yandex account, then every Jellyfin account in sign-in order (D75);
+  `ProviderRegistry.all()` stays the Yandex list. Badges only when the results really come from two providers or more
+  (canvas `sr-results` vs `sr-single`). `ProviderRegistryTest` (+1, order).
+- Search: `ProviderBadge` (Y / J, the canvas colours) leads the second line of tracks, artists and albums while the list
+  mixes providers; a Jellyfin artist or album opens on its own account's page; a Jellyfin track has no heart. Results
+  come one list per type in provider order — Yandex's first, then each Jellyfin account's (not interleaved by rank as
+  the canvas's note says: the services' ranks are not comparable). Golden `jellyfin_search_merged`.
+- `:core:domain` `QueueFit`: `TrackRef.fitsQueueOf(account)` (D84: a Yandex track fits any Yandex queue, a Jellyfin
+  track only an account on its server) and `TrackRef/MediaRef.service`. `QueueFitTest` (3).
+- D84 everywhere a track enters a queue: the "Add to queue…" picker lists only the queues (and "New queue" accounts)
+  that can hold the tracks; the controller drops tracks that don't fit in `addToQueue`, `addToEnd`, `playNextTracks`,
+  `enqueueNext`, `createQueueWith`. A tap in a merged list keeps only the tapped track's service; a Jellyfin track
+  tapped while another account's queue plays (Search, History) plays in its own account's queue (`playInAccount`).
+  `AccountContext.accountOf(track)`. Controller tests (+2).
+- Track menu on Jellyfin rows (catalog pages, Search, History): "Add to queue…" always; "Play next" / "Add to end" only
+  when the active queue can hold the track; no like, playlists, radio, artist / album rows (P5, P6). A Yandex track
+  while a Jellyfin queue is active loses "Play next" / "Add to end" the same way.
+- No likes for Jellyfin tracks anywhere: `MainViewModel.toggleLike/dislikeTrack` ignore them; the car hides its
+  like / dislike buttons (empty space keeps the row) and "Start radio" for a Jellyfin track.
+- History: a row now keeps the track's own ref and its queue's account (was always `yandex:track:<id>`), so a Jellyfin
+  row opens and plays under its account. Rows written before this keep the old Yandex ref. `ListeningHistoryTest` (+1).
+- Not done, by scope: Home's Jellyfin sections (canvas `hm-home-c`: Folders is P4b, Instant Mix P6, and Home is a
+  fixed one-screen layout — a scrolling Home is its own change); Library rows merged with badges (`hm-lib-c` — the
+  step-22 per-account sections stay); Home's like / dislike row still shows for a Jellyfin track (a tap does nothing);
+  Android Auto's tree was not walked on the AVD (the Jellyfin queue plays through the same session).
+- Checks: 668 app tests, `:core:domain` and `:provider:jellyfin` tests, 0 failures; one new golden; no existing golden
+  changed; lint, the instrumented-test compile, detekt clean. Smoke on the AVD (b96) with the dev server: merged Search
+  (Y / J badges; Yandex-only results without badges), a Jellyfin album opened from Search, its track menu (Add to
+  queue… only, offering the Jellyfin queue alone), the track added and played in the Jellyfin queue, the car screen on
+  it, a Yandex search result played afterwards, History showing the Jellyfin queue's rows; no crash.
+
+**Fix after step 25 — Home's like buttons for Jellyfin** (2026-11-17)
+- `Track.supportsLikes` (`presentation/common/TrackUi.kt`): likes exist for Yandex tracks only. Home's track line shows
+  no like / dislike for a Jellyfin track (a 48 dp spacer keeps the title centred), like the car and the track menu; the
+  car's "Start radio" chip uses the same rule. `TrackUiTest` (+1). No golden changed.
+
+**Step 26 — Jellyfin play reporting** (2026-11-17, D87)
+- `:provider:jellyfin`: `POST Sessions/Playing`, `Sessions/Playing/Progress`, `Sessions/Playing/Stopped`;
+  `PlaybackReportDto` (positions in ticks; `IsPaused`, `CanSeek`, `PlayMethod`, `EventName` always sent — the client's
+  Json drops default values) and `JellyfinPlayReporter` (answers an `Outcome`, never throws). `JellyfinPlayReporterTest` (2).
+- `:app`: `PlayReportPlanner` (pure) decides from a once-a-second snapshot of the player — started when a Jellyfin track
+  first sounds; progress every 10 s, on pause (`EventName` "Pause"), resume ("Unpause") and seek (> 3 s off); stopped
+  on a track change or when playback leaves Jellyfin; one play session id per track. `JellyfinPlayReporting` (started
+  with the app) sends them fire-and-forget under the playing queue's account (`PlaybackController.playingAccount`); a
+  failed report is a `REPORT` journal line, playback is never touched. No setting (the doc asks for none).
+  `PlayReportPlannerTest` (4).
+- Found on the way: without `EventName` the server kept the session "playing" after a pause report; with it the
+  session shows paused.
+- Smoke on the AVD (b98–b100) with the dev server: the server's session for "YAMP" showed «Carefree» now playing with
+  the position moving, then paused after a pause; the item's `UserData` got `Played`, `PlayCount` 1 and `LastPlayedDate`;
+  periodic progress every 10 s in logcat (`204`); no crash.
+
+**Step 27 — docs** (2026-11-17): D66–D87 in `kb/decisions.md` (D66–D70 from the playback-stability work were missing
+there); `docs/multi-source-player.md` Phase 3 / 3b / 4 marked implemented; `kb/architecture/as-is-data.md` and
+`as-is-playback.md` updated; draft release notes in `tasks/release-notes-v0.4.0-v0.5.0.md`. No release.
+
+**Deferred from Phase 4** (in `tasks/todo.md`): Jellyfin sections on Home (needs a scrolling Home; folders are P4b,
+Instant Mix P6); Library rows merged with badges (the per-account sections stay); Jellyfin downloads and offline play of
+a fully cached Jellyfin track; likes / favourites for Jellyfin (P5); Android Auto's browse tree not verified on a device.
 

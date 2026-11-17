@@ -96,7 +96,25 @@ Engine emits `prepareNextTrack` at −15 s → controller prepares standby. `tra
 - Lost on process death: queue beyond window, sleep timer, undo/return points, failure counters, resolved
   URLs, standby player.
 
-## Stream resolution (what a provider must wrap)
+## Stream resolution after Phase 3 + 3b + 4 (2026-11-17)
+
+- **The controller resolves** (D74): `streams.forAccount(account).resolve(ref)` → `ResolvedStream` (uri, headers,
+  quality, decryption, `cacheKey`, `expiresAt`); the engine plays only what it is handed and reports a broken stream back
+  (`staleStreamEvent`). Yandex: `YandexStreamResolver` (device copy → fresh link → network); Jellyfin:
+  `JellyfinStreamResolver` (`/Audio/{id}/universal`, D79). The account is the playing queue's (`playbackAccount`;
+  Jellyfin queues resolve through their own account, D84).
+- **Headers:** `StreamHeaders` attaches a stream's headers only to its own URL, below the disk cache; Yandex requests are
+  unchanged.
+- **Disk cache** (D86): `StreamCache` (`SimpleCache` + own LRU evictor, size from Settings) below decryption, so encrypted
+  Yandex bytes stay encrypted on disk; `NextTrackCacher` writes the next track fully, one at a time, cancelled on skip /
+  queue change; a fully cached track plays without a link.
+- **Next-track state** (D80, D81): `PlaybackController.nextTrack` = None / Loading / Ready (warm player or on disk) /
+  Failed(reason); preload waits for the calm window after skips; a failed next track retries with a fresh link on
+  `LINK → GOOD`; journal `NEXT` / `CACHE` lines.
+- **Play reporting** (D87): `JellyfinPlayReporting` → `/Sessions/Playing`, `Progress` (10 s, pause / resume with
+  `EventName`, seek), `Stopped`; `REPORT` journal line on failure.
+
+## Stream resolution (what a provider must wrap — the pre-Phase-3 state)
 
 - Entry: `data/network/TrackPreloadManager.getOrFetchUrl(trackId): String?` — URL cached 45 min, in-flight
   de-dup; side tables `qualities`, `offered`.

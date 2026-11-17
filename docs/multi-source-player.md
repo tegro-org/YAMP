@@ -192,6 +192,10 @@ accounts, so a queue must play, refill and report under its own account.
 
 ### Phase 3 — Provider abstraction
 
+**Implemented 2026-11-17** (stage 1, checkpoint build b85) — design and as built: [phase-3-providers.md](phase-3-providers.md),
+D71–D77, D82. No Yandex DTO outside `data/provider/yandex/`; streams resolved by the controller (D74). Not done here:
+Home and Library composed from several providers (one provider until Phase 4).
+
 - **Module `:core:domain`** (pure Kotlin, D17): neutral `Track`, `Album`, `Artist`, `Playlist`, `Folder`,
   `Genre` with only the fields the UI and player need (C2). Tracks are identified by
   `TrackRef`; albums, artists, playlists, folders and genres by a ref of the same form
@@ -221,7 +225,8 @@ accounts, so a queue must play, refill and report under its own account.
 
 ### Phase 3b — Next-track buffering and its state
 
-Planned (user, 2026-11-14; plan in `tasks/todo.md`; canvas first). Done together with Phase 3 (stage 1, after the step that moves stream resolution to the controller, D74), then a
+**Implemented 2026-11-17** with Phase 3 (stage 1; [phase-3-providers.md](phase-3-providers.md), D80, D81, D86 — early
+preload, Next never disabled, buffered progress, on-disk stream cache). Planned (user, 2026-11-14; canvas first). Done together with Phase 3 (stage 1, after the step that moves stream resolution to the controller, D74), then a
 test checkpoint before Phase 4; built on the playback-stability engine ([playback-stability.md](playback-stability.md)). Why: the original app silently disables
 Next when the next track can't load and sometimes stays stuck until it is killed, even after the network is back.
 
@@ -234,6 +239,12 @@ Next when the next track can't load and sometimes stays stuck until it is killed
 - Phone player, car screen and the car's next-track artwork; Android Auto shows what its template allows.
 
 ### Phase 4 — Jellyfin provider
+
+**Implemented 2026-11-17** (stage 2, not yet released; [phase-3-providers.md](phase-3-providers.md), D78, D79, D83–D85,
+D87): sign-in by password and Quick Connect, server + user accounts with their own cache, library and pages, streaming
+and covers, merged search with badges, queues and History per account (D84), play reporting. **Deferred:** Jellyfin
+sections on Home, Library rows merged with badges, Jellyfin downloads and offline play, favourites (Phase 5), Instant
+Mix (Phase 6), folders (Phase 4b).
 
 - **Module `:provider:jellyfin`** (D17) with its own OkHttp client and auth interceptor (C6); the Jellyfin
   token is never sent to another host.

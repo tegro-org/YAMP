@@ -283,16 +283,16 @@ prompt paused the music (other players keep playing).
 - [ ] Ride with the APK: compare switch 4 on/off; read UNDERRUN / TIMING lines from the log
 - [ ] Later: split `PlayerRepositoryImpl`'s transition logic out of the class (now in the detekt baseline)
 
-## Phase 3b — Next-track buffering and its state (planned; canvas first; roadmap: `docs/multi-source-player.md`)
+## Phase 3b — Next-track buffering and its state (implemented 2026-11-17 in stage 1; roadmap: `docs/multi-source-player.md`)
 
 User, 2026-11-14 — the original app silently disables Next when the next track can't load, and sometimes stays stuck
 until the app is killed, even after the network is back.
-- [ ] Preload the next track early (a few seconds after the current one starts), not only 60 s / 15 s before its end
-- [ ] Next is never disabled; it shows the next track's state: ready / loading (spinner ring) / failed (greyed);
+- [x] Preload the next track early (a few seconds after the current one starts), not only 60 s / 15 s before its end
+- [x] Next is never disabled; it shows the next track's state: ready / loading (spinner ring) / failed (greyed);
       a tap retries at once (load first, then switch)
-- [ ] Failed next-track loads retry by themselves when the link comes back (`LINK NONE → GOOD`)
-- [ ] Progress bar shows the buffered part (like YouTube Music)
-- [ ] Design on the canvas first: phone player, car screen, the next-track artwork in the car
+- [x] Failed next-track loads retry by themselves when the link comes back (`LINK NONE → GOOD`)
+- [x] Progress bar shows the buffered part (like YouTube Music)
+- [x] Design on the canvas first: phone player, car screen, the next-track artwork in the car
 
 ## Small fixes before v0.3.0 (branch `fix/journal-buildno-radio-menu`, 2026-11-15)
 
@@ -487,3 +487,63 @@ Workaround now: Poweramp Equalizer → Known Players → YAMP → "Fade" off.
 - [ ] Observe: YouTube Music started by itself while YAMP played (2026-11-17 08:28, phone SM-F946B); Android's
       AudioHardening ignored its focus request, so both played — YAMP never lost focus. Idea if it recurs: pause or
       duck when another app's music plays while YAMP plays (needs care: `isMusicActive()` doesn't say whose).
+
+## Phase 4 — Jellyfin, stage 2 (`docs/phase-3-providers.md`, branch `feature/phase-4-jellyfin`)
+
+- [x] Step 18 done — `scripts/jellyfin-dev/` (`docker-compose.yml`, `fetch-test-music.sh`, `setup.sh`, `README.md`),
+      `.gitignore` (`scripts/jellyfin-dev/data/`); Jellyfin 12.4.0 running locally with 2 albums / 6 tracks
+      (CC BY 4.0, ~55 MB), Quick Connect on, emulator URL `http://10.0.2.2:8096` (2026-11-17)
+- [x] Step 19 done — `android/provider/jellyfin/` (`JellyfinApi`, `JellyfinAuth`, `JellyfinDtos`, `JellyfinMappers`,
+      tests + fixtures), `:core:domain` `Provider.JELLYFIN` / `AccountId.jellyfin` + `AccountIdTest`,
+      `settings.gradle.kts`, `libs.versions.toml` (`okhttp`), `ArchitectureTest`, `ci.yml` / `release.yml`
+      (2026-11-17)
+- [x] Step 20 — canvas: Jellyfin sign-in, provider chooser, sections and badges (approved 2026-11-17)
+- [x] Step 21 done — sign-in + accounts: `provider/jellyfin` `JellyfinSignIn` (+ Quick Connect API, `JellyfinSignInTest`);
+      `app` `data/provider/jellyfin/{JellyfinAccount,JellyfinAccountStore,JellyfinClients,JellyfinAccountSession}`,
+      `data/account/SignedInAccounts`, `AccountContext`, `QueueManager.defaultQueue`, `PlaybackController`,
+      `MediaLibraryTree`, `di/JellyfinModule`, `presentation/account/{JellyfinSignIn,JellyfinSignInViewModel,
+      AccountMarks,AccountManagementDialog,AccountViewModel}`, `QueueSwitcherViewModel`, `HistoryViewModel`,
+      `MainViewModel`, `MainDialogs`, `MainScreen`, strings EN/RU, debug `network_security_config.xml`,
+      `app/build.gradle.kts`; tests `JellyfinAccountStoreTest`, `QueueManagerTest` (+1), `JellyfinScreenshotsTest`
+      (11 goldens) (2026-11-17)
+- [x] Step 22 done — library: `:core:domain` `Genre`, `Browse` (paged albums / artists / genres / playlists / genre albums,
+      counts), `Catalog.playlist`, `MusicProvider.reachable`; `provider/jellyfin` `JellyfinLibrary` (+ `/Artists/AlbumArtists`,
+      `/MusicGenres`, `/Playlists/{id}/Items`, `Users/{id}/Items/{id}`, `JellyfinListCache`, errors → `ProviderError`,
+      `JellyfinLibraryTest`, `FakeJellyfinApi`, fixtures `artists/genres/playlists/playlist-items.json`); `:app`
+      `JellyfinProvider`, `JellyfinCacheDatabase` + `JellyfinDatabases` (per account, deleted on sign-out, schema 1),
+      `ProviderRegistry` Jellyfin providers (`provider`, `jellyfin()`, `forget`), Library rows (`JellyfinLibraryViewModel`),
+      catalog stack: `CatalogPage.Browse` / `.Playlist` + account, `BrowsePageScreen`, offline banner (retries every 15 s),
+      `TrackItem(showLike)`; `JellyfinLibraryScreenshotsTest` (6 new goldens), `JellyfinDatabasesTest`, registry test;
+      `scripts/jellyfin-dev/setup.sh` adds a test playlist. Smoke on the AVD (b92). (2026-11-17)
+- [x] Step 23 done — streaming and covers: `provider/jellyfin` `JellyfinStreamResolver` (+ test), `JellyfinCover`
+      `{px}` template; `:app` `StreamHeaders` (+ test), `EncrawDataSourceFactory.httpFactory`, engine/`NextTrackCacher`
+      register headers, `JellyfinImageAuth` + `YandexMusicApp` image loader, `ProviderRegistry` (+ test deps),
+      `JellyfinProvider`, `PlaybackController` (Jellyfin playback account, `refOf`, `playInAccount`, D84 guard),
+      `QueueManager.entryOf` / `QueueTrackBridge.recall` keep the ref, `CatalogViewModel.play`, `CoverUrlHelper`;
+      tests: controller (+1), `InteractionLogicTest`, `JellyfinMappersTest`. Downloads of Jellyfin tracks not done.
+      Smoke on the AVD (b93) passed (2026-11-17)
+- [x] Steps 24–25 done — composition and Jellyfin tracks in queues / History: `provider/jellyfin` search
+      (`JellyfinApi` `SearchTerm`, `JellyfinLibrary.search`, test +2); `ProviderComposition` adds Jellyfin; `:core:domain`
+      `QueueFit` (+ test); `ProviderBadge`, `TrackItem` badge, `SearchScreen`/`SearchParts`/`MainTabs` (badges, account-
+      aware opens); `QueueSwitcherHost`/`Sheet`/`ViewModel` (D84 picker); `PlaybackController` D84 guards and merged-list
+      taps (+2 tests); `AccountContext.accountOf`; `TrackContextMenu`/`MainDialogs`, `CatalogScreens` (menu on Jellyfin
+      rows), `HistoryScreen`, `ListeningHistory` (own ref + account, test +1), `CarScreen`, `MainViewModel` (no Jellyfin
+      likes); golden `jellyfin_search_merged`. Home Jellyfin sections and merged Library rows not done (see As built).
+      Smoke on the AVD (b96) passed (2026-11-17)
+- [x] Fix — Home's like / dislike hidden for Jellyfin tracks (`Track.supportsLikes`, also the car's radio chip);
+      `TrackUiTest` (+1); no golden changed (2026-11-17)
+- [x] Step 26 done — play reporting (D87): `provider/jellyfin` `PlaybackReportDto`, `JellyfinPlayReporter` (+ test, 2),
+      `Sessions/Playing*` endpoints; `:app` `PlayReportPlanner` (+ test, 4), `JellyfinPlayReporting` (started in
+      `YandexMusicApp`), `PlaybackController.playingAccount`, journal kind `REPORT`. Smoke on the AVD with the dev
+      server: now playing, position, paused (needs `EventName`), play count 1 (2026-11-17)
+- [x] Step 27 done (docs only, no release) — D66–D87 in `kb/decisions.md`; `docs/multi-source-player.md` Phase 3 / 3b / 4
+      implemented; `kb/architecture/as-is-data.md`, `as-is-playback.md`; draft notes `tasks/release-notes-v0.4.0-v0.5.0.md`
+- [ ] Release v0.4.0 (stage 1) after the b85 rides, then v0.5.0 — on the user's word
+
+### Deferred from Phase 4
+- [ ] Jellyfin sections on Home (needs a scrolling Home; folders → P4b, Instant Mix → P6)
+- [ ] Library rows merged with provider badges (today: a section per Jellyfin account)
+- [ ] Jellyfin downloads, and offline play of a fully cached Jellyfin track
+- [ ] Jellyfin favourites / likes (Phase 5)
+- [ ] Android Auto browse tree with Jellyfin accounts — verify on a device
+

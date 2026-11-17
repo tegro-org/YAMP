@@ -1,6 +1,8 @@
 # As-is: layers, DI, data layer (upstream `fac6af7`)
 
-Snapshot of the imported code before any YAMP change. Paths relative to
+**Phases 3 + 4 (2026-11-17) replaced the data layer's provider side — see "Providers (Phase 3 + 4)" below and
+[phase-3-providers.md](../../docs/phase-3-providers.md); the "Yandex leaks" list is resolved.** The rest is the
+snapshot of the imported code before any YAMP change. Paths relative to
 `android/app/src/main/java/com/korenskoy/yandexmusic/`. Parent: [ARCHITECTURE.md](../../ARCHITECTURE.md).
 
 ## Packages
@@ -117,7 +119,25 @@ Single-flight sync; cache-first then network with "never fewer details" fallback
 rollback; pure tested policy objects (`ReservePolicy`, `PendingReactions`, `PlaybackQueue`); Room lists as
 metadata + ordered items in one transaction; write-then-rename files; token isolation; Keystore secrets.
 
-## Yandex leaks (what blocks a second provider)
+## Providers (Phase 3 + 4, 2026-11-17)
+
+- **Modules:** `:core:domain` (pure Kotlin) — refs (`<provider>[@instance]:<kind>:<id>`), `Track` / `Album` / `Artist` /
+  `Playlist` / `Genre`, `ProviderAccount` / `AccountId`, `MusicProvider` (Library, Search, Catalog, Browse, `streams`,
+  `reachable`), `StreamResolver` → `ResolvedStream`, `Outcome` / `ProviderError`, `Page`, `NextTrack`, the queue model
+  (D71, D73, D82). `:provider:jellyfin` (pure Kotlin) — `JellyfinApi`, auth header, sign-in, library, stream resolver,
+  play reporter; depends on `:core:domain` only (D77).
+- **Yandex:** everything Yandex-specific lives in `data/provider/yandex/` (API, DTOs, repositories, wave / rotor, reserve,
+  `YandexStreamResolver`, `YandexMappers`); names and stored formats unchanged. No DTO outside it (`ArchitectureTest`).
+- **Registry and composition:** `ProviderRegistry` gives one provider per account; `ProviderComposition` orders them for
+  Search (the context Yandex account, then Jellyfin accounts in sign-in order, D75); badges only with ≥ 2 providers.
+- **Networking:** one client per account on a shared base (`@ProviderBaseClient`; pool and timeouts): `YandexClients`
+  (token per account) and `JellyfinClients` (auth header for its server's host only, own HTTP cache).
+- **Jellyfin accounts:** `JellyfinAccountStore` (Keystore-encrypted; server + user, D78; duplicates refused),
+  `JellyfinAccountSession` (sign-in → default queue D83; sign-out D62), one Room database per account
+  (`jellyfin-<server>-<user>.db`, `cached_lists`) serving pages while the server is away (D72).
+- **Play reporting:** `JellyfinPlayReporting` sends `/Sessions/Playing*` for the playing Jellyfin track (D87).
+
+## Yandex leaks (what blocked a second provider — resolved by Phase 3)
 
 1. `TrackDetailsDto` is the domain model (Room JSON, snapshot, reserve, 22 UI files, widget, utils).
 2. Unscoped string ids everywhere (Room, files, reserve, snapshot); ad-hoc `radio_` prefix.
