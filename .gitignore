@@ -11,3 +11,6 @@ Design/out/
 
 # Local APK builds (scripts/build-apk.sh)
 dist/
+
+# Local Jellyfin dev server (scripts/jellyfin-dev): config, cache, test music and the generated dev password
+scripts/jellyfin-dev/data/

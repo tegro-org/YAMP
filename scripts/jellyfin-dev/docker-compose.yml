@@ -1,0 +1,14 @@
+# Local Jellyfin for YAMP development and emulator tests (docs/phase-3-providers.md step 18, D85).
+# Everything it writes lives in ./data (gitignored). Usage: see README.md in this folder.
+services:
+  jellyfin:
+    image: jellyfin/jellyfin:12.4.20261026-211555
+    container_name: yamp-jellyfin-dev
+    user: "${JF_UID:-1000}:${JF_GID:-1000}"
+    ports:
+      - "8096:8096"
+    volumes:
+      - ./data/config:/config
+      - ./data/cache:/cache
+      - ./data/media:/media:ro
+    restart: "no"
