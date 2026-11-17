@@ -401,4 +401,4 @@ function searchSections() {
   ];
 }
 
-Object.assign(window, { searchSections });
+Object.assign(window, { searchSections, SrUseWords, SrUseData, SrField, SrPills, SrSub, SrCaps });

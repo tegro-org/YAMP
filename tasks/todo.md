@@ -547,3 +547,13 @@ Workaround now: Poweramp Equalizer → Known Players → YAMP → "Fade" off.
 - [ ] Jellyfin favourites / likes (Phase 5)
 - [ ] Android Auto browse tree with Jellyfin accounts — verify on a device
 
+
+## Album / artist actions (user, 2026-11-17; canvas first)
+
+- [ ] Menu for an album or artist: Play now (replace queue) · Play next · Add to end · Add to queue… (picker of
+      the account's queues + "New queue") · Start radio (Yandex `album:`/`artist:` stations; hidden for Jellyfin
+      until P6). From a long press wherever albums/artists are listed (search, Library, catalog, artist page) and a
+      ⋮ button in the album and artist page headers; car: long press.
+- [ ] Artist "add" asks first, with a choice: all albums in release order / popular tracks; singles and
+      compilations as an option; counts shown (e.g. «12 альбомов · 147 треков»).
+- [ ] Canvas boards approved before code.

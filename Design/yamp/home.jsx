@@ -608,4 +608,4 @@ function homeSections() {
   ];
 }
 
-Object.assign(window, { homeSections });
+Object.assign(window, { homeSections, HM_SIT, HmPhoneChrome, HmDock, HmTabBar });

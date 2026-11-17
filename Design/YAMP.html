@@ -42,6 +42,8 @@
   <script src="yamp/signin.jsx" type="text/babel"></script>
   <script src="yamp/jellyfin.jsx" type="text/babel"></script>
   <script src="yamp/search.jsx" type="text/babel"></script>
+  <script src="yamp/albummenu.jsx" type="text/babel"></script>
+  <script src="yamp/welcome.jsx" type="text/babel"></script>
   <script src="yamp/home.jsx" type="text/babel"></script>
   <script src="yamp/mix.jsx" type="text/babel"></script>
 </head>
@@ -147,7 +149,7 @@
           ] },
         // Sections defined in their own files (yamp/<name>.jsx → <name>Sections()).
         ...signin.slice(0, 1), ...optional('searchSections'), ...optional('homeSections'), ...optional('mixSections'), ...signin.slice(1),
-      ], optionalMap('jellyfinBoards'));
+      ], mergeExtras(optionalMap('jellyfinBoards'), optionalMap('albumMenuBoards'), optionalMap('welcomeBoards')));
     }
     // Variants defined in another file join an existing section right after a given board (Phase 4, jellyfin.jsx):
     // { sectionId: [{ after: boardId, boards: [...] }] }. An unknown section or board appends at the end.
@@ -161,6 +163,12 @@
         });
         return { ...s, boards };
       });
+    }
+    // Several extras maps (jellyfin.jsx, albummenu.jsx) join per section, in order — later ones may follow boards of earlier ones.
+    function mergeExtras(...maps) {
+      const out = {};
+      maps.forEach((m) => Object.keys(m).forEach((k) => { out[k] = [...(out[k] || []), ...m[k]]; }));
+      return out;
     }
     function optionalMap(name) {
       try { return typeof window[name] === 'function' ? window[name]() : {}; }
