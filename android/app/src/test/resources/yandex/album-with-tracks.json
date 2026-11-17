@@ -1,0 +1,22 @@
+{
+  "id": 7536452,
+  "title": "Imaginaerum",
+  "type": "",
+  "metaType": "music",
+  "year": 2011,
+  "releaseDate": "2011-11-30T00:00:00+03:00",
+  "coverUri": "avatars.yandex.net/get-music-content/2441215/cd.a.7536452-1/%%",
+  "trackCount": 3,
+  "genre": "metal",
+  "available": true,
+  "artists": [{"id": 61094, "name": "Nightwish", "various": false}],
+  "volumes": [
+    [
+      {"id": 58142729, "title": "Taikatalvi", "durationMs": 155000, "artists": [{"id": 61094, "name": "Nightwish"}], "albums": [{"id": 7536452, "title": "Imaginaerum"}]},
+      {"id": 58142730, "title": "Storytime", "durationMs": 330810, "artists": [{"id": 61094, "name": "Nightwish"}], "albums": [{"id": 7536452, "title": "Imaginaerum"}]}
+    ],
+    [
+      {"id": "58142731:7536452", "title": "Ghost River", "durationMs": 328000, "artists": [{"id": 61094, "name": "Nightwish"}], "albums": [{"id": 7536452, "title": "Imaginaerum"}]}
+    ]
+  ]
+}

@@ -4,15 +4,29 @@ package org.tegro.yamp.domain.queue
  * One reference form for every item of every provider (ARCHITECTURE C1, D27): `<provider>:<kind>:<id>`,
  * e.g. `yandex:track:12345`, `yandex:playlist:1234567:1003`, `jellyfin:folder:3f2a…`. Parsing splits at the
  * first two colons; the rest is the provider's own id, opaque, and may itself contain colons.
+ *
+ * The provider part may name an instance (docs/phase-3-providers.md D78): `jellyfin@<serverId>:track:<itemId>` —
+ * item ids are unique per server, so the ref says which one. [providerType] is the part before `@`, [instance]
+ * the part after it (null for Yandex, whose refs stay `yandex:track:<id>`).
  */
 data class MediaRef(val provider: String, val kind: String, val id: String) {
     val value: String get() = "$provider:$kind:$id"
+
+    /** The provider without its instance: `jellyfin` for `jellyfin@abc`, `yandex` for `yandex`. */
+    val providerType: String get() = provider.substringBefore(INSTANCE_SEPARATOR)
+
+    /** The instance after `@`, or null when the provider part names none. */
+    val instance: String? get() = provider.substringAfter(INSTANCE_SEPARATOR, "").ifEmpty { null }
 
     override fun toString(): String = value
 
     companion object {
         const val KIND_TRACK = "track"
         const val PROVIDER_YANDEX = "yandex"
+
+        /** The FM stations: a built-in source, not a streaming service's items (D76). */
+        const val PROVIDER_RADIO = "radio"
+        const val INSTANCE_SEPARATOR = '@'
 
         /** Null when the text is not of the form `provider:kind:id` with all three parts non-empty. */
         fun parse(value: String): MediaRef? {

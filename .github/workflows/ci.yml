@@ -43,7 +43,7 @@ jobs:
             android/gradle/libs.versions.toml
       - run: chmod +x gradlew
       # verifyRoborazziDebug runs all unit tests and compares the screens with app/src/test/screenshots
-      - run: ./gradlew verifyRoborazziDebug lintDebug --no-daemon
+      - run: ./gradlew verifyRoborazziDebug lintDebug :core:domain:test --no-daemon
       - name: Screenshot differences
         if: failure()
         uses: actions/upload-artifact@v4
@@ -70,4 +70,4 @@ jobs:
           curl -sSL -o detekt.jar https://github.com/detekt/detekt/releases/download/v1.23.8/detekt-cli-1.23.8-all.jar
           echo "2ce2ff952e150baf28a29cda70a363b0340b3e81a55f43e51ec5edffc3d066c1  detekt.jar" | sha256sum -c -
       # New findings fail the build; what existed before is in the baseline
-      - run: java -jar detekt.jar --input app/src/main/java --build-upon-default-config --config config/detekt.yml --baseline config/detekt-baseline.xml
+      - run: java -jar detekt.jar --input app/src/main/java,core/domain/src/main/kotlin --build-upon-default-config --config config/detekt.yml --baseline config/detekt-baseline.xml

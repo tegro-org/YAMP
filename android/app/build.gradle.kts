@@ -197,6 +197,9 @@ dependencies {
     implementation(libs.media3.session)
     implementation(libs.media3.exoplayer.hls)
 
+    // Pure domain module: refs, accounts, queue model, provider interfaces (docs/phase-3-providers.md D71)
+    implementation(project(":core:domain"))
+
     // Coroutines & Serialization
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)

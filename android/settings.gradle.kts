@@ -24,6 +24,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "Yandex Music"
 include(":app")
+include(":core:domain")
 include(":baselineprofile")
 // YAMP Diag (docs/diag-tool.md): a debug tool built by hand only. Included only with -Pyamp.diag, so CI, release
 // builds and the local gates (root tasks such as lintDebug / testDebugUnitTest) never see it.

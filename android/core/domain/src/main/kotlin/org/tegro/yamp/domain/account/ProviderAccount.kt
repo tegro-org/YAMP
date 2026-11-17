@@ -1,7 +1,5 @@
 package org.tegro.yamp.domain.account
 
-import org.tegro.yamp.domain.model.UserAccount
-
 /** The music services an account can belong to (docs/multi-source-player.md C5). Yandex only until Phase 3. */
 enum class Provider(val key: String) { YANDEX("yandex") }
 
@@ -29,14 +27,4 @@ data class ProviderAccount(
     val displayName: String,
     val avatarUrl: String?,
     val hasPlus: Boolean
-)
-
-fun UserAccount.accountId(): AccountId = AccountId.yandex(uid)
-
-fun UserAccount.toProviderAccount() = ProviderAccount(
-    provider = Provider.YANDEX,
-    id = accountId(),
-    displayName = displayName.ifBlank { login }.ifBlank { uid },
-    avatarUrl = avatarUrl,
-    hasPlus = hasPlus
 )

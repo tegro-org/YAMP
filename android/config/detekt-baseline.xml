@@ -10,7 +10,7 @@
     <ID>ComplexCondition:PlayerRepositoryImpl.kt$PlayerRepositoryImpl$activePlayer === player &amp;&amp; outgoingPlayer !== player &amp;&amp; player.isPlaying &amp;&amp; SystemClock.elapsedRealtime() - silentSince &lt; SKIP_SILENCE_MAX_MS</ID>
     <ID>ComplexCondition:RadioScreen.kt$near != null &amp;&amp; near != lastTick &amp;&amp; nearFraction != null &amp;&amp; abs(nearFraction - next) &lt; 0.012f</ID>
     <ID>LargeClass:PlaybackController.kt$PlaybackController</ID>
-    <ID>LargeClass:PlayerRepositoryImpl.kt$PlayerRepositoryImpl : PlayerRepository</ID>
+    <ID>LargeClass:PlayerRepositoryImpl.kt$PlayerRepositoryImpl : PlayerRepositorySessionPlayers</ID>
     <ID>NestedBlockDepth:AuthScreen.kt$internal fun extractTokenFromUrl(url: String): String?</ID>
     <ID>NestedBlockDepth:DownloadInfoParser.kt$DownloadInfoParser$fun parseXml(xml: String): DownloadInfoXml?</ID>
     <ID>NestedBlockDepth:ReserveKeeper.kt$ReserveKeeper$private suspend fun fill(limitBytes: Long)</ID>
