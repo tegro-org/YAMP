@@ -156,7 +156,10 @@ fun LibraryScreen(
     /** Rows of the last seven days, on the "History" row. */
     historyCount: Int = 0,
     /** The History page (D46), given the page modifier, the bottom clearance and the way back. */
-    historyPage: @Composable (modifier: Modifier, contentBottom: androidx.compose.ui.unit.Dp, onBack: () -> Unit) -> Unit = { _, _, _ -> }
+    historyPage: @Composable (modifier: Modifier, contentBottom: androidx.compose.ui.unit.Dp, onBack: () -> Unit) -> Unit = { _, _, _ -> },
+    /** Each signed-in Jellyfin account's library (step 22): its rows open the catalog stack's browse pages. */
+    jellyfinLibraries: List<org.tegro.yamp.presentation.catalog.JellyfinLibraryRow> = emptyList(),
+    onOpenJellyfin: (org.tegro.yamp.presentation.catalog.CatalogPage.Browse) -> Unit = {}
 ) {
     var showSettings by remember { mutableStateOf(false) }
     var showProgressModal by remember { mutableStateOf(false) }
@@ -229,6 +232,9 @@ fun LibraryScreen(
                         SectionRow(Icons.Rounded.History, stringResource(R.string.history_row), historyCount) { sectionName = LibrarySection.HISTORY.name }
                         SectionRow(Icons.AutoMirrored.Rounded.PlaylistPlay, stringResource(R.string.library_playlists_row), playlists.size) { sectionName = LibrarySection.PLAYLISTS.name }
                     }
+                }
+                jellyfinLibraries.forEach { library ->
+                    item(key = "jellyfin:" + library.account.value) { JellyfinLibrarySection(library, onOpenJellyfin) }
                 }
                 when (LoadState.of(tracks, tracks.isEmpty(), isLoading, loadFailed)) {
                     LoadState.Loading -> item(key = "loading") { HiFiSkeletonRows(Modifier.padding(top = 28.dp), count = 4) }
@@ -373,7 +379,7 @@ private fun LibraryTrack(
 
 /** One library section row: metal plaque, title, count, chevron, hairline below. */
 @Composable
-private fun SectionRow(icon: ImageVector, title: String, count: Int, onClick: () -> Unit) {
+private fun SectionRow(icon: ImageVector, title: String, count: Int?, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -384,11 +390,31 @@ private fun SectionRow(icon: ImageVector, title: String, count: Int, onClick: ()
         IconPlaque(icon, size = 36.dp)
         Spacer(Modifier.width(14.dp))
         Text(title, style = HiFiType.RowTitle, modifier = Modifier.weight(1f))
-        Text(count.toString(), color = HiFi.TextTertiary, fontSize = 15.sp)
+        count?.let { Text(it.toString(), color = HiFi.TextTertiary, fontSize = 15.sp) }
         Spacer(Modifier.width(4.dp))
         Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, tint = Color.White.copy(alpha = 0.45f), modifier = Modifier.size(20.dp))
     }
     Box(Modifier.fillMaxWidth().padding(start = 50.dp).height(1.dp).background(HiFi.Hairline))
+}
+
+/**
+ * A Jellyfin account's library rows (step 22, canvas `hm-lib-c` until Library is composed in step 24): Albums,
+ * Artists, Playlists and Genres under the account's name, each opening its browse page.
+ */
+@Composable
+private fun JellyfinLibrarySection(
+    library: org.tegro.yamp.presentation.catalog.JellyfinLibraryRow,
+    onOpen: (org.tegro.yamp.presentation.catalog.CatalogPage.Browse) -> Unit
+) {
+    Column(Modifier.padding(top = 18.dp)) {
+        HiFiSectionHeader(library.label, Modifier.padding(bottom = 4.dp))
+        library.rows().forEach { (kind, icon, title) ->
+            val label = stringResource(title)
+            SectionRow(icon, label, library.count(kind)) {
+                onOpen(org.tegro.yamp.presentation.catalog.CatalogPage.Browse(kind, label, library.account))
+            }
+        }
+    }
 }
 
 /** Back button, page title and count — the header of every library sub-page. */

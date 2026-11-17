@@ -169,6 +169,8 @@ fun MainScreen(
     // Nothing to show: a stale "expanded" would open an empty player with the next track
     LaunchedEffect(currentTrack == null) { if (currentTrack == null) isPlayerExpanded = false }
     var showAccountDialog by remember { mutableStateOf(false) }
+    // "Add account" asks where the music is: Yandex or Jellyfin (Phase 4 step 21)
+    var showAddAccount by remember { mutableStateOf(false) }
     var showCrashLog by remember { mutableStateOf(false) }
     var qualityDetails by remember { mutableStateOf<PlaybackController.QualityDetails?>(null) }
     var trackMenu by remember { mutableStateOf<TrackMenuRequest?>(null) }
@@ -183,6 +185,8 @@ fun MainScreen(
             onOpenArtist = { id, name -> catalogVm.openArtist(id, name) },
             onOpenAlbum = { id, title -> catalogVm.openAlbum(id, title) },
             onPlay = { tracks, trackId, shuffle -> catalogVm.play(tracks, trackId, shuffle) },
+            onOpen = { catalogVm.open(it) },
+            onLoadMore = { catalogVm.loadMore() },
             onToggleLike = { viewModel.toggleLike(it) },
             onAddToEnd = viewModel::addToEnd
         )
@@ -276,7 +280,8 @@ fun MainScreen(
                                 viewModel, accountVm, playlistsVm, updateVm, crashVm, now,
                                 onOpenAccounts = { showAccountDialog = true },
                                 onOpenCrashLog = { showCrashLog = true },
-                                onAddAccount = onNavigateToAuth
+                                onAddAccount = { showAddAccount = true },
+                                onOpenJellyfin = { catalogVm.open(it) }
                             )
                             MainTab.RADIO -> RadioTab(viewModel, radioVm, now)
                             MainTab.CAR -> CarTab(viewModel, radioVm, now, progress, isLandscape, onExit = { chosenTab = MainTab.HOME })
@@ -429,7 +434,9 @@ fun MainScreen(
                     accountVm,
                     showManagement = showAccountDialog,
                     onCloseManagement = { showAccountDialog = false },
-                    onAddAccount = onNavigateToAuth
+                    onAddAccount = onNavigateToAuth,
+                    showChooser = showAddAccount,
+                    onChooser = { showAddAccount = it }
                 )
             }
         }

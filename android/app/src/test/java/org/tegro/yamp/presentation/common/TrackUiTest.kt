@@ -49,4 +49,15 @@ class TrackUiTest {
         val service = UserPlaylistDto(kind = JsonPrimitive(1003), title = "В дорогу", trackCount = 2, ogImage = "avatars.yandex.net/x/%%")
         assertEquals(service.coverUri, service.toPlaylist()?.coverUri)
     }
+
+    @Test
+    fun likesExistOnlyForYandexTracks() {
+        assertTrue(dto("1").toTrack().supportsLikes)
+        assertFalse(dto("station-7", isRadio = true).toTrack().supportsLikes)
+        val jellyfin = org.tegro.yamp.domain.media.Track(
+            ref = org.tegro.yamp.domain.queue.TrackRef.of("jellyfin@srv1", "j1"),
+            title = "Song", artists = emptyList(), album = null, durationMs = 1000, cover = null, explicit = false
+        )
+        assertFalse(jellyfin.supportsLikes)
+    }
 }

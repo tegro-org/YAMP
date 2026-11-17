@@ -113,7 +113,8 @@ internal fun QueueSwitcherSheet(
     val radio = state.mode as? QueueSwitcherRequest.StartRadio
     val signedIn = state.queues.filterNot(state::isRemoved)
     val rows = when {
-        adding != null -> signedIn.filter { it.editable }.map { it.copy(isActive = false) }
+        // Only queues that can hold the tracks (D84)
+        adding != null -> signedIn.filter { it.editable && adding.fits(it.account) }.map { it.copy(isActive = false) }
         // Only radios are re-seeded; the user's queues are never a target (D51)
         radio != null -> signedIn.filter { it.kind == QueueKind.RADIO }
         else -> signedIn

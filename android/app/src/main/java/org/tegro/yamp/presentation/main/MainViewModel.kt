@@ -1,5 +1,6 @@
 package org.tegro.yamp.presentation.main
 
+import org.tegro.yamp.domain.queue.service
 import org.tegro.yamp.domain.model.WaveTuning
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.first
@@ -45,6 +46,7 @@ import javax.inject.Inject
 @HiltViewModel
 class MainViewModel @Inject constructor(
     authRepository: AuthRepository,
+    signedInAccounts: org.tegro.yamp.data.account.SignedInAccounts,
     private val session: AccountSessionManager,
     private val playbackController: PlaybackController,
     private val settingsRepository: SettingsRepository,
@@ -119,9 +121,9 @@ class MainViewModel @Inject constructor(
     val activeQueue: StateFlow<org.tegro.yamp.data.queue.ActiveQueue?> = playbackController.activeQueue
 
     /** The signed-in accounts as markers; markers show only with more than one (D58). */
-    val accountTags: StateFlow<List<org.tegro.yamp.presentation.account.AccountTag>> = authRepository.allAccounts
-        .map { org.tegro.yamp.presentation.account.accountTags(it) }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, org.tegro.yamp.presentation.account.accountTags(authRepository.getAllAccounts()))
+    val accountTags: StateFlow<List<org.tegro.yamp.presentation.account.AccountTag>> = signedInAccounts.accounts
+        .map { org.tegro.yamp.presentation.account.providerAccountTags(it) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, org.tegro.yamp.presentation.account.providerAccountTags(signedInAccounts.current()))
 
     /** The marker of [queue]'s account with more than one account; null otherwise (D58, D64). */
     fun markOf(tags: List<org.tegro.yamp.presentation.account.AccountTag>, account: String?): org.tegro.yamp.presentation.account.AccountTag? =
@@ -152,10 +154,17 @@ class MainViewModel @Inject constructor(
     }
 
     /** The heart: a track's like, or a station's favourite (shared with the player in the notification). */
-    fun toggleLike(track: Track) = reactions.toggleLike(track)
+    /** A Jellyfin track has no likes yet (P5): nothing goes to the Yandex account for it. */
+    fun toggleLike(track: Track) {
+        if (track.ref.service == org.tegro.yamp.domain.account.Provider.JELLYFIN) return
+        reactions.toggleLike(track)
+    }
 
     /** "Не нравится": a track leaves the wave and the next one plays; a station leaves the favourites. */
-    fun dislikeTrack(track: Track) = reactions.dislike(track)
+    fun dislikeTrack(track: Track) {
+        if (track.ref.service == org.tegro.yamp.domain.account.Provider.JELLYFIN) return
+        reactions.dislike(track)
+    }
 
     /** Offline downloads run in WorkManager: they continue after the app is closed. */
     fun downloadAllLikedTracks() {

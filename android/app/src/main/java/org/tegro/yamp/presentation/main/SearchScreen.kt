@@ -120,7 +120,9 @@ fun SearchScreen(
     onRemoveFromHistory: (String) -> Unit = {},
     onClearHistory: () -> Unit = {},
     onSubmit: () -> Unit = {},
-    initiallyShowHistory: Boolean = false
+    initiallyShowHistory: Boolean = false,
+    /** The results mix providers: provider badges on the rows (D21, D75). */
+    badges: Boolean = false
 ) {
     val isLandscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation ==
         android.content.res.Configuration.ORIENTATION_LANDSCAPE
@@ -188,7 +190,8 @@ fun SearchScreen(
                     onTrackClick = onTrackClick,
                     onToggleLike = onToggleLike,
                     onArtistClick = onArtistClick,
-                    onAlbumClick = onAlbumClick
+                    onAlbumClick = onAlbumClick,
+                    badges = badges
                 )
             }
         }

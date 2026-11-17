@@ -1,5 +1,6 @@
 package org.tegro.yamp.presentation.main.components
 
+import org.tegro.yamp.domain.queue.service
 import androidx.compose.material.icons.rounded.Waves
 import androidx.compose.material.icons.rounded.Sensors
 import androidx.compose.material.icons.rounded.Layers
@@ -106,8 +107,16 @@ fun TrackContextMenu(
     /** Opens the radio picker for this track (new radio or re-seed, with the account selector). */
     onStartRadio: (() -> Unit)? = null,
     onAddToEnd: () -> Unit = {},
-    onAddToQueue: () -> Unit = {}
+    onAddToQueue: () -> Unit = {},
+    /**
+     * False when the active queue can't hold this track — another account's queue (D84): no "Play next" and no
+     * "Add to end"; "Add to queue…" offers the track's own account's queues.
+     */
+    fitsActiveQueue: Boolean = true
 ) {
+    // A Jellyfin track (step 25): queue actions only — likes come in P5, its radio (Instant Mix) in P6, playlists
+    // and its artist/album pages from the menu with the merged Library
+    val ownService = track.ref.service != org.tegro.yamp.domain.account.Provider.JELLYFIN
     var picking by remember { mutableStateOf(startWithPlaylists) }
     var naming by remember { mutableStateOf(false) }
     // The picker opened from the actions steps back to them; opened on its own (the player's "add to
@@ -197,7 +206,7 @@ fun TrackContextMenu(
             } else {
                 // On My Wave: "wave by track" stays inside My Wave; on any other queue the radio row below covers it.
                 // Without a radio picker (no switcher host) the old single row stays: wave by track or start radio.
-                val topWaveRow = waveActive || onStartRadio == null
+                val topWaveRow = (waveActive || onStartRadio == null) && ownService
                 if (onTrackWave != null && !track.isRadio && topWaveRow) {
                     ContextMenuItem(
                         if (waveActive) Icons.Rounded.Waves else Icons.Rounded.Sensors,
@@ -207,12 +216,12 @@ fun TrackContextMenu(
                         onDismiss()
                     }
                 }
-                ContextMenuItem(Icons.Default.SkipNext, stringResource(R.string.track_context_menu_igrat_sleduyuschim)) {
+                if (fitsActiveQueue) ContextMenuItem(Icons.Default.SkipNext, stringResource(R.string.track_context_menu_igrat_sleduyuschim)) {
                     onPlayNext()
                     onDismiss()
                 }
                 if (!track.isRadio) {
-                    ContextMenuItem(Icons.AutoMirrored.Rounded.PlaylistPlay, stringResource(R.string.track_menu_add_to_end)) {
+                    if (fitsActiveQueue) ContextMenuItem(Icons.AutoMirrored.Rounded.PlaylistPlay, stringResource(R.string.track_menu_add_to_end)) {
                         onAddToEnd()
                         onDismiss()
                     }
@@ -220,15 +229,17 @@ fun TrackContextMenu(
                         onAddToQueue()
                         onDismiss()
                     }
-                    if (onStartRadio != null) {
+                    if (onStartRadio != null && ownService) {
                         ContextMenuItem(Icons.Rounded.Sensors, stringResource(R.string.radio_start)) {
                             onStartRadio()
                             onDismiss()
                         }
                     }
                 }
-                ContextMenuItem(Icons.AutoMirrored.Filled.PlaylistAdd, stringResource(R.string.track_context_menu_dobavit_v_pleylist)) {
-                    picking = true
+                if (ownService) {
+                    ContextMenuItem(Icons.AutoMirrored.Filled.PlaylistAdd, stringResource(R.string.track_context_menu_dobavit_v_pleylist)) {
+                        picking = true
+                    }
                 }
                 if (inPlaylist != null) {
                     ContextMenuItem(Icons.Default.PlaylistRemove, stringResource(R.string.track_menu_remove_from_playlist)) {
@@ -236,19 +247,19 @@ fun TrackContextMenu(
                         onDismiss()
                     }
                 }
-                if (onOpenArtist != null) {
+                if (onOpenArtist != null && ownService) {
                     ContextMenuItem(Icons.Default.Person, stringResource(R.string.track_menu_artist, (track.artists.firstOrNull { it.ref != null } ?: track.artists.firstOrNull())?.name.orEmpty())) {
                         onOpenArtist()
                         onDismiss()
                     }
                 }
-                if (onOpenAlbum != null) {
+                if (onOpenAlbum != null && ownService) {
                     ContextMenuItem(Icons.Default.Album, stringResource(R.string.track_menu_album, track.album?.title.orEmpty()).removeSuffix(": ")) {
                         onOpenAlbum()
                         onDismiss()
                     }
                 }
-                ContextMenuItem(
+                if (ownService) ContextMenuItem(
                     if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                     stringResource(if (isLiked) R.string.track_menu_unlike else R.string.track_menu_like),
                     iconTint = if (isLiked) org.tegro.yamp.presentation.hifi.HiFi.Love else Color.White.copy(alpha = 0.75f)

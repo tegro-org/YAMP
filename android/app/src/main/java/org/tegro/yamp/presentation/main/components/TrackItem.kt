@@ -74,7 +74,11 @@ fun TrackItem(
     subtitle: String? = null,
     onClick: () -> Unit,
     onToggleLike: () -> Unit = {},
-    onLongClick: () -> Unit = {}
+    onLongClick: () -> Unit = {},
+    /** False where the track's service has no likes yet (Jellyfin until P5): no heart at all, rather than a dead one. */
+    showLike: Boolean = true,
+    /** The provider badge leading the second line, in a list that mixes providers (D21, D75); null = none. */
+    badge: org.tegro.yamp.domain.account.Provider? = null
 ) {
     val menu = LocalTrackMenu.current
     val menuPlaylist = LocalTrackMenuPlaylist.current
@@ -129,12 +133,16 @@ fun TrackItem(
                 overflow = TextOverflow.Ellipsis
             )
             Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = subtitle ?: track.artists.joinToString { it.name }.ifEmpty { stringResource(R.string.player_unknown_artist) },
-                style = HiFiType.Caption,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            val second = subtitle ?: track.artists.joinToString { it.name }.ifEmpty { stringResource(R.string.player_unknown_artist) }
+            if (badge == null) {
+                Text(text = second, style = HiFiType.Caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    org.tegro.yamp.presentation.common.ProviderBadge(badge)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(text = second, style = HiFiType.Caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
         }
 
         if (isDownloaded) {
@@ -147,25 +155,27 @@ fun TrackItem(
             Spacer(modifier = Modifier.width(10.dp))
         }
 
-        // A 44 dp touch area around the 34 dp glass circle
-        val likeDescription = stringResource(R.string.cd_nravitsya)
-        Box(
-            modifier = Modifier
-                .size(44.dp)
-                .hifiPress(onToggleLike, pressedScale = 0.9f)
-                .semantics { contentDescription = likeDescription },
-            contentAlignment = Alignment.Center
-        ) {
+        if (showLike) {
+            // A 44 dp touch area around the 34 dp glass circle
+            val likeDescription = stringResource(R.string.cd_nravitsya)
             Box(
-                modifier = Modifier.size(34.dp).hifiGlass(CircleShape, fill = Color.White.copy(alpha = 0.06f), border = Color.White.copy(alpha = 0.14f)),
+                modifier = Modifier
+                    .size(44.dp)
+                    .hifiPress(onToggleLike, pressedScale = 0.9f)
+                    .semantics { contentDescription = likeDescription },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                    tint = if (isLiked) HiFi.Love else Color.White.copy(alpha = 0.6f),
-                    contentDescription = null,
-                    modifier = Modifier.size(17.dp)
-                )
+                Box(
+                    modifier = Modifier.size(34.dp).hifiGlass(CircleShape, fill = Color.White.copy(alpha = 0.06f), border = Color.White.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                        tint = if (isLiked) HiFi.Love else Color.White.copy(alpha = 0.6f),
+                        contentDescription = null,
+                        modifier = Modifier.size(17.dp)
+                    )
+                }
             }
         }
 

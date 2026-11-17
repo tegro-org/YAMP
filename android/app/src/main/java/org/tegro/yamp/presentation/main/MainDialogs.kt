@@ -1,8 +1,12 @@
 package org.tegro.yamp.presentation.main
 
+import org.tegro.yamp.domain.queue.fitsQueueOf
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -68,6 +72,8 @@ internal fun TrackMenuHost(
         onStartRadio = queueSwitcher?.let { switcher -> { switcher.open(QueueSwitcherRequest.StartRadio.of(track)) } },
         onAddToEnd = { viewModel.addToEnd(listOf(track)) },
         onAddToQueue = { queueSwitcher?.open(QueueSwitcherRequest.AddTo(listOf(track), trackLabel)) },
+        fitsActiveQueue = viewModel.activeQueue.collectAsStateWithLifecycle().value
+            ?.let { active -> track.ref.fitsQueueOf(active.queue.account?.let { org.tegro.yamp.domain.account.AccountId(it) }) } ?: true,
         onOpenArtist = track.artists.firstNotNullOfOrNull { artist -> artist.ref?.id?.let { id -> id to artist.name } }
             ?.let { (id, name) ->
                 {
@@ -117,12 +123,24 @@ internal fun AccountHost(
     accountVm: AccountViewModel,
     showManagement: Boolean,
     onCloseManagement: () -> Unit,
-    onAddAccount: () -> Unit
+    onAddAccount: () -> Unit,
+    showChooser: Boolean = false,
+    onChooser: (Boolean) -> Unit = {}
 ) {
     val accounts by accountVm.allAccounts.collectAsStateWithLifecycle()
     val active by accountVm.activeAccount.collectAsStateWithLifecycle()
     val defaultUid by accountVm.defaultAccountUid.collectAsStateWithLifecycle()
     val hidden by accountVm.hiddenAccounts.collectAsStateWithLifecycle()
+    val jellyfin by accountVm.jellyfinRows.collectAsStateWithLifecycle()
+    var jellyfinSignIn by remember { mutableStateOf(false) }
+    if (showChooser) {
+        org.tegro.yamp.presentation.account.AddAccountChooser(
+            onYandex = { onChooser(false); onAddAccount() },
+            onJellyfin = { onChooser(false); jellyfinSignIn = true },
+            onDismiss = { onChooser(false) }
+        )
+    }
+    if (jellyfinSignIn) org.tegro.yamp.presentation.account.JellyfinSignInHost(onDismiss = { jellyfinSignIn = false })
     if (showManagement) {
         AccountManagementDialog(
             accounts = accounts,
@@ -130,7 +148,8 @@ internal fun AccountHost(
             defaultAccountUid = defaultUid,
             onSetDefaultAccount = { accountVm.setDefaultAccount(it) },
             onRemoveAccount = { accountVm.removeAccount(it) },
-            onAddNewAccount = onAddAccount,
+            // "Add account" asks where the music is: Yandex or Jellyfin (step 21)
+            onAddNewAccount = { onChooser(true) },
             onLogoutCurrent = { accountVm.logoutCurrentAccount() },
             onLogoutAll = { accountVm.logoutAllAccounts() },
             onDismiss = onCloseManagement,
@@ -141,7 +160,9 @@ internal fun AccountHost(
                     onHide = { accountVm.hideAccount(it) },
                     onUnhide = { accountVm.unhideAccount(it) }
                 )
-            } else null
+            } else null,
+            jellyfinAccounts = jellyfin,
+            onRemoveJellyfin = { accountVm.removeJellyfin(it) }
         )
     }
 }

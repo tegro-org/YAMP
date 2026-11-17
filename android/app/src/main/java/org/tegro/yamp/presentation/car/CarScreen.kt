@@ -1,5 +1,6 @@
 package org.tegro.yamp.presentation.car
 
+import org.tegro.yamp.domain.queue.service
 import androidx.compose.ui.draw.alpha
 import org.tegro.yamp.presentation.player.LocalPlaybackAux
 import org.tegro.yamp.presentation.player.NextCoverOverlay
@@ -111,6 +112,7 @@ import org.tegro.yamp.domain.media.Track
 import org.tegro.yamp.presentation.common.artistNames
 import org.tegro.yamp.presentation.common.coverUri
 import org.tegro.yamp.presentation.common.id
+import org.tegro.yamp.presentation.common.supportsLikes
 import org.tegro.yamp.presentation.common.isRadio
 import org.tegro.yamp.data.player.PlaylistSource
 import org.tegro.yamp.presentation.hifi.ArtworkTint
@@ -357,7 +359,8 @@ fun CarScreen(
             CarQueuePill(activeQueueName ?: stringResource(R.string.queue_switcher_title), activeQueueAccount, height = pillHeight, fontSize = pillFont, onClick = onQueues)
             if (!waveActive) {
                 // Off My Wave the wave-by-track pill is "Start radio" (D54); tuning has no radio equivalent
-                currentTrack?.takeIf { !it.isRadio }?.let { track ->
+                // A Jellyfin track has no radio yet (Instant Mix, P6)
+                currentTrack?.takeIf { it.supportsLikes }?.let { track ->
                     WavePill(Icons.Rounded.Sensors, stringResource(R.string.radio_start), active = false, height = pillHeight, fontSize = pillFont, onClick = { onTrackWave(track) })
                 }
             } else if (trackWaveSeed != null && onWave) {
@@ -396,6 +399,7 @@ fun CarScreen(
                             ringMode = ringMode, fraction = fraction, progress = progress, durationMs = durationMs, isRadio = isRadio,
                             onPlayPause = playPause, onPrev = onPrevClick, onNext = onNextClick,
                             onLike = { currentTrack?.let(onToggleLike) }, onDislike = { currentTrack?.let(onDislikeClick) },
+                            showLikes = currentTrack?.ref?.service != org.tegro.yamp.domain.account.Provider.JELLYFIN,
                             sources = sources, active = active, onSeek = onSeek,
                             modifier = Modifier.width(u(652f)).fillMaxHeight()
                         )
@@ -452,6 +456,7 @@ fun CarScreen(
                         ringMode = ringMode, fraction = fraction, progress = progress, durationMs = durationMs, isRadio = isRadio,
                         onPlayPause = playPause, onPrev = onPrevClick, onNext = onNextClick,
                         onLike = { currentTrack?.let(onToggleLike) }, onDislike = { currentTrack?.let(onDislikeClick) },
+                        showLikes = currentTrack?.ref?.service != org.tegro.yamp.domain.account.Provider.JELLYFIN,
                         sources = sources, active = active, onSeek = onSeek,
                         // At most 560 wide and centred: on a wide standing screen (the Geely's 960) the controls
                         // stay together instead of spreading to the edges
@@ -633,6 +638,8 @@ private fun DriverPanel(
     active: CarSource?,
     onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier,
+    /** False for a Jellyfin track (likes come in P5): the side buttons give way to empty space, the row keeps its look. */
+    showLikes: Boolean = true,
     compactDock: Boolean = false,
     beforeDock: (@Composable () -> Unit)? = null
 ) {
@@ -684,8 +691,12 @@ private fun DriverPanel(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            GlassRound(u(sideSize), stringResource(R.string.cd_ne_nravitsya), onDislike) {
-                Icon(Icons.Rounded.HeartBroken, contentDescription = null, tint = Color.White.copy(alpha = 0.88f), modifier = Modifier.size(u(sideIcon)))
+            if (showLikes) {
+                GlassRound(u(sideSize), stringResource(R.string.cd_ne_nravitsya), onDislike) {
+                    Icon(Icons.Rounded.HeartBroken, contentDescription = null, tint = Color.White.copy(alpha = 0.88f), modifier = Modifier.size(u(sideIcon)))
+                }
+            } else {
+                Spacer(Modifier.size(u(sideSize)))
             }
             HiFiKnob(onClick = onPrev, contentDescription = stringResource(R.string.cd_predyduschiy_trek), size = u(skipSize)) {
                 Icon(Icons.Rounded.SkipPrevious, contentDescription = null, tint = HiFi.OnMetal, modifier = Modifier.size(u(skipIcon)))
@@ -716,7 +727,7 @@ private fun DriverPanel(
                     Icon(Icons.Rounded.SkipNext, contentDescription = null, tint = HiFi.OnMetal, modifier = Modifier.size(u(skipIcon)))
                 }
             }
-            GlassRound(u(sideSize), stringResource(R.string.cd_nravitsya), onLike) {
+            if (!showLikes) Spacer(Modifier.size(u(sideSize))) else GlassRound(u(sideSize), stringResource(R.string.cd_nravitsya), onLike) {
                 Icon(
                     if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                     contentDescription = null,

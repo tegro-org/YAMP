@@ -57,11 +57,14 @@ fun AccountManagementDialog(
     onLogoutCurrent: () -> Unit,
     onLogoutAll: () -> Unit,
     onDismiss: () -> Unit,
-    debugActions: AccountDebugActions? = null
+    debugActions: AccountDebugActions? = null,
+    jellyfinAccounts: List<JellyfinAccountRow> = emptyList(),
+    onRemoveJellyfin: (String) -> Unit = {}
 ) {
     var confirmLogoutCurrent by remember { mutableStateOf(false) }
     var confirmLogoutAll by remember { mutableStateOf(false) }
     var accountToDelete by remember { mutableStateOf<UserAccount?>(null) }
+    var jellyfinToDelete by remember { mutableStateOf<JellyfinAccountRow?>(null) }
     // Several accounts are all live (D56): no "active" one to switch to; each can be removed on its own
     val multi = accounts.size > 1
 
@@ -318,6 +321,10 @@ fun AccountManagementDialog(
                         )
                     }
 
+                    if (jellyfinAccounts.isNotEmpty()) {
+                        JellyfinAccountRows(jellyfinAccounts, onRemove = { jellyfinToDelete = it })
+                    }
+
                     debugActions?.let { AccountDebugRows(accounts, it) }
 
                     Spacer(modifier = Modifier.height(14.dp))
@@ -430,6 +437,15 @@ fun AccountManagementDialog(
             content = { Text(stringResource(R.string.account_remove_confirm, target.displayName.ifBlank { target.login }.ifBlank { target.uid }), color = HiFi.TextSecondary, fontSize = 15.sp) },
             confirm = { HiFiDialogAction(stringResource(R.string.account_management_udalit), { val uidToRemove = target.uid; accountToDelete = null; onRemoveAccount(uidToRemove) }, HiFiDialogActionKind.Danger) },
             dismiss = { HiFiDialogAction(stringResource(R.string.account_management_otmena), { accountToDelete = null }, HiFiDialogActionKind.Quiet) }
+        )
+    }
+    jellyfinToDelete?.let { target ->
+        HiFiAlertDialog(
+            onDismissRequest = { jellyfinToDelete = null },
+            title = stringResource(R.string.account_management_udalit_profil),
+            content = { Text(stringResource(R.string.jellyfin_remove_confirm, target.tag.name), color = HiFi.TextSecondary, fontSize = 15.sp) },
+            confirm = { HiFiDialogAction(stringResource(R.string.account_management_udalit), { jellyfinToDelete = null; onRemoveJellyfin(target.tag.key) }, HiFiDialogActionKind.Danger) },
+            dismiss = { HiFiDialogAction(stringResource(R.string.account_management_otmena), { jellyfinToDelete = null }, HiFiDialogActionKind.Quiet) }
         )
     }
 }

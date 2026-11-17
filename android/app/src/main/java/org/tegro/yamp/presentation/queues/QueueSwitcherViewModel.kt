@@ -13,7 +13,7 @@ import org.tegro.yamp.data.player.PlaybackController
 import org.tegro.yamp.domain.repository.AuthRepository
 import org.tegro.yamp.domain.repository.SettingsRepository
 import org.tegro.yamp.presentation.account.AccountTag
-import org.tegro.yamp.presentation.account.accountTags
+import org.tegro.yamp.presentation.account.providerAccountTags
 import org.tegro.yamp.presentation.account.removedAccountTag
 import org.tegro.yamp.domain.queue.QueueKind
 import org.tegro.yamp.domain.queue.QueueSummary
@@ -71,6 +71,16 @@ data class QueueSwitcherUiState(
 
     fun tagOf(account: String?): AccountTag? = account?.let { key -> accounts.firstOrNull { it.key == key } }
 
+    /**
+     * The accounts the open "Add to queue…" may target (D84): those whose queues can hold every track being added.
+     * Outside the picker, every account.
+     */
+    val addAccounts: List<AccountTag>
+        get() {
+            val adding = mode as? QueueSwitcherRequest.AddTo ?: return accounts
+            return accounts.filter { tag -> adding.fits(tag.key) }
+        }
+
     /** A queue whose account is no longer signed in (D62): kept, shown only in the collapsed group. */
     fun isRemoved(row: QueueRowState): Boolean = row.account != null && tagOf(row.account) == null
 
@@ -86,19 +96,20 @@ data class QueueSwitcherUiState(
 class QueueSwitcherViewModel @Inject constructor(
     private val playbackController: PlaybackController,
     authRepository: AuthRepository,
-    settings: SettingsRepository
+    settings: SettingsRepository,
+    signedInAccounts: org.tegro.yamp.data.account.SignedInAccounts
 ) : ViewModel() {
 
     private val mode = MutableStateFlow<QueueSwitcherRequest?>(null)
 
     val state: StateFlow<QueueSwitcherUiState> = combine(
-        playbackController.queues, mode, authRepository.allAccounts, settings.groupQueuesByAccount, authRepository.removedAccountNames
+        playbackController.queues, mode, signedInAccounts.accounts, settings.groupQueuesByAccount, authRepository.removedAccountNames
     ) { queues, mode, accounts, grouped, removed ->
         QueueSwitcherUiState(
             queues = queues.map { it.toRow() },
             activeId = queues.firstOrNull { it.isActive }?.queue?.id,
             mode = mode,
-            accounts = accountTags(accounts),
+            accounts = providerAccountTags(accounts),
             grouped = grouped,
             removedNames = removed
         )

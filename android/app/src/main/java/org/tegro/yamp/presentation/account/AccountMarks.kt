@@ -31,6 +31,8 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import org.tegro.yamp.domain.account.accountId
 import org.tegro.yamp.domain.model.UserAccount
+import org.tegro.yamp.domain.account.ProviderAccount
+import org.tegro.yamp.domain.account.toProviderAccount
 import org.tegro.yamp.presentation.hifi.HiFi
 import org.tegro.yamp.presentation.hifi.hifiPress
 import kotlin.math.abs
@@ -51,8 +53,11 @@ private val MarkPalette = listOf(
  * The signed-in accounts as tags, in the order of [accounts]. Colours: each account takes the palette slot its key
  * hashes to, the next free one on a clash (keys sorted, so the result does not depend on the list order).
  */
-fun accountTags(accounts: List<UserAccount>): List<AccountTag> {
-    val keys = accounts.map { it.accountId().value }
+fun accountTags(accounts: List<UserAccount>): List<AccountTag> = providerAccountTags(accounts.map { it.toProviderAccount() })
+
+/** The signed-in accounts of every provider (Yandex and Jellyfin, D78) as tags, in the order of [accounts]. */
+fun providerAccountTags(accounts: List<ProviderAccount>): List<AccountTag> {
+    val keys = accounts.map { it.id.value }
     val colors = HashMap<String, Color>()
     val taken = HashSet<Int>()
     for (key in keys.sorted()) {
@@ -64,8 +69,8 @@ fun accountTags(accounts: List<UserAccount>): List<AccountTag> {
         colors[key] = MarkPalette[slot]
     }
     return accounts.map { account ->
-        val name = account.displayName.ifBlank { account.login }.ifBlank { account.uid }
-        val key = account.accountId().value
+        val name = account.displayName.ifBlank { account.id.id }
+        val key = account.id.value
         AccountTag(key, name, name.firstOrNull()?.uppercaseChar()?.toString() ?: "?", colors.getValue(key))
     }
 }

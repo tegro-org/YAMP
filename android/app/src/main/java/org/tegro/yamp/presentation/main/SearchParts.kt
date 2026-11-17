@@ -1,5 +1,8 @@
 package org.tegro.yamp.presentation.main
 
+import org.tegro.yamp.domain.account.Provider
+import org.tegro.yamp.domain.queue.service
+import org.tegro.yamp.presentation.common.ProviderBadge
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.rounded.SearchOff
@@ -225,7 +228,9 @@ internal fun ResultsList(
     onTrackClick: (String, List<Track>) -> Unit,
     onToggleLike: (Track) -> Unit,
     onArtistClick: (Artist) -> Unit,
-    onAlbumClick: (Album) -> Unit
+    onAlbumClick: (Album) -> Unit,
+    /** The results mix providers (D21, D75): each row leads its second line with a provider badge. */
+    badges: Boolean = false
 ) {
     if (results.isEmpty() && artists.isEmpty() && albums.isEmpty()) {
         HiFiEmptyState(
@@ -275,7 +280,15 @@ internal fun ResultsList(
                         ) {
                             Box(Modifier.hifiSoftShadow(CircleShape, 14.dp)) { Cover(artist.cover?.key, Icons.Rounded.Person, CircleShape, 88.dp) }
                             Spacer(Modifier.height(8.dp))
-                            Text(artist.name, style = HiFiType.CardTitle.copy(fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            if (badges) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    artist.ref.service?.let { ProviderBadge(it, size = 14.dp) }
+                                    Spacer(Modifier.width(5.dp))
+                                    Text(artist.name, style = HiFiType.CardTitle.copy(fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                            } else {
+                                Text(artist.name, style = HiFiType.CardTitle.copy(fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
                         }
                     }
                 }
@@ -291,7 +304,7 @@ internal fun ResultsList(
                     Row(Modifier.fillMaxWidth().padding(start = contentStart - 8.dp, end = 12.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         row.forEach { track ->
                             Box(Modifier.weight(1f)) {
-                                TrackItem(track = track, isPlaying = isPlaying && track.id == currentTrackId, isLiked = likedTrackIds.contains(track.id), onToggleLike = { onToggleLike(track) }, onClick = { onTrackClick(track.id, results) })
+                                TrackItem(track = track, isPlaying = isPlaying && track.id == currentTrackId, isLiked = likedTrackIds.contains(track.id), onToggleLike = { onToggleLike(track) }, onClick = { onTrackClick(track.id, results) }, showLike = track.ref.service != Provider.JELLYFIN, badge = track.ref.service.takeIf { badges })
                             }
                         }
                         if (row.size == 1) Spacer(Modifier.weight(1f))
@@ -300,7 +313,7 @@ internal fun ResultsList(
             } else {
                 itemsIndexed(shown, key = { _, t -> "t_" + t.id }, contentType = { _, _ -> "track" }) { index, track ->
                     Box(Modifier.padding(start = contentStart - 12.dp, end = 8.dp).appearOnce(appearance, track.id, index)) {
-                        TrackItem(track = track, isPlaying = isPlaying && track.id == currentTrackId, isLiked = likedTrackIds.contains(track.id), onToggleLike = { onToggleLike(track) }, onClick = { onTrackClick(track.id, results) })
+                        TrackItem(track = track, isPlaying = isPlaying && track.id == currentTrackId, isLiked = likedTrackIds.contains(track.id), onToggleLike = { onToggleLike(track) }, onClick = { onTrackClick(track.id, results) }, showLike = track.ref.service != Provider.JELLYFIN, badge = track.ref.service.takeIf { badges })
                     }
                 }
             }
@@ -316,7 +329,16 @@ internal fun ResultsList(
                             Box(Modifier.hifiSoftShadow(RoundedCornerShape(16.dp), 18.dp)) { Cover(album.cover?.key, Icons.Rounded.Album, RoundedCornerShape(16.dp), 150.dp) }
                             Spacer(Modifier.height(9.dp))
                             Text(album.title, style = HiFiType.CardTitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(listOfNotNull(album.year?.toString(), album.artists.firstOrNull()?.name?.ifEmpty { null }).joinToString(" · "), style = HiFiType.Caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            val albumLine = listOfNotNull(album.year?.toString(), album.artists.firstOrNull()?.name?.ifEmpty { null }).joinToString(" · ")
+                            if (badges) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    album.ref.service?.let { ProviderBadge(it) }
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(albumLine, style = HiFiType.Caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                            } else {
+                                Text(albumLine, style = HiFiType.Caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
                         }
                     }
                 }

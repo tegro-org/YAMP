@@ -4,6 +4,7 @@ import org.tegro.yamp.data.player.PlaybackQueue
 import org.tegro.yamp.presentation.main.components.SettingsActions
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -184,14 +185,18 @@ internal fun SearchTab(
         artists = remember(found.artists) { found.artists.map { it.item } },
         albums = remember(found.albums) { found.albums.map { it.item } },
         history = history,
+        // A Jellyfin artist or album opens on its own account's pages (step 24)
         onArtistClick = { artist ->
             searchVm.rememberQuery()
-            catalogVm.openArtist(artist.ref.id, artist.name)
+            val account = found.artists.firstOrNull { it.item.ref == artist.ref }?.account?.takeIf { it.provider == org.tegro.yamp.domain.account.Provider.JELLYFIN }
+            catalogVm.open(org.tegro.yamp.presentation.catalog.CatalogPage.Artist(artist.ref.id, artist.name, account))
         },
         onAlbumClick = { album ->
             searchVm.rememberQuery()
-            catalogVm.openAlbum(album.ref.id, album.title)
+            val account = found.albums.firstOrNull { it.item.ref == album.ref }?.account?.takeIf { it.provider == org.tegro.yamp.domain.account.Provider.JELLYFIN }
+            catalogVm.open(org.tegro.yamp.presentation.catalog.CatalogPage.Album(album.ref.id, album.title, account))
         },
+        badges = found.showBadges,
         onRemoveFromHistory = { searchVm.removeFromHistory(it) },
         onClearHistory = { searchVm.clearHistory() },
         onSubmit = { searchVm.rememberQuery() }
@@ -210,8 +215,13 @@ internal fun LibraryTab(
     onOpenCrashLog: () -> Unit,
     onAddAccount: () -> Unit,
     settingsVm: SettingsViewModel = hiltViewModel(),
-    historyVm: org.tegro.yamp.presentation.history.HistoryViewModel = hiltViewModel()
+    historyVm: org.tegro.yamp.presentation.history.HistoryViewModel = hiltViewModel(),
+    /** Opens a Jellyfin library list on the catalog stack (step 22). */
+    onOpenJellyfin: (org.tegro.yamp.presentation.catalog.CatalogPage.Browse) -> Unit = {},
+    jellyfinVm: org.tegro.yamp.presentation.catalog.JellyfinLibraryViewModel = hiltViewModel()
 ) {
+    val jellyfinLibraries by jellyfinVm.libraries.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { jellyfinVm.refresh() }
     val tracks by viewModel.tracks.collectAsStateWithLifecycle()
     val historyState by historyVm.state.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
@@ -338,7 +348,9 @@ internal fun LibraryTab(
                 onClear = historyVm::clear,
                 modifier = modifier
             )
-        }
+        },
+        jellyfinLibraries = jellyfinLibraries,
+        onOpenJellyfin = onOpenJellyfin
     )
 }
 

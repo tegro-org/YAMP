@@ -1,6 +1,7 @@
 package org.tegro.yamp.presentation.queues
 
 import androidx.compose.material3.SnackbarHostState
+import org.tegro.yamp.domain.queue.fitsQueueOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -25,7 +26,11 @@ sealed interface QueueSwitcherRequest {
     data class Switch(val car: Boolean = false, val side: PanelSide = PanelSide.RIGHT) : QueueSwitcherRequest
 
     /** "Add to queue…" for [tracks]; [subtitle] names what is being added (a track, an album). */
-    data class AddTo(val tracks: List<Track>, val subtitle: String) : QueueSwitcherRequest
+    data class AddTo(val tracks: List<Track>, val subtitle: String) : QueueSwitcherRequest {
+        /** Whether a queue of [account] may hold every one of [tracks] (D84: a queue holds its own account's tracks). */
+        fun fits(account: String?): Boolean =
+            tracks.all { it.ref.fitsQueueOf(account?.let { org.tegro.yamp.domain.account.AccountId(it) }) }
+    }
 
     /**
      * "Start radio" (D51): the radios to re-seed and "New radio". [track] is the seed track to play first, when
@@ -82,7 +87,9 @@ fun QueueSwitcherHost(viewModel: QueueSwitcherViewModel, snackbar: SnackbarHostS
     var keep by remember(request) { mutableStateOf(false) }
     // The account of a new queue or radio (D57): the active queue's until the user picks another
     var newAccount by remember(request) { mutableStateOf<String?>(null) }
-    val chosenAccount = newAccount ?: state.contextAccount
+    // "Add to queue…" offers only accounts whose queues can hold the tracks (D84)
+    val chosenAccount = newAccount ?: state.contextAccount?.takeIf { adding == null || adding.fits(it) }
+        ?: state.addAccounts.firstOrNull()?.key ?: state.contextAccount
     val addedTo = { name: String -> scope.launch { snackbar.showSnackbar(resources.getString(R.string.queue_added_to, name)) } }
     val defaultName = stringResource(R.string.queue_default_name, state.queues.size + 1)
 
@@ -129,11 +136,12 @@ fun QueueSwitcherHost(viewModel: QueueSwitcherViewModel, snackbar: SnackbarHostS
             title = stringResource(R.string.queue_new),
             confirmLabel = stringResource(R.string.queue_create),
             hint = if (adding == null) stringResource(R.string.queue_new_hint) else null,
-            accounts = state.accounts,
+            accounts = if (adding != null) state.addAccounts else state.accounts,
             selectedAccount = chosenAccount,
             onAccount = { newAccount = it },
             onConfirm = { name ->
-                val account = chosenAccount.takeIf { state.multiAccount }
+                // A Jellyfin track's new queue always names its account, even with one account per service
+                val account = chosenAccount.takeIf { state.multiAccount || adding?.fits(null) == false }
                 if (adding != null) {
                     viewModel.createAndAdd(name, account)
                     addedTo(name)

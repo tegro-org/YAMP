@@ -140,6 +140,9 @@ class InteractionLogicTest {
         assertEquals(CoverSize.Large, CoverSize.forPixels(800))
         assertEquals("https://avatars.yandex.net/get/1/200x200",
             "avatars.yandex.net/get/1/%%".toCoverUrl(CoverSize.Small))
+        assertEquals("a Jellyfin cover is sized by its server (step 23)",
+            "http://10.0.2.2:8096/Items/a1/Images/Primary?fillWidth=400&fillHeight=400&quality=90&tag=t",
+            "http://10.0.2.2:8096/Items/a1/Images/Primary?fillWidth={px}&fillHeight={px}&quality=90&tag=t".toCoverUrl(CoverSize.Medium))
         assertEquals("a bundled logo stays as it is", "android.resource://x/1",
             "android.resource://x/1".toCoverUrl(CoverSize.Large))
         assertEquals("a logo saved under the old application id is re-homed",

@@ -89,7 +89,11 @@ class CatalogActions(
     val onOpenAlbum: (id: String, title: String) -> Unit,
     val onPlay: (tracks: List<Track>, trackId: String?, shuffle: Boolean) -> Unit,
     val onToggleLike: (Track) -> Unit,
-    val onAddToEnd: (List<Track>) -> Unit = {}
+    val onAddToEnd: (List<Track>) -> Unit = {},
+    /** Any page of the stack — a Jellyfin page names its account (step 22). */
+    val onOpen: (CatalogPage) -> Unit = {},
+    /** The browse list on top wants its next page. */
+    val onLoadMore: () -> Unit = {}
 )
 
 /** The page on top of the catalog stack: an artist or an album. Back returns to the previous page. */
@@ -102,9 +106,24 @@ fun CatalogPageScreen(
     contentBottom: Dp,
     actions: CatalogActions
 ) {
+    if (state.page is CatalogPage.Browse) {
+        BrowsePageScreen(state, contentBottom, actions)
+        return
+    }
     val back = rememberPredictiveBack(enabled = true, onBack = actions.onBack)
     val isArtist = state.page is CatalogPage.Artist
-    val tracks = state.artist?.popularTracks ?: state.album?.tracks.orEmpty()
+    val jellyfin = state.page.isJellyfin
+    val tracks = state.artist?.popularTracks ?: state.album?.tracks ?: state.playlist?.tracks.orEmpty()
+    // A Jellyfin page opens its artists and albums on the same server; a Yandex page as before
+    val openArtist: (String, String) -> Unit = { id, name ->
+        state.page.account?.let { actions.onOpen(CatalogPage.Artist(id, name, it)) } ?: actions.onOpenArtist(id, name)
+    }
+    val openAlbum: (String, String) -> Unit = { id, title ->
+        state.page.account?.let { actions.onOpen(CatalogPage.Album(id, title, it)) } ?: actions.onOpenAlbum(id, title)
+    }
+    val pageTitle = state.artist?.artist?.name?.ifEmpty { null } ?: state.album?.title?.ifEmpty { null }
+        ?: state.playlist?.title?.ifEmpty { null } ?: state.page.title
+    val coverKey = if (isArtist) state.artist?.artist?.cover?.key else state.album?.cover?.key ?: state.playlist?.cover?.key
     val appearance = rememberAppearance(state.page)
     val isLandscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation ==
         android.content.res.Configuration.ORIENTATION_LANDSCAPE
@@ -119,7 +138,7 @@ fun CatalogPageScreen(
         item(key = "header") {
             if (isLandscape) {
                 HiFiWideHeader(
-                    title = state.artist?.artist?.name?.ifEmpty { null } ?: state.album?.title?.ifEmpty { null } ?: state.page.title,
+                    title = pageTitle,
                     modifier = Modifier
                         .statusBarsPadding()
                         .padding(horizontal = 16.dp, vertical = 8.dp),
@@ -130,13 +149,16 @@ fun CatalogPageScreen(
                     },
                     cover = { size ->
                         Cover(
-                            uri = if (isArtist) state.artist?.artist?.cover?.key else state.album?.cover?.key,
+                            uri = coverKey,
                             placeholder = if (isArtist) Icons.Default.Person else Icons.Default.Album,
                             shape = if (isArtist) CircleShape else RoundedCornerShape(12.dp),
                             size = size
                         )
                     },
-                    details = { state.album?.let { album -> AlbumSubtitle(album, actions) } },
+                    details = {
+                        state.album?.let { album -> AlbumSubtitle(album, openArtist) }
+                        state.playlist?.let { playlist -> TrackCountLine(playlist.tracks.size.takeIf { it > 0 } ?: playlist.trackCount) }
+                    },
                     actions = {
                         if (tracks.isNotEmpty()) {
                             PlayButton(Icons.Default.PlayArrow, stringResource(R.string.cd_slushat), primary = true, Modifier.weight(1f)) {
@@ -148,7 +170,7 @@ fun CatalogPageScreen(
                         }
                     },
                     trailing = {
-                        if (tracks.isNotEmpty()) {
+                        if (tracks.isNotEmpty() && !jellyfin) {
                             Spacer(Modifier.width(12.dp))
                             ListMenuButton(tracks, state.page.title, actions.onAddToEnd, radioSeedOf(state.page))
                         }
@@ -166,12 +188,12 @@ fun CatalogPageScreen(
                     }
                     Spacer(Modifier.weight(1f))
                     // The list's queue actions sit where the playlist page keeps its menu
-                    if (tracks.isNotEmpty()) ListMenuButton(tracks, state.page.title, actions.onAddToEnd, radioSeedOf(state.page))
+                    if (tracks.isNotEmpty() && !jellyfin) ListMenuButton(tracks, state.page.title, actions.onAddToEnd, radioSeedOf(state.page))
                 }
                 Spacer(Modifier.height(12.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Cover(
-                        uri = if (isArtist) state.artist?.artist?.cover?.key else state.album?.cover?.key,
+                        uri = coverKey,
                         placeholder = if (isArtist) Icons.Default.Person else Icons.Default.Album,
                         shape = if (isArtist) CircleShape else RoundedCornerShape(12.dp),
                         size = 112.dp
@@ -179,12 +201,13 @@ fun CatalogPageScreen(
                     Spacer(Modifier.width(16.dp))
                     Column {
                         Text(
-                            text = state.artist?.artist?.name?.ifEmpty { null } ?: state.album?.title?.ifEmpty { null } ?: state.page.title,
+                            text = pageTitle,
                             style = HiFiType.LargeTitle.copy(fontSize = 26.sp, lineHeight = 32.sp),
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
                         )
-                        state.album?.let { album -> AlbumSubtitle(album, actions) }
+                        state.album?.let { album -> AlbumSubtitle(album, openArtist) }
+                        state.playlist?.let { playlist -> TrackCountLine(playlist.tracks.size.takeIf { it > 0 } ?: playlist.trackCount) }
                     }
                 }
                 Spacer(Modifier.height(14.dp))
@@ -201,6 +224,7 @@ fun CatalogPageScreen(
             }
         }
 
+        if (state.offline) item(key = "offline") { OfflineBanner(state.serverName, actions.onRetry) }
         when {
             state.isLoading -> item(key = "loading") { HiFiSkeletonRows(Modifier.padding(top = 20.dp), count = 6) }
             state.failed -> item(key = "failed") {
@@ -212,12 +236,14 @@ fun CatalogPageScreen(
                 }
                 itemsIndexed(tracks, key = { _, t -> "t" + t.id }, contentType = { _, _ -> "track" }) { index, track ->
                     Box(Modifier.padding(horizontal = 8.dp).appearOnce(appearance, track.id, index)) {
+                        // A Jellyfin track has no likes yet (P5): no heart; its ⋮ menu has the queue actions (step 25)
                         TrackItem(
                             track = track,
                             isPlaying = isPlaying && track.id == currentTrackId,
                             isLiked = track.id in likedTrackIds,
                             onToggleLike = { actions.onToggleLike(track) },
-                            onClick = { actions.onPlay(tracks, track.id, false) }
+                            onClick = { actions.onPlay(tracks, track.id, false) },
+                            showLike = !jellyfin
                         )
                     }
                 }
@@ -226,7 +252,7 @@ fun CatalogPageScreen(
                     item(key = "albums") {
                         Column {
                             SectionTitle(stringResource(R.string.catalog_albums))
-                            AlbumsRow(albums, onOpen = { album -> actions.onOpenAlbum(album.ref.id, album.title) })
+                            AlbumsRow(albums, onOpen = { album -> openAlbum(album.ref.id, album.title) })
                         }
                     }
                 }
@@ -236,7 +262,7 @@ fun CatalogPageScreen(
 }
 
 @Composable
-private fun AlbumSubtitle(album: Album, actions: CatalogActions) {
+private fun AlbumSubtitle(album: Album, onOpenArtist: (id: String, name: String) -> Unit) {
     val artist = album.artists.firstOrNull { it.ref != null }
     if (artist != null) {
         Text(
@@ -246,7 +272,7 @@ private fun AlbumSubtitle(album: Album, actions: CatalogActions) {
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.clickable(role = Role.Button) { artist.ref?.id?.let { actions.onOpenArtist(it, artist.name) } }
+            modifier = Modifier.clickable(role = Role.Button) { artist.ref?.id?.let { onOpenArtist(it, artist.name) } }
         )
     }
     Text(
@@ -254,6 +280,16 @@ private fun AlbumSubtitle(album: Album, actions: CatalogActions) {
             album.year?.toString(),
             russianQuantityString(album.tracks.size.takeIf { it > 0 } ?: album.trackCount, R.string.tracks_count_one, R.string.tracks_count_few, R.string.tracks_count_many)
         ).joinToString(" · "),
+        color = Color.White.copy(alpha = 0.7f),
+        fontSize = 13.sp
+    )
+}
+
+/** "22 tracks" under a playlist's title. */
+@Composable
+private fun TrackCountLine(count: Int) {
+    Text(
+        text = russianQuantityString(count, R.string.tracks_count_one, R.string.tracks_count_few, R.string.tracks_count_many),
         color = Color.White.copy(alpha = 0.7f),
         fontSize = 13.sp
     )

@@ -1,5 +1,6 @@
 package org.tegro.yamp.presentation.history
 
+import org.tegro.yamp.domain.queue.service
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -177,7 +178,9 @@ private fun HistoryTrack(
         // In "All" every row says where it played
         subtitle = if (showQueue && !row.queueName.isNullOrBlank()) "$artist · ${row.queueName}" else null,
         onToggleLike = { onToggleLike(track) },
-        onClick = { onTrackClick(track) }
+        onClick = { onTrackClick(track) },
+        // A Jellyfin track has no likes yet (P5); it plays under its own account (D84, step 25)
+        showLike = track.ref.service != org.tegro.yamp.domain.account.Provider.JELLYFIN
     )
 }
 

@@ -17,8 +17,22 @@ import javax.inject.Inject
 class AccountViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val session: AccountSessionManager,
-    accountContext: org.tegro.yamp.data.account.AccountContext
+    accountContext: org.tegro.yamp.data.account.AccountContext,
+    jellyfinStore: org.tegro.yamp.data.provider.jellyfin.JellyfinAccountStore,
+    private val jellyfinSession: org.tegro.yamp.data.provider.jellyfin.JellyfinAccountSession,
+    signedInAccounts: org.tegro.yamp.data.account.SignedInAccounts
 ) : ViewModel() {
+
+    /** The Jellyfin accounts for Settings → Accounts, with the markers they have among all accounts (D78). */
+    val jellyfinRows: StateFlow<List<JellyfinAccountRow>> =
+        kotlinx.coroutines.flow.combine(jellyfinStore.accounts, signedInAccounts.accounts) { jellyfin, all ->
+            val tags = providerAccountTags(all).associateBy { it.key }
+            jellyfin.mapNotNull { account ->
+                tags[account.id.value]?.let { JellyfinAccountRow(it, listOf(account.serverVersion.takeIf { v -> v.isNotBlank() }?.let { v -> "Jellyfin $v" }, account.serverUrl.substringAfter("://")).filterNotNull().joinToString(" · ")) }
+            }
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    fun removeJellyfin(key: String) = jellyfinSession.signOut(org.tegro.yamp.domain.account.AccountId(key))
 
     val allAccounts: StateFlow<List<UserAccount>> = authRepository.allAccounts
     val activeAccount: StateFlow<UserAccount?> = authRepository.activeAccount

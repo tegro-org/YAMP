@@ -86,6 +86,7 @@ import org.tegro.yamp.presentation.queues.QueueButton
 import org.tegro.yamp.domain.media.Track
 import org.tegro.yamp.presentation.common.coverUri
 import org.tegro.yamp.presentation.common.id
+import org.tegro.yamp.presentation.common.supportsLikes
 import org.tegro.yamp.data.queue.ActiveQueue
 import org.tegro.yamp.domain.queue.QueueKind
 import org.tegro.yamp.presentation.hifi.GlassCircleButton
@@ -400,8 +401,13 @@ private fun WaveTrackInfo(track: Track?, startsWith: Track?, wave: Boolean, isLi
             }
         } else {
             Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-                GlassCircleButton(onClick = onDislike, contentDescription = stringResource(R.string.cd_ne_nravitsya), size = 48.dp) {
-                    Icon(Icons.Rounded.HeartBroken, contentDescription = null, tint = Color.White.copy(alpha = 0.86f), modifier = Modifier.size(21.dp))
+                if (shown.supportsLikes) {
+                    GlassCircleButton(onClick = onDislike, contentDescription = stringResource(R.string.cd_ne_nravitsya), size = 48.dp) {
+                        Icon(Icons.Rounded.HeartBroken, contentDescription = null, tint = Color.White.copy(alpha = 0.86f), modifier = Modifier.size(21.dp))
+                    }
+                } else {
+                    // Keeps the title centred where the buttons would be (Jellyfin tracks have no likes yet)
+                    Spacer(Modifier.size(48.dp))
                 }
                 Column(Modifier.weight(1f).padding(horizontal = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
@@ -425,13 +431,17 @@ private fun WaveTrackInfo(track: Track?, startsWith: Track?, wave: Boolean, isLi
                         textAlign = TextAlign.Center
                     )
                 }
-                GlassCircleButton(onClick = onLike, contentDescription = stringResource(R.string.cd_nravitsya), size = 48.dp) {
-                    Icon(
-                        if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                        contentDescription = null,
-                        tint = if (isLiked) HiFi.Love else Color.White.copy(alpha = 0.86f),
-                        modifier = Modifier.size(21.dp)
-                    )
+                if (shown.supportsLikes) {
+                    GlassCircleButton(onClick = onLike, contentDescription = stringResource(R.string.cd_nravitsya), size = 48.dp) {
+                        Icon(
+                            if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                            contentDescription = null,
+                            tint = if (isLiked) HiFi.Love else Color.White.copy(alpha = 0.86f),
+                            modifier = Modifier.size(21.dp)
+                        )
+                    }
+                } else {
+                    Spacer(Modifier.size(48.dp))
                 }
             }
         }

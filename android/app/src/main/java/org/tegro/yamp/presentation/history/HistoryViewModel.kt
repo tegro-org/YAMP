@@ -67,7 +67,7 @@ class HistoryViewModel @Inject constructor(
     private val history: ListeningHistory,
     private val playbackController: PlaybackController,
     settings: SettingsRepository,
-    authRepository: org.tegro.yamp.domain.repository.AuthRepository
+    signedInAccounts: org.tegro.yamp.data.account.SignedInAccounts
 ) : ViewModel() {
 
     private sealed interface Selection {
@@ -85,9 +85,9 @@ class HistoryViewModel @Inject constructor(
         }
     }.distinctUntilChanged()
 
-    private val filters: Flow<List<HistoryFilter>> = combine(playbackController.queues, history.queues(), authRepository.allAccounts) { queues, inHistory, accounts ->
+    private val filters: Flow<List<HistoryFilter>> = combine(playbackController.queues, history.queues(), signedInAccounts.accounts) { queues, inHistory, accounts ->
         val activeId = queues.firstOrNull { it.isActive }?.queue?.id
-        val tags = org.tegro.yamp.presentation.account.accountTags(accounts).takeIf { it.size > 1 }.orEmpty()
+        val tags = org.tegro.yamp.presentation.account.providerAccountTags(accounts).takeIf { it.size > 1 }.orEmpty()
         val known = queues
             .sortedWith(compareBy({ it.queue.id != activeId }, { it.queue.kind.rank }))
             .map { q -> HistoryFilter(q.queue.id, q.queue.name, q.queue.kind, tags.firstOrNull { it.key == q.queue.account }) }
