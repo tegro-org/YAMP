@@ -3,8 +3,10 @@ package org.tegro.yamp.domain.provider
 import org.tegro.yamp.domain.account.AccountId
 import org.tegro.yamp.domain.media.Album
 import org.tegro.yamp.domain.media.Artist
+import org.tegro.yamp.domain.media.Genre
 import org.tegro.yamp.domain.media.Playlist
 import org.tegro.yamp.domain.media.Track
+import kotlinx.coroutines.flow.StateFlow
 import org.tegro.yamp.domain.queue.MediaRef
 
 /**
@@ -24,6 +26,16 @@ interface MusicProvider {
     val library: Library? get() = null
     val search: Search? get() = null
     val catalog: Catalog? get() = null
+
+    /** Paged lists of a library too big to load at once (Jellyfin, docs/phase-3-providers.md step 22). */
+    val browse: Browse? get() = null
+
+    /**
+     * Whether the service answered the last call (null: always reachable, as far as the UI goes — Yandex). A
+     * provider that serves the last visit from its cache while away (Jellyfin) says so here, and its pages show
+     * the "not reachable" banner.
+     */
+    val reachable: StateFlow<Boolean>? get() = null
 }
 
 /** The account's own collection. */
@@ -58,4 +70,23 @@ interface Catalog {
     suspend fun album(album: MediaRef): Outcome<Album>
 
     suspend fun artist(artist: MediaRef): Outcome<ArtistPage>
+
+    /** The playlist with its tracks; a provider without playlist pages here (Yandex: its own screen) says not found. */
+    suspend fun playlist(playlist: MediaRef): Outcome<Playlist> = Outcome.Err(ProviderError.NotFound)
+}
+
+/** How many of each a [Browse] library holds. */
+data class BrowseCounts(val albums: Int, val artists: Int, val genres: Int, val playlists: Int)
+
+/**
+ * A library browsed by kind (Jellyfin, step 22): every list is paged — pass the [Page.next] of one page to get
+ * the next. Order is the service's sort by name.
+ */
+interface Browse {
+    suspend fun counts(): Outcome<BrowseCounts>
+    suspend fun albums(cursor: Page.Cursor? = null): Outcome<Page<Album>>
+    suspend fun artists(cursor: Page.Cursor? = null): Outcome<Page<Artist>>
+    suspend fun genres(cursor: Page.Cursor? = null): Outcome<Page<Genre>>
+    suspend fun playlists(cursor: Page.Cursor? = null): Outcome<Page<Playlist>>
+    suspend fun genreAlbums(genre: MediaRef, cursor: Page.Cursor? = null): Outcome<Page<Album>>
 }

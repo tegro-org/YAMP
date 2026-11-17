@@ -1,0 +1,62 @@
+{
+  "Items": [
+    {
+      "Name": "celtic",
+      "ServerId": "0123456789abcdef0123456789abcdef",
+      "Id": "0000000000000000000000000000b001",
+      "ChannelId": null,
+      "Genres": [],
+      "Type": "MusicGenre",
+      "GenreItems": [],
+      "ImageTags": {},
+      "BackdropImageTags": [],
+      "ImageBlurHashes": {},
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown"
+    },
+    {
+      "Name": "electronica",
+      "ServerId": "0123456789abcdef0123456789abcdef",
+      "Id": "0000000000000000000000000000b002",
+      "ChannelId": null,
+      "Genres": [],
+      "Type": "MusicGenre",
+      "GenreItems": [],
+      "ImageTags": {},
+      "BackdropImageTags": [],
+      "ImageBlurHashes": {},
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown"
+    },
+    {
+      "Name": "irish folk",
+      "ServerId": "0123456789abcdef0123456789abcdef",
+      "Id": "0000000000000000000000000000b003",
+      "ChannelId": null,
+      "Genres": [],
+      "Type": "MusicGenre",
+      "GenreItems": [],
+      "ImageTags": {},
+      "BackdropImageTags": [],
+      "ImageBlurHashes": {},
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown"
+    },
+    {
+      "Name": "production music",
+      "ServerId": "0123456789abcdef0123456789abcdef",
+      "Id": "0000000000000000000000000000b004",
+      "ChannelId": null,
+      "Genres": [],
+      "Type": "MusicGenre",
+      "GenreItems": [],
+      "ImageTags": {},
+      "BackdropImageTags": [],
+      "ImageBlurHashes": {},
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown"
+    }
+  ],
+  "TotalRecordCount": 4,
+  "StartIndex": 0
+}

@@ -1,0 +1,9 @@
+{
+  "LocalAddress": "yamp-dev",
+  "ServerName": "yamp-dev",
+  "Version": "12.4.0",
+  "ProductName": "Jellyfin Server",
+  "OperatingSystem": "",
+  "Id": "0123456789abcdef0123456789abcdef",
+  "StartupWizardCompleted": true
+}

@@ -62,3 +62,6 @@ data class Playlist(
     /** Empty when the list did not include them. */
     val tracks: List<Track> = emptyList()
 )
+
+/** A genre of a library that browses by genre (Jellyfin); its albums are listed through [org.tegro.yamp.domain.provider.Browse]. */
+data class Genre(val ref: MediaRef, val name: String, val cover: Cover?)

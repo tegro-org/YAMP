@@ -57,7 +57,7 @@ jobs:
             git /repo --no-banner --redact --exit-code 1
 
       - name: Run unit tests
-        run: ./gradlew testDebugUnitTest :core:domain:test --no-daemon
+        run: ./gradlew testDebugUnitTest :core:domain:test :provider:jellyfin:test --no-daemon
 
       - name: Build Release APK
         env:

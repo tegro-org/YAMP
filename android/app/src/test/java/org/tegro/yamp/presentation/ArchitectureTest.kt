@@ -112,5 +112,25 @@ class ArchitectureTest {
         assertEquals("files no longer using Yandex DTOs — remove them from the allow-list", emptySet<String>(), allowList - users)
     }
 
+    /**
+     * D71, D77: `:provider:jellyfin` is pure Kotlin/JVM and depends on no project but `:core:domain` — it never
+     * reaches into the app or the Yandex provider; the app wires it in, not the other way round.
+     */
+    @Test
+    fun theJellyfinModuleDependsOnlyOnTheDomainModule() {
+        val build = File(jellyfinModuleDir, "build.gradle.kts").readText()
+        val forbiddenInBuild = listOf("com.android", "android.application", "android.library")
+        assertEquals(emptyList<String>(), forbiddenInBuild.filter { build.contains(it) })
+        val projects = Regex("""project\("([^"]+)"\)""").findAll(build).map { it.groupValues[1] }.toList()
+        assertEquals(listOf(":core:domain"), projects)
+        val forbidden = listOf("import android.", "import androidx.", "import org.tegro.yamp.data.", "import org.tegro.yamp.presentation.")
+        val offenders = File(jellyfinModuleDir, "src/main").walk()
+            .filter { it.isFile && it.extension == "kt" }
+            .flatMap { file -> file.readLines().filter { line -> forbidden.any { line.contains(it) } }.map { "${file.name}: $it" } }
+            .toList()
+        assertEquals(emptyList<String>(), offenders)
+    }
+
     private val domainModuleDir = File("../core/domain")
+    private val jellyfinModuleDir = File("../provider/jellyfin")
 }

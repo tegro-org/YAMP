@@ -1,7 +1,7 @@
 package org.tegro.yamp.domain.account
 
-/** The music services an account can belong to (docs/multi-source-player.md C5). Yandex only until Phase 3. */
-enum class Provider(val key: String) { YANDEX("yandex") }
+/** The music services an account can belong to (docs/multi-source-player.md C5). */
+enum class Provider(val key: String) { YANDEX("yandex"), JELLYFIN("jellyfin") }
 
 /**
  * Who a request is for: `"<provider>:<id>"`, e.g. `"yandex:12345"` (docs/phase-2a-accounts.md §2). The id is the
@@ -17,6 +17,12 @@ value class AccountId(val value: String) {
     companion object {
         private const val SEPARATOR = ":"
         fun yandex(uid: String) = AccountId(Provider.YANDEX.key + SEPARATOR + uid)
+
+        /**
+         * A Jellyfin account is one server plus one user (docs/phase-3-providers.md D78):
+         * `jellyfin:<serverId>/<userId>` — the same user name on two servers is two accounts.
+         */
+        fun jellyfin(serverId: String, userId: String) = AccountId(Provider.JELLYFIN.key + SEPARATOR + serverId + "/" + userId)
     }
 }
 

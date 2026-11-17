@@ -1,0 +1,66 @@
+{
+  "Items": [
+    {
+      "Name": "Kevin MacLeod",
+      "ServerId": "0123456789abcdef0123456789abcdef",
+      "Id": "0000000000000000000000000000b000",
+      "PremiereDate": "1972-09-28T00:00:00.0000000Z",
+      "ChannelId": null,
+      "Genres": [
+        "celtic",
+        "electronica",
+        "irish folk",
+        "production music"
+      ],
+      "RunTimeTicks": 0,
+      "ProductionYear": 1972,
+      "IsFolder": true,
+      "Type": "MusicArtist",
+      "GenreItems": [
+        {
+          "Name": "celtic",
+          "Id": "0000000000000000000000000000b001"
+        },
+        {
+          "Name": "electronica",
+          "Id": "0000000000000000000000000000b002"
+        },
+        {
+          "Name": "irish folk",
+          "Id": "0000000000000000000000000000b003"
+        },
+        {
+          "Name": "production music",
+          "Id": "0000000000000000000000000000b004"
+        }
+      ],
+      "UserData": {
+        "PlaybackPositionTicks": 0,
+        "PlayCount": 0,
+        "IsFavorite": false,
+        "Played": false,
+        "Key": "Artist-Kevin MacLeod",
+        "ItemId": "0000000000000000000000000000b000"
+      },
+      "ChildCount": 2,
+      "ImageTags": {
+        "Primary": "0000000000000000000000000000b005"
+      },
+      "BackdropImageTags": [
+        "0000000000000000000000000000b006"
+      ],
+      "ImageBlurHashes": {
+        "Backdrop": {
+          "0000000000000000000000000000b006": "WU6+CxyGbIaIV?V?juWCWAe-axayWCjZadadj[WrkDogkDf,j]js"
+        },
+        "Primary": {
+          "0000000000000000000000000000b005": "etH_=B_3ofxuof~q%Mayt7j[ofWBj[ayj[t7ofofWBofxuj[WBj[of"
+        }
+      },
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown"
+    }
+  ],
+  "TotalRecordCount": 1,
+  "StartIndex": 0
+}
