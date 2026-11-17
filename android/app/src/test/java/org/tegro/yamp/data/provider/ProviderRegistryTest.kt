@@ -1,5 +1,9 @@
 package org.tegro.yamp.data.provider
 
+import org.tegro.yamp.data.provider.jellyfin.JellyfinAccount
+import org.tegro.yamp.data.provider.jellyfin.JellyfinAccountStore
+import org.tegro.yamp.data.provider.jellyfin.JellyfinClients
+import org.tegro.yamp.data.provider.jellyfin.cache.JellyfinDatabases
 import android.app.Application
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
@@ -83,14 +87,40 @@ class ProviderRegistryTest {
         override val io get() = Dispatchers.Unconfined
         override val default get() = Dispatchers.Unconfined
     }
+    private val jellyfinStore = JellyfinAccountStore { context.getSharedPreferences("registry_jellyfin", Context.MODE_PRIVATE) }
+    private val jellyfinClients = JellyfinClients(OkHttpClient(), jellyfinStore, context)
+    private val jellyfinDatabases = JellyfinDatabases(context)
+    private val soundMode = org.tegro.yamp.data.player.SoundMode(kotlinx.coroutines.flow.flowOf(false), {}, { true })
+    private val fixedOutput = org.tegro.yamp.data.player.FixedOutputRate(48_000)
     private val registry = ProviderRegistry(
         auth,
         YandexStreamResolver.Factory(NoLinks, dispatchers) { null },
         library,
         UserPlaylistsRepository(clients, auth, library, cache),
         SearchRepository(clients),
-        CatalogRepository(clients)
+        CatalogRepository(clients),
+        jellyfinStore, jellyfinClients, jellyfinDatabases, soundMode, fixedOutput
     )
+
+    @Test
+    fun aJellyfinAccountHasABrowsableProviderOutsideTheYandexComposition() {
+        val home = JellyfinAccount(
+            serverUrl = "http://10.0.2.2:8096", serverId = "srv1", serverName = "Home Media",
+            userId = "u1", userName = "alex", token = "tok"
+        )
+        jellyfinStore.add(home)
+
+        val provider = registry.provider(home.id)
+        assertNotNull(provider)
+        assertNotNull("Jellyfin browses by kind (step 22)", provider!!.browse)
+        assertNotNull(provider.reachable)
+        assertEquals(listOf(provider), registry.jellyfin())
+        assertTrue("all() lists the Yandex accounts; composition adds Jellyfin (step 24)", registry.all().none { it.account == home.id })
+
+        registry.forget(home.id)
+        jellyfinStore.remove(home.id)
+        assertNull("signed out", registry.provider(home.id))
+    }
 
     @Test
     fun everySignedInAccountHasItsProviderInSignInOrder() {
@@ -143,11 +173,32 @@ class ProviderRegistryTest {
     }
 
     @Test
+    fun compositionPutsTheContextYandexAccountFirstThenJellyfinInSignInOrder() {
+        val home = JellyfinAccount(
+            serverUrl = "http://10.0.2.2:8096", serverId = "srv1", serverName = "Home Media",
+            userId = "u1", userName = "alex", token = "tok"
+        )
+        val office = home.copy(serverId = "srv2", serverName = "Office", userId = "u2")
+        jellyfinStore.add(home)
+        jellyfinStore.add(office)
+        try {
+            val composition = ProviderComposition(registry, AccountContext(auth))
+
+            assertEquals(listOf(first.accountId(), home.id, office.id), composition.providers().map { it.account })
+            assertNotNull("Jellyfin searches (step 24)", registry.provider(home.id)!!.search)
+        } finally {
+            jellyfinStore.remove(home.id)
+            jellyfinStore.remove(office.id)
+        }
+    }
+
+    @Test
     fun compositionIsEmptyWhileNobodyIsSignedIn() = runBlocking {
         val nobody = FakeAuthRepository(null)
         val composition = ProviderComposition(
             ProviderRegistry(nobody, YandexStreamResolver.Factory(NoLinks, dispatchers) { null }, library,
-                UserPlaylistsRepository(clients, nobody, library, cache), SearchRepository(clients), CatalogRepository(clients)),
+                UserPlaylistsRepository(clients, nobody, library, cache), SearchRepository(clients), CatalogRepository(clients),
+                jellyfinStore, jellyfinClients, jellyfinDatabases, soundMode, fixedOutput),
             AccountContext(nobody)
         )
 

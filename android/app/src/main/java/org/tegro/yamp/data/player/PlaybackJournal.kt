@@ -55,7 +55,9 @@ class PlaybackJournal(
         /** The next track's state changed: loading / ready / failed (D80); [Event.detail] says how and why. */
         NEXT,
         /** The on-disk stream cache: a track found, missed or written in full (D86); [Event.detail]. */
-        CACHE
+        CACHE,
+        /** A play report a provider's server didn't take (Jellyfin `/Sessions/Playing*`, step 26). */
+        REPORT
     }
 
     data class Event(val atMs: Long, val kind: Kind, val title: String? = null, val detail: String? = null, val valueMs: Long = 0L)

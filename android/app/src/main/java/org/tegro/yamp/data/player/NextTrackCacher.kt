@@ -82,6 +82,7 @@ class NextTrackCacher(
         if (writingTrackId == trackId && job?.isActive == true) return
         cancel()
         streamCache.remember(stream)
+        StreamHeaders.register(stream.uri, stream.headers)
         if (streamCache.isComplete(key)) {
             _results.tryEmit(NextTrackFetch.Result(trackId, NextTrackFetch.Outcome.ALREADY_ON_DISK))
             return

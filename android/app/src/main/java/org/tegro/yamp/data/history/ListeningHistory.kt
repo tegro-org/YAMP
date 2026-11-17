@@ -109,7 +109,8 @@ class ListeningHistory(
     }
 
     private fun rowOf(track: org.tegro.yamp.domain.media.Track, queue: PlayQueue?, time: Long) = HistoryEntity(
-        ref = TrackRef.yandex(track.ref.id).value,
+        // The track's own ref: a Jellyfin row stays a Jellyfin track, played back under its account (step 25)
+        ref = track.ref.value,
         trackId = track.ref.id,
         title = track.title,
         artist = track.artists.joinToString(", ") { it.name },
@@ -117,7 +118,8 @@ class ListeningHistory(
         durationMs = track.durationMs ?: 0L,
         startedAt = time,
         queueId = queue?.id,
-        queueName = queue?.name
+        queueName = queue?.name,
+        account = queue?.account
     )
 
     /** The row as a queue entry, for the track lookup (the stored track, or a stub from the display columns). */

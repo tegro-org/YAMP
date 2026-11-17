@@ -461,6 +461,8 @@ class PlayerRepositoryImpl(
     override fun prepareNextTrack(trackId: String, stream: ResolvedStream, title: String?, artist: String?, coverUrl: String?) {
         if (preloadedTrackId == trackId || outgoingPlayer != null) return
         val playUri = stream.uri.takeIf { it.isNotBlank() } ?: return
+        // Its headers (a Jellyfin token, step 23) go with every request to this URL, and only to it
+        org.tegro.yamp.data.player.StreamHeaders.register(playUri, stream.headers)
         scope.launch {
             // State may have changed since the controller asked.
             if (outgoingPlayer != null || _currentTrackId.value == trackId) return@launch
@@ -545,6 +547,7 @@ class PlayerRepositoryImpl(
     ) {
         playJob?.cancel()
         diagnostics.requested(onlyIfUnset = true)
+        stream?.let { org.tegro.yamp.data.player.StreamHeaders.register(it.uri, it.headers) }
         playJob = scope.launch {
             // The player already moved on to this track gapless (F4): nothing to resolve, the start takes it over
             if (gaplessArrived == trackId && activePlayer.currentMediaItem?.mediaId == trackId) {

@@ -42,10 +42,10 @@ class ProviderComposition @Inject constructor(
 ) {
     /** The providers a screen composes, in the stable order. Empty while nobody is signed in. */
     fun providers(): List<MusicProvider> {
-        val all = registry.all()
-        val context = accountContext.current()?.let(registry::provider) ?: all.firstOrNull { it.account.isYandex }
-        val others = all.filterNot { it.account.isYandex }
-        return listOfNotNull(context) + others
+        val yandex = registry.all()
+        val context = accountContext.current()?.takeIf { it.isYandex }?.let(registry::provider) ?: yandex.firstOrNull()
+        // Then each account of another service in sign-in order (step 24): Jellyfin today
+        return listOfNotNull(context) + registry.jellyfin()
     }
 
     /** The providers that have a library, for the Library screen's sections. */
@@ -66,7 +66,8 @@ class ProviderComposition @Inject constructor(
                 tracks = ok.flatMap { (account, r) -> r.tracks.map { Sourced(it, account) } },
                 artists = ok.flatMap { (account, r) -> r.artists.map { Sourced(it, account) } },
                 albums = ok.flatMap { (account, r) -> r.albums.map { Sourced(it, account) } },
-                showBadges = searching.size >= 2
+                // Badges only while the list really mixes providers (canvas `sr-results` / `sr-single`)
+                showBadges = ok.count { (_, r) -> r.tracks.isNotEmpty() || r.artists.isNotEmpty() || r.albums.isNotEmpty() } >= 2
             )
         )
     }

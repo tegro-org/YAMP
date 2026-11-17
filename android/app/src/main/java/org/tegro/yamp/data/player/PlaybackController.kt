@@ -47,6 +47,7 @@ import org.tegro.yamp.domain.provider.getOrNull
 import org.tegro.yamp.domain.queue.RadioTarget
 import org.tegro.yamp.domain.queue.RepeatMode
 import org.tegro.yamp.domain.queue.TrackRef
+import org.tegro.yamp.domain.queue.fitsQueueOf
 import org.tegro.yamp.domain.repository.AuthRepository
 import org.tegro.yamp.domain.repository.PlaybackFailure
 import org.tegro.yamp.domain.repository.PlayerRepository
@@ -359,7 +360,32 @@ class PlaybackController @Inject internal constructor(
      * — the active one — while its account is signed in.
      */
     private val playbackAccount: AccountId?
-        get() = contextAccount
+        get() = jellyfinQueueAccount() ?: contextAccount
+
+    /** [playbackAccount] for the Jellyfin play reports (step 26). */
+    val playingAccount: AccountId? get() = playbackAccount
+
+    /**
+     * The active queue's account when it is a signed-in Jellyfin account (step 23): its tracks resolve through
+     * its own provider, never through the Yandex context (D84). Yandex queues keep the context rule above.
+     */
+    private fun jellyfinQueueAccount(): AccountId? = active?.queue?.account
+        ?.let(::AccountId)
+        ?.takeIf { it.provider == org.tegro.yamp.domain.account.Provider.JELLYFIN && accountContext.signedInAnyProvider(it.value) }
+
+    /** Whether [track] may go into the queue of [account] — a queue holds its own account's tracks (D84). */
+    private fun fits(track: Track, account: String?): Boolean = track.ref.fitsQueueOf(account?.let(::AccountId))
+
+    /** [tracks] that may go into the active queue (D84); all of them while there is no queue. */
+    private fun fittingActive(tracks: List<Track>): List<Track> =
+        active?.queue?.let { queue -> tracks.filter { fits(it, queue.account) } } ?: tracks
+
+    /** Whether [account] is a Yandex account (or the Yandex context): the service-only helpers apply to it. */
+    private fun isYandex(account: AccountId?): Boolean = account?.provider != org.tegro.yamp.domain.account.Provider.JELLYFIN
+
+    /** The ref of a track the engine names by id: from the active queue (any provider), else a Yandex track. */
+    private fun refOf(trackId: String): TrackRef =
+        active?.tracks?.firstOrNull { it.idString == trackId }?.ref ?: TrackRef.yandex(trackId)
 
     /** The account a queue made now is bound to (D57): the one the user is in. */
     private val accountForNew: String? get() = contextAccount?.value
@@ -382,7 +408,7 @@ class PlaybackController @Inject internal constructor(
         playerRepository.skipPrevEvent.onEach { playPrev() }.launchIn(scope)
         playerRepository.playbackErrorEvent.onEach { onPlaybackFailure(it) }.launchIn(scope)
         // A player failed on a stream (a standby, a fading tail): its link is spent, the next start asks afresh
-        playerRepository.staleStreamEvent.onEach { streams.forAccount(playbackAccount).invalidate(TrackRef.yandex(it)) }.launchIn(scope)
+        playerRepository.staleStreamEvent.onEach { streams.forAccount(playbackAccount).invalidate(refOf(it)) }.launchIn(scope)
         settingsRepository.crossfadeSeconds
             .onEach { playerRepository.setCrossfadeDuration(it * 1000L) }
             .launchIn(scope)
@@ -501,7 +527,17 @@ class PlaybackController @Inject internal constructor(
         crossfade: Boolean = true,
         startPositionMs: Long = 0L
     ) {
-        if (playlist.none { it.idString == trackId }) return
+        val tapped = playlist.firstOrNull { it.idString == trackId } ?: return
+        // A merged list (Search, step 24) mixes services: a Jellyfin track plays in its own account's queue (D84)
+        accountContext.accountOf(tapped.ref)?.takeIf { active == null || !fits(tapped, active?.queue?.account) }?.let { account ->
+            playInAccount(account, playlist.filter { it.ref.provider == tapped.ref.provider }, trackId)
+            return
+        }
+        val own = playlist.filter { it.ref.provider == tapped.ref.provider }
+        if (own.size != playlist.size) {
+            playTrack(trackId, own, source, crossfade, startPositionMs)
+            return
+        }
         dropFailedNextLink(trackId)
         // A context chosen on purpose: there is nothing to go back to any more
         if (source != null) returnPoint = null
@@ -525,6 +561,30 @@ class PlaybackController @Inject internal constructor(
         }
     }
 
+    /**
+     * Plays [tracks] of [account] (a Jellyfin page, step 23) from [startId] in that account's own queue (D84): the
+     * active queue when it is the account's, else its latest own queue, else its default one. Never another
+     * account's queue, so the tracks resolve through their own provider.
+     */
+    fun playInAccount(account: AccountId, tracks: List<Track>, startId: String?) {
+        if (tracks.isEmpty()) return
+        returnPoint = null
+        val start = tracks.firstOrNull { it.idString == startId } ?: tracks.first()
+        pickOp(start.title) {
+            val key = account.value
+            val current = active?.queue
+            val target = current?.takeIf { it.account == key && it.kind == QueueKind.STATIC }?.id
+                ?: queueManager.queues.value.map { it.queue }
+                    .filter { it.account == key && it.kind == QueueKind.STATIC }
+                    .maxByOrNull { it.updatedAt }?.id
+                ?: queueManager.defaultQueue(key, mainName).id
+            if (current?.id != target) queueManager.switchTo(target, progress.value.takeIf { liveStation.value == null })
+            val queue = queueManager.replaceActive(tracks, PlaylistSource.SEARCH.name, start.ref, nameIfNew = mainName, accountIfNew = key)
+            val entry = queue.cursorEntry ?: return@pickOp
+            startEntry(entry.entryId, crossfade = true, startPositionMs = 0L)
+        }
+    }
+
     /** Moves the cursor to [entryId] of the active queue and plays it: the queue sheet's row, duplicates included. */
     fun playEntry(entryId: Long) {
         returnPoint = null
@@ -538,6 +598,12 @@ class PlaybackController @Inject internal constructor(
      * plays; the queue goes on after it. Never replaces a queue (D35) — with none, it starts a new one.
      */
     fun playNowKeepQueue(track: Track) {
+        // A track of another account (History's Jellyfin row while a Yandex queue plays): its own queue (D84)
+        if (active != null && !fits(track, active?.queue?.account)) {
+            accountContext.accountOf(track.ref)?.let { playInAccount(it, listOf(track), track.idString) }
+                ?: playTrack(track.idString, listOf(track), PlaylistSource.LIBRARY)
+            return
+        }
         returnPoint = null
         pickOp(track.title) {
             val queue = active
@@ -642,18 +708,22 @@ class PlaybackController @Inject internal constructor(
     fun setRepeat(mode: RepeatMode) = queueOp { queueManager.setRepeat(mode) }
 
     /** "Add to queue…": to the end of any queue, the active one included. */
-    fun addToQueue(queueId: Long, tracks: List<Track>) = queueOp { queueManager.appendTo(queueId, tracks) }
+    fun addToQueue(queueId: Long, tracks: List<Track>) = queueOp {
+        val account = queueManager.queues.value.firstOrNull { it.queue.id == queueId }?.queue?.account
+        tracks.filter { fits(it, account) }.takeIf { it.isNotEmpty() }?.let { queueManager.appendTo(queueId, it) }
+    }
 
     /** "Add to end of queue": the active one, created when there is none. */
     fun addToEnd(tracks: List<Track>) = queueOp {
+        val fitting = fittingActive(tracks).ifEmpty { return@queueOp }
         val queueId = active?.queue?.id ?: queueManager.create(mainName, account = accountForNew).id.also { queueManager.switchTo(it, null) }
-        queueManager.appendTo(queueId, tracks)
+        queueManager.appendTo(queueId, fitting)
     }
 
     /** "Play next" for a list: right after the current track. */
     fun playNextTracks(tracks: List<Track>) = queueOp {
         if (active == null) playFromNow(tracks, null, null, crossfade = true, startPositionMs = 0L)
-        else queueManager.insertAfterCursor(tracks)
+        else fittingActive(tracks).takeIf { it.isNotEmpty() }?.let { queueManager.insertAfterCursor(it) }
     }
 
     /** The switcher's edits, each one a queue operation in call order; nothing to wait for. */
@@ -662,7 +732,9 @@ class PlaybackController @Inject internal constructor(
 
     /** A new queue that at once gets [tracks] ("New queue" in the "Add to queue…" picker). */
     fun createQueueWith(name: String, tracks: List<Track>, account: String? = null) = queueOp {
-        queueManager.appendTo(queueManager.create(name, account = account ?: accountForNew).id, tracks)
+        val owner = account ?: accountForNew
+        val fitting = tracks.filter { fits(it, owner) }.ifEmpty { return@queueOp }
+        queueManager.appendTo(queueManager.create(name, account = owner).id, fitting)
     }
 
     fun renameQueue(queueId: Long, name: String) = queueOp { queueManager.rename(queueId, name) }
@@ -790,7 +862,7 @@ class PlaybackController @Inject internal constructor(
     private fun dropFailedNextLink(trackId: String) {
         val failed = _nextTrack.value as? NextTrack.Failed ?: return
         if (failed.trackId != trackId) return
-        streams.forAccount(playbackAccount).invalidate(TrackRef.yandex(trackId))
+        streams.forAccount(playbackAccount).invalidate(refOf(trackId))
         journal.record(PlaybackJournal.Kind.NEXT, null, "retry after: ${failed.reason}")
     }
 
@@ -816,6 +888,8 @@ class PlaybackController @Inject internal constructor(
 
     /** Puts [track] right after the current one; with nothing (or a station) playing it just starts. */
     fun enqueueNext(track: Track) = queueOp {
+        // Never into another account's queue (D84); the menu hides "Play next" then
+        if (active != null && !fits(track, active?.queue?.account)) return@queueOp
         val queue = active
         if (queue == null) {
             playFromNow(listOf(track), null, track.idString, crossfade = true, startPositionMs = 0L)
@@ -904,6 +978,9 @@ class PlaybackController @Inject internal constructor(
         if (active?.queue?.account == account.value) followQueueAccount(account.value) else switchQueueNow(waveId, play = false)
     }
 
+    /** A Jellyfin account's default queue exists from sign-in on (D83); an account with queues already keeps them. */
+    fun ensureDefaultQueue(account: AccountId, name: String) = queueOp { queueManager.defaultQueue(account.value, name) }
+
     /** The account's My Wave queue exists from sign-in on (D63); an existing one (same uid) is kept. */
     fun ensureWaveQueue(account: AccountId) = queueOp { queueManager.waveQueue(account.value, waveName) }
 
@@ -987,7 +1064,7 @@ class PlaybackController @Inject internal constructor(
      */
     private suspend fun leaveStrandedQueue() {
         val account = active?.queue?.account ?: return
-        if (accountContext.signedIn(account) != null) return
+        if (accountContext.signedInAnyProvider(account)) return
         val fallback = SignOutPlan.fallback(authRepository.getAllAccounts(), authRepository.getDefaultAccountUid())
         enterFallback(fallback, position = null)
     }
@@ -1357,10 +1434,12 @@ class PlaybackController @Inject internal constructor(
     /** Replaces the active queue with [tracks] and plays [startId] (or the first); My Wave is never replaced. */
     private suspend fun playFromNow(tracks: List<Track>, origin: String?, startId: String?, crossfade: Boolean, startPositionMs: Long) {
         val left = active
-        if (left?.queue?.kind == QueueKind.WAVE) {
+        // Yandex tracks never go into a Jellyfin account's queue (D84): they go to the context account's own queue
+        val foreign = jellyfinQueueAccount() != null && tracks.none { it.ref.provider.startsWith(JELLYFIN_PROVIDER) }
+        if (left?.queue?.kind == QueueKind.WAVE || foreign) {
             // The wave is not editable: the list goes to the user's latest own queue, or a new one
             val target = queueManager.queues.value
-                .filter { it.queue.kind == QueueKind.STATIC }
+                .filter { it.queue.kind == QueueKind.STATIC && (!foreign || it.queue.account == accountForNew) }
                 .maxByOrNull { it.queue.updatedAt }?.queue?.id
                 ?: queueManager.create(mainName, account = accountForNew).id
             queueManager.switchTo(target, progress.value.takeIf { liveStation.value == null })
@@ -1391,7 +1470,8 @@ class PlaybackController @Inject internal constructor(
         setNext(NextTrack.None)
 
         val upcoming = queue.tracks.drop(index + 1).take(3).map { it.idString }
-        if (upcoming.isNotEmpty()) preloadManager.preloadTracks(upcoming, playbackAccount)
+        // The Yandex link prefetch; a Jellyfin queue's links come from its own resolver (step 23)
+        if (upcoming.isNotEmpty() && isYandex(playbackAccount)) preloadManager.preloadTracks(upcoming, playbackAccount)
 
         if (queue.queue.kind == QueueKind.WAVE) {
             // Continuous queue auto-refill: fewer than 20 tracks left in My Wave
@@ -1602,7 +1682,7 @@ class PlaybackController @Inject internal constructor(
             return
         }
 
-        val ref = TrackRef.yandex(trackId)
+        val ref = track.ref
         val downloaded = preloadManager.hasPlayableCopy(trackId)
         if (downloaded) {
             publishQuality(trackId)
@@ -1703,6 +1783,10 @@ class PlaybackController @Inject internal constructor(
         }
         onDiskTrackId.value = trackId.takeIf { stream.localFile || it == lastOnDiskId }
         publishQuality(trackId)
+        // Another provider's stream says its own quality (Jellyfin in compatible mode: MP3 320; as-is: unknown)
+        if (!isYandex(playbackAccount)) {
+            _streamQuality.value = stream.quality?.let { context.getString(R.string.quality_stream, it.codec.uppercase(), it.bitrateKbps) }
+        }
         streamingTrackId = trackId
         playingCopyId = null
         playerRepository.playTrack(trackId, stream, track.title, track.artists.firstOrNull()?.name, coverUrlFor(track), crossfade, startPositionMs, pickAt)
@@ -1810,7 +1894,7 @@ class PlaybackController @Inject internal constructor(
             return
         }
 
-        streams.forAccount(playbackAccount).invalidate(TrackRef.yandex(failure.trackId))
+        streams.forAccount(playbackAccount).invalidate(refOf(failure.trackId))
         // A copy that does not play is no use to anyone
         val copyFailed = playingCopyId == failure.trackId
         if (copyFailed) {
@@ -1996,7 +2080,7 @@ class PlaybackController @Inject internal constructor(
         nextTitle = track.title
         if (_nextTrack.value !is NextTrack.Ready || _nextTrack.value.trackId != nextId) setNext(NextTrack.Loading(nextId))
         scope.launch {
-            val ref = TrackRef.yandex(nextId)
+            val ref = track.ref
             val stream = when {
                 // The resolver hands the downloaded copy first
                 preloadManager.hasPlayableCopy(nextId) -> streams.forAccount(playbackAccount).resolve(ref).getOrNull()
@@ -2079,7 +2163,7 @@ class PlaybackController @Inject internal constructor(
         val next = nextAdvance(queue, manual = false) as? Advance.To ?: return
         val track = queue.tracks[next.index]
         if (track.idString != failed.trackId) return
-        streams.forAccount(playbackAccount).invalidate(TrackRef.yandex(track.idString))
+        streams.forAccount(playbackAccount).invalidate(track.ref)
         prepareStandby(track)
     }
 
@@ -2340,3 +2424,6 @@ class PlaybackController @Inject internal constructor(
         private const val SERVER_CHECK_TIMEOUT_MS = 4_000
     }
 }
+
+/** The provider key of Jellyfin refs (`jellyfin@<server>`); `org.tegro.yamp.provider.jellyfin.JellyfinRefs.PROVIDER`. */
+private const val JELLYFIN_PROVIDER = org.tegro.yamp.provider.jellyfin.JellyfinRefs.PROVIDER

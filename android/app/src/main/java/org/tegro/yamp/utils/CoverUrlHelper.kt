@@ -11,6 +11,9 @@ import org.tegro.yamp.presentation.common.isRadio
 
 private const val RESOURCE_SCHEME = "android.resource://"
 
+/** The size placeholder of a Jellyfin cover template (`JellyfinCover.SIZE`). */
+private const val SIZE_PLACEHOLDER = "{px}"
+
 /** Application ids YAMP shipped under before the current one (D16, D55). */
 private val LEGACY_APP_IDS = setOf("org.tegro.yamp")
 
@@ -57,6 +60,8 @@ fun String?.toCoverUrl(size: CoverSize): String? {
             this
         }
     }
+    // A Jellyfin cover (step 23): the server scales it, the size goes into the query
+    if (contains(SIZE_PLACEHOLDER)) return replace(SIZE_PLACEHOLDER, size.px.toString())
     if (!contains("%%")) return this
     return (if (startsWith("http")) this else "https://$this").replace("%%", size.spec)
 }

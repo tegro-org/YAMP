@@ -33,6 +33,13 @@ class YandexMusicApp : Application(), Configuration.Provider, SingletonImageLoad
     @Inject
     lateinit var bluetoothAutoplay: org.tegro.yamp.data.player.BluetoothAutoplay
 
+    /** A Jellyfin server's covers get that account's header; no other image host gets anything (step 23). */
+    @Inject
+    lateinit var jellyfinPlayReporting: org.tegro.yamp.data.provider.jellyfin.JellyfinPlayReporting
+
+    @Inject
+    lateinit var jellyfinImageAuth: org.tegro.yamp.data.provider.jellyfin.JellyfinImageAuth
+
     /**
      * Covers: a quarter of the app's memory for decoded images and 300 MB on disk, so covers seen once come
      * back without the network. The loader keeps its own HTTP client: the app's one adds the account token
@@ -48,6 +55,13 @@ class YandexMusicApp : Application(), Configuration.Provider, SingletonImageLoad
                     .build()
             }
             .crossfade(COVER_CROSSFADE_MS)
+            .components {
+                add(
+                    coil3.network.okhttp.OkHttpNetworkFetcherFactory(
+                        callFactory = { okhttp3.OkHttpClient.Builder().addInterceptor { chain -> jellyfinImageAuth.intercept(chain) }.build() }
+                    )
+                )
+            }
             // Plain bitmaps, never "hardware" ones: head units that draw their window without the GPU (Android 9
             // on Allwinner with a Mali-400) crash on a hardware bitmap ("Software rendering doesn't support
             // hardware bitmaps"). On Android 8+ the pixels sit in native memory either way.
@@ -67,6 +81,7 @@ class YandexMusicApp : Application(), Configuration.Provider, SingletonImageLoad
         }
         widgetUpdater.start()
         bluetoothAutoplay.start()
+        jellyfinPlayReporting.start()
     }
 }
 

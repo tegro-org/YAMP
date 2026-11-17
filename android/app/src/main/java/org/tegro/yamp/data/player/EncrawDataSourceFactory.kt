@@ -32,12 +32,16 @@ class EncrawDataSourceFactory(
     }
 
     companion object {
-        /** The stream host's HTTP source, also used to write the next track to disk ([NextTrackCacher]). */
-        fun httpFactory(): androidx.media3.datasource.DefaultHttpDataSource.Factory =
+        /**
+         * The stream host's HTTP source, also used to write the next track to disk ([NextTrackCacher]). A stream
+         * resolved with headers (a Jellyfin token, step 23) gets them on requests to its own URL ([StreamHeaders]).
+         */
+        fun httpFactory(): DataSource.Factory = StreamHeaders.wrap(
             androidx.media3.datasource.DefaultHttpDataSource.Factory()
                 .setConnectTimeoutMs(PlaybackBuffering.CONNECT_TIMEOUT_MS)
                 .setReadTimeoutMs(PlaybackBuffering.READ_TIMEOUT_MS)
                 .setAllowCrossProtocolRedirects(true)
+        )
 
         /** [uri] without the decryption key it may carry in its fragment: what the network (and the cache) sees. */
         fun networkUri(uri: Uri): Uri = if (uri.fragment?.startsWith("encraw_key=") == true) uri.buildUpon().fragment(null).build() else uri

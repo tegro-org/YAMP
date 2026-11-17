@@ -199,6 +199,7 @@ dependencies {
 
     // Pure domain module: refs, accounts, queue model, provider interfaces (docs/phase-3-providers.md D71)
     implementation(project(":core:domain"))
+    implementation(project(":provider:jellyfin"))
 
     // Coroutines & Serialization
     implementation(libs.kotlinx.coroutines.core)

@@ -28,6 +28,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertNotEquals
 import org.tegro.yamp.domain.repository.PlaybackFailure
 import org.junit.Before
 import org.junit.Test
@@ -200,7 +201,9 @@ class PlaybackControllerTest {
         engine: FakePlayerRepository = this.engine,
         queueManager: QueueManager = manager(),
         clients: org.tegro.yamp.data.network.YandexClients = FixedYandexClients(api),
-        journal: PlaybackJournal = PlaybackJournal(now = { 0L })
+        journal: PlaybackJournal = PlaybackJournal(now = { 0L }),
+        jellyfin: org.tegro.yamp.data.provider.jellyfin.JellyfinAccountStore? = null,
+        otherStreams: (org.tegro.yamp.domain.account.AccountId) -> org.tegro.yamp.domain.provider.StreamResolver? = { null }
     ): PlaybackController {
         val legacyImport = LegacySessionImport(store, cacheManager, RoomQueueStore(db.queueDao(), db.dao()), QueueTrackBridge(db.dao(), json))
         val controller = PlaybackController(
@@ -209,8 +212,10 @@ class PlaybackControllerTest {
             queueManager, legacyImport, db.dao(),
             settings, NetworkMonitor(context), RoadReserve(context, client, json),
             journal, DiagnosticLog(context, settings), history,
-            org.tegro.yamp.data.account.AccountContext(auth, queueManager),
-            org.tegro.yamp.data.provider.StreamResolvers { account -> org.tegro.yamp.data.provider.yandex.YandexStreamResolver(resolver, dispatchers, { null }, account) },
+            org.tegro.yamp.data.account.AccountContext(auth, queueManager, jellyfin),
+            org.tegro.yamp.data.provider.StreamResolvers { account ->
+                account?.let(otherStreams) ?: org.tegro.yamp.data.provider.yandex.YandexStreamResolver(resolver, dispatchers, { null }, account)
+            },
             nextFetch
         )
         controllers += controller
@@ -247,6 +252,122 @@ class PlaybackControllerTest {
     }
 
     private val List<Track>.ids get() = map { it.idString }
+
+    @Test
+    fun aJellyfinPagePlaysInItsAccountsQueueThroughItsOwnResolverAndYandexStaysAsItWas() {
+        // step 23: the tracks of a Jellyfin page resolve through that account's resolver, in its own queue (D84)
+        val home = org.tegro.yamp.data.provider.jellyfin.JellyfinAccount(
+            serverUrl = "http://10.0.2.2:8096", serverId = "srv1", serverName = "Home Media",
+            userId = "u1", userName = "alex", token = "t0k"
+        )
+        val store = org.tegro.yamp.data.provider.jellyfin.JellyfinAccountStore {
+            context.getSharedPreferences("controller_jellyfin", android.content.Context.MODE_PRIVATE)
+        }.apply { add(home) }
+        val asked = mutableListOf<String>()
+        val jellyfinStreams = object : org.tegro.yamp.domain.provider.StreamResolver {
+            override fun cached(track: org.tegro.yamp.domain.queue.TrackRef): org.tegro.yamp.domain.provider.ResolvedStream? = null
+            override suspend fun resolve(
+                track: org.tegro.yamp.domain.queue.TrackRef,
+                prefs: org.tegro.yamp.domain.provider.StreamPrefs
+            ): org.tegro.yamp.domain.provider.Outcome<org.tegro.yamp.domain.provider.ResolvedStream> {
+                asked += track.value
+                return org.tegro.yamp.domain.provider.Outcome.Ok(
+                    org.tegro.yamp.domain.provider.ResolvedStream("http://10.0.2.2:8096/Audio/${track.id}/universal", headers = mapOf("Authorization" to "MediaBrowser Token=\"t0k\""))
+                )
+            }
+            override fun invalidate(track: org.tegro.yamp.domain.queue.TrackRef) = Unit
+        }
+        val controller = controller(jellyfin = store, otherStreams = { account -> jellyfinStreams.takeIf { account == home.id } })
+        val refs = org.tegro.yamp.provider.jellyfin.JellyfinRefs("srv1")
+        val album = listOf("j1", "j2").map { id ->
+            Track(ref = refs.track(id), title = "Song $id", artists = emptyList(), album = null, durationMs = 180_000L, cover = null, explicit = false)
+        }
+
+        controller.playInAccount(home.id, album, "j1")
+        controller.settle()
+
+        assertEquals(listOf(refs.track("j1").value), asked.take(1))
+        assertEquals("http://10.0.2.2:8096/Audio/j1/universal", engine.played.last().url)
+        assertEquals("the page plays in the Jellyfin account's own queue", home.id.value, controller.activeQueue.value?.queue?.account)
+
+        // A Yandex queue afterwards resolves through the Yandex resolver as before
+        val yandex = playlist("1", "2")
+        controller.playTrack("1", yandex, PlaylistSource.LIBRARY)
+        controller.settle()
+        assertEquals(resolver.url("1"), engine.played.last().url)
+        assertNotEquals("Yandex tracks left the Jellyfin queue", home.id.value, controller.activeQueue.value?.queue?.account)
+        assertTrue("no Yandex track was asked of the Jellyfin resolver", asked.all { it.startsWith("jellyfin@srv1:") })
+    }
+
+    /** A Jellyfin account on server "srv1" and a controller that resolves its tracks (steps 23–25). */
+    private fun jellyfinSetup(prefs: String): Triple<PlaybackController, org.tegro.yamp.data.provider.jellyfin.JellyfinAccount, List<Track>> {
+        val home = org.tegro.yamp.data.provider.jellyfin.JellyfinAccount(
+            serverUrl = "http://10.0.2.2:8096", serverId = "srv1", serverName = "Home Media",
+            userId = "u1", userName = "alex", token = "t0k"
+        )
+        val store = org.tegro.yamp.data.provider.jellyfin.JellyfinAccountStore {
+            context.getSharedPreferences(prefs, android.content.Context.MODE_PRIVATE)
+        }.apply { add(home) }
+        val streams = object : org.tegro.yamp.domain.provider.StreamResolver {
+            override fun cached(track: org.tegro.yamp.domain.queue.TrackRef): org.tegro.yamp.domain.provider.ResolvedStream? = null
+            override suspend fun resolve(
+                track: org.tegro.yamp.domain.queue.TrackRef,
+                prefs: org.tegro.yamp.domain.provider.StreamPrefs
+            ): org.tegro.yamp.domain.provider.Outcome<org.tegro.yamp.domain.provider.ResolvedStream> =
+                org.tegro.yamp.domain.provider.Outcome.Ok(org.tegro.yamp.domain.provider.ResolvedStream("http://10.0.2.2:8096/Audio/${track.id}/universal"))
+            override fun invalidate(track: org.tegro.yamp.domain.queue.TrackRef) = Unit
+        }
+        val controller = controller(jellyfin = store, otherStreams = { account -> streams.takeIf { account == home.id } })
+        val refs = org.tegro.yamp.provider.jellyfin.JellyfinRefs("srv1")
+        val tracks = listOf("j1", "j2").map { id ->
+            Track(ref = refs.track(id), title = "Song $id", artists = emptyList(), album = null, durationMs = 180_000L, cover = null, explicit = false)
+        }
+        return Triple(controller, home, tracks)
+    }
+
+    @Test
+    fun aQueueNeverTakesAnotherAccountsTracks() {
+        // D84 (step 25): "Add to queue…", "Play next" and "Add to end" keep a queue to its own account's tracks
+        val (controller, home, jellyfinTracks) = jellyfinSetup("controller_jellyfin_fit")
+        controller.playTrack("1", playlist("1", "2"), PlaylistSource.LIBRARY)
+        controller.settle()
+        val yandexQueue = controller.activeQueue.value!!.queue.id
+
+        controller.enqueueNext(jellyfinTracks[0])
+        controller.addToEnd(jellyfinTracks)
+        controller.addToQueue(yandexQueue, jellyfinTracks)
+        controller.settle()
+        assertEquals("a Yandex queue took no Jellyfin track", listOf("1", "2"), controller.activeQueue.value!!.tracks.map { it.ref.id })
+
+        controller.playInAccount(home.id, jellyfinTracks, "j1")
+        controller.settle()
+        val jellyfinQueue = controller.activeQueue.value!!.queue.id
+        controller.addToQueue(jellyfinQueue, listOf(track("3")))
+        controller.enqueueNext(track("3"))
+        controller.settle()
+        assertEquals("the Jellyfin queue took no Yandex track", listOf("j1", "j2"), controller.activeQueue.value!!.tracks.map { it.ref.id })
+    }
+
+    @Test
+    fun aJellyfinTrackTappedInMergedSearchOrHistoryPlaysInItsOwnAccountsQueue() {
+        // Search mixes providers and History keeps every track (step 24/25): a Jellyfin one plays under its account
+        val (controller, home, jellyfinTracks) = jellyfinSetup("controller_jellyfin_tap")
+        controller.playTrack("1", playlist("1", "2"), PlaylistSource.LIBRARY)
+        controller.settle()
+
+        controller.playTrack("j2", playlist("5") + jellyfinTracks, PlaylistSource.SEARCH)
+        controller.settle()
+        assertEquals(home.id.value, controller.activeQueue.value?.queue?.account)
+        assertEquals("only the tapped track's service went into the queue", listOf("j1", "j2"), controller.activeQueue.value!!.tracks.map { it.ref.id })
+        assertEquals("http://10.0.2.2:8096/Audio/j2/universal", engine.played.last().url)
+
+        controller.playTrack("1", playlist("1", "2"), PlaylistSource.LIBRARY)
+        controller.settle()
+        controller.playNowKeepQueue(jellyfinTracks[0])
+        controller.settle()
+        assertEquals("History's Jellyfin row plays in its account's queue", home.id.value, controller.activeQueue.value?.queue?.account)
+        assertEquals("http://10.0.2.2:8096/Audio/j1/universal", engine.played.last().url)
+    }
 
     @Test
     fun playingATrackStreamsItsLinkAndWarmsUpWhatFollows() {

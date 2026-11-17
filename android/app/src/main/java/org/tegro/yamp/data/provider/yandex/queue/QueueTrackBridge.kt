@@ -37,7 +37,8 @@ class QueueTrackBridge @Inject constructor(
         if (entries.isEmpty()) return emptyList()
         val byId = entries.map { it.ref.id }.distinct().chunked(900).flatMap { dao.tracksById(it) }
             .associate { it.id to runCatching { json.decodeFromString<TrackDetailsDto>(it.json).toTrack() }.getOrNull() }
-        return entries.map { e -> byId[e.ref.id] ?: stub(e) }
+        // The row keeps the service's shape; the entry keeps whose track it is (a Jellyfin ref, step 23)
+        return entries.map { e -> (byId[e.ref.id] ?: stub(e)).let { t -> if (t.ref == e.ref) t else t.copy(ref = e.ref) } }
     }
 
     private fun stub(e: QueueEntry) = TrackDetailsDto(

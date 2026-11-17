@@ -93,6 +93,23 @@ class ListeningHistoryTest {
     }
 
     @Test
+    fun aJellyfinTrackKeepsItsOwnRefAndItsQueuesAccount() {
+        // Step 25: a History row of a Jellyfin track opens and plays under its own account
+        val home = PlayQueue(id = 9L, name = "Home Media", kind = QueueKind.STATIC, account = "jellyfin:srv1/u1")
+        val track = org.tegro.yamp.domain.media.Track(
+            ref = org.tegro.yamp.domain.queue.TrackRef.of("jellyfin@srv1", "item1"), title = "Carefree", artists = emptyList(),
+            album = null, durationMs = 180_000L, cover = null, explicit = false
+        )
+
+        history.started(track, home)
+        history.stopped(5_000L)
+
+        val row = rows().single()
+        assertEquals("jellyfin@srv1:track:item1", row.ref)
+        assertEquals("jellyfin:srv1/u1", row.account)
+    }
+
+    @Test
     fun theSameTrackWithinTenMinutesAddsToItsRowAndAfterThatGetsANewOne() {
         history.started(track("1"), family)
         history.stopped(60_000L)

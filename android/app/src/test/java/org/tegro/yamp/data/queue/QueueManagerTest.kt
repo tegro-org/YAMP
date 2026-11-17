@@ -165,6 +165,23 @@ class QueueManagerTest {
         assertEquals(listOf("1", "2", "3"), store.entriesByQueue[wave.id]!!.map { it.ref.id })
     }
 
+    @Test
+    fun aJellyfinAccountGetsAnEmptyDefaultQueueOnceAndKeepsItsQueuesOnASecondSignIn() = runTest {
+        val m = manager(StandardTestDispatcher(testScheduler))
+        m.load()
+        val account = "jellyfin:srv1/u1"
+        val first = m.defaultQueue(account, "Home Media")
+        assertEquals(QueueKind.STATIC, first.kind)
+        assertEquals(account, first.account)
+        assertEquals("Home Media", first.name)
+        assertEquals(true, store.entriesByQueue[first.id].orEmpty().isEmpty())
+        // Signed out and in again (D62, D83): its queues are still there, nothing new is made
+        m.appendFetched(first.id, listOf(dto("1")))
+        val again = m.defaultQueue(account, "Home Media")
+        assertEquals(first.id, again.id)
+        assertEquals(1, store.queuesById.values.count { it.account == account })
+    }
+
     // ---- radios (docs/phase-2-radio.md §3)
 
     @Test

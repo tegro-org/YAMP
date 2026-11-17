@@ -239,6 +239,19 @@ class QueueManager @Inject constructor(
         _active.value = active.copy(queue = active.queue.copy(repeat = mode))
     }
 
+    /**
+     * An account's default queue (D83): created empty, named [name], when the account has no queue at all — the
+     * first sign-in of a Jellyfin account. When it has some (a re-sign-in of the same server + user, D62), nothing
+     * is created and its first queue is returned.
+     */
+    suspend fun defaultQueue(account: String, name: String): PlayQueue = mutation {
+        store.queues().filter { it.account == account }.minByOrNull { it.sortOrder }
+            ?: store.create(
+                PlayQueue(id = 0L, name = name, kind = QueueKind.STATIC, account = account,
+                    sortOrder = (store.queues().maxOfOrNull { it.sortOrder } ?: -1) + 1)
+            )
+    }
+
     // ---- dynamic queues (My Wave)
 
     /** The WAVE queue of an account, created empty on first use. */
@@ -347,7 +360,8 @@ class QueueManager @Inject constructor(
 
     private fun entryOf(track: Track) = QueueEntry(
         entryId = 0L, queueId = 0L, position = 0, originalPosition = 0,
-        ref = TrackRef.yandex(track.ref.id),
+        // The track's own ref: a Jellyfin entry stays Jellyfin, so it resolves through its account (step 23)
+        ref = track.ref,
         title = track.title,
         artist = track.artists.joinToString(", ") { it.name },
         coverUrl = track.cover?.key,

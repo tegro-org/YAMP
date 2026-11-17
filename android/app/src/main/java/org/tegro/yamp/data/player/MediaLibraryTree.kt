@@ -19,7 +19,6 @@ import org.tegro.yamp.utils.toCoverUrl
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import kotlinx.coroutines.flow.first
-import org.tegro.yamp.domain.account.accountId
 import javax.inject.Singleton
 
 /**
@@ -36,8 +35,8 @@ class MediaLibraryTree @Inject constructor(
     private val playbackController: PlaybackController,
     private val searchRepository: org.tegro.yamp.data.provider.yandex.repository.SearchRepository,
     private val playlistsRepository: UserPlaylistsRepository,
-    private val authRepository: org.tegro.yamp.domain.repository.AuthRepository,
-    private val settingsRepository: org.tegro.yamp.domain.repository.SettingsRepository
+    private val settingsRepository: org.tegro.yamp.domain.repository.SettingsRepository,
+    private val signedInAccounts: org.tegro.yamp.data.account.SignedInAccounts
 ) {
     fun root(): MediaItem = folder(ROOT_ID, context.getString(R.string.app_name), MediaMetadata.MEDIA_TYPE_FOLDER_MIXED)
         .withExtras(Bundle().apply {
@@ -203,9 +202,7 @@ class MediaLibraryTree @Inject constructor(
     )
 
     /** The signed-in accounts' names by key (`AccountId.value`), in the accounts' order. */
-    private fun accountNames(): Map<String, String> = authRepository.getAllAccounts().associate { account ->
-        account.accountId().value to account.displayName.ifBlank { account.login }.ifBlank { account.uid }
-    }
+    private fun accountNames(): Map<String, String> = signedInAccounts.current().associate { it.id.value to it.displayName }
 
     /** The queues the car may show: a removed account's queues never (D62). */
     private fun queueSummaries(): List<org.tegro.yamp.domain.queue.QueueSummary> =

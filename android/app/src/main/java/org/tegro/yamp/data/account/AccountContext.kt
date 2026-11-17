@@ -20,7 +20,9 @@ import javax.inject.Singleton
 class AccountContext @Inject constructor(
     private val authRepository: AuthRepository,
     /** Null where only the active account matters (tests of the network layer). */
-    private val queues: QueueManager? = null
+    private val queues: QueueManager? = null,
+    /** The other providers' accounts (Jellyfin, D78); null in tests that only know Yandex. */
+    private val jellyfin: org.tegro.yamp.data.provider.jellyfin.JellyfinAccountStore? = null
 ) {
     fun current(): AccountId? = signedIn(queues?.active?.value?.queue?.account) ?: authRepository.getActiveAccount()?.accountId()
 
@@ -36,6 +38,23 @@ class AccountContext @Inject constructor(
 
     fun currentUser(): UserAccount? =
         contextUser(queues?.active?.value?.queue?.account, authRepository.getAllAccounts(), authRepository.getActiveAccount())
+
+    /**
+     * [account] (`AccountId.value`) is signed in with any provider — what decides whether a queue is hidden as a
+     * removed account's (D62). [signedIn] stays Yandex-only: it picks the context for Yandex's Home, likes and wave.
+     */
+    fun signedInAnyProvider(account: String?): Boolean =
+        signedIn(account) != null || (account != null && jellyfin?.accounts?.value?.any { it.id.value == account } == true)
+
+    /**
+     * The signed-in account a track belongs to (D84): for a Jellyfin track the first signed-in account on its server
+     * (refs name the server, D78), for a Yandex one null — the context account plays it (D56).
+     */
+    fun accountOf(track: org.tegro.yamp.domain.queue.TrackRef): AccountId? {
+        val ref = org.tegro.yamp.domain.queue.MediaRef.parse(track.value) ?: return null
+        if (ref.providerType != org.tegro.yamp.domain.account.Provider.JELLYFIN.key) return null
+        return jellyfin?.accounts?.value?.firstOrNull { it.serverId == ref.instance }?.id
+    }
 
     /** [account] when it is a signed-in account; a queue of a signed-out one gives no context (D62). */
     fun signedIn(account: String?): AccountId? =
