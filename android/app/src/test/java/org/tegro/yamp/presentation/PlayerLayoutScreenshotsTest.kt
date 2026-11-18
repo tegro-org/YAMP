@@ -83,6 +83,9 @@ class PlayerLayoutScreenshotsTest {
 
     private fun snap(name: String) = compose.onRoot().captureRoboImage("src/test/screenshots/$name.png", options)
 
+    /** The whole screen, dialogs included (the tune panel is a dialog, as on the main screen). */
+    private fun snapScreen(name: String) = captureScreenRoboImage("src/test/screenshots/$name.png", options)
+
     private fun track(id: String, title: String, artist: String) =
         TrackDetailsDto(id = JsonPrimitive(id), title = title, artists = listOf(ArtistDto(name = artist)), durationMs = 312_000)
 
@@ -94,12 +97,12 @@ class PlayerLayoutScreenshotsTest {
     ).map { it.toTrack() }
 
     @Composable
-    private fun Phone(nextThree: Boolean = false, likeGestures: Boolean = false, moreOpen: Boolean = false) = FullScreenPlayer(
+    private fun Phone(nextThree: Boolean = false, likeGestures: Boolean = false, moreOpen: Boolean = false, tuneOpen: Boolean = false) = FullScreenPlayer(
         track = tracks[0], isPlaying = true, isLiked = true, progress = { 106_000L }, queue = tracks,
         onPlayPauseClick = {}, onToggleLike = {}, onNextClick = {}, onPrevClick = {}, onSeekTo = {},
         onTrackSelect = {}, onRemoveFromQueue = {}, onCollapse = {}, onCloseAndClear = {}, onDislikeClick = {},
         sourceLabel = "Моя волна", nextThree = nextThree, likeGestures = likeGestures,
-        caption = "Очередь · 12 из 48", queueName = "С семьёй", initialMoreOpen = moreOpen
+        caption = "Очередь · 12 из 48", queueName = "С семьёй", initialMoreOpen = moreOpen, initialTuneOpen = tuneOpen
     )
 
     @Test
@@ -178,5 +181,127 @@ class PlayerLayoutScreenshotsTest {
     fun carMoreMenuWithLikeGestures() {
         show { CarPlayerForTest(track = tracks[0], queue = tracks, likeGestures = true, caption = "Очередь · 12 из 48", queueName = "С семьёй", initialMoreOpen = true) }
         captureScreenRoboImage("src/test/screenshots/player_car_more_menu.png", options)
+    }
+
+    /** The portrait ⋮ menu on My Wave (canvas `pl-player-more`): tune, search, sleep timer, add to playlist, quality. */
+    @Test
+    fun phoneMoreMenu() {
+        show { Phone(moreOpen = true) }
+        captureScreenRoboImage("src/test/screenshots/player_phone_more_menu.png", options)
+    }
+
+    /** A taller car screen (4:3): the cover block at the far padding, the clock inside its corner (canvas `plc-tall-1280`). */
+    @Test
+    @Config(qualifiers = "w1024dp-h768dp-land-mdpi")
+    fun carOnATallerScreen() {
+        show { CarPlayerForTest(track = tracks[0], queue = tracks, caption = "Очередь · 12 из 48", queueName = "С семьёй") }
+        snap("player_car_tall_4x3")
+    }
+
+    /** A very wide car screen: the controls at their share, the block centred beside them (canvas `plc-wide-2400`). */
+    @Test
+    @Config(qualifiers = "w2400dp-h720dp-land-mdpi")
+    fun carOnAVeryWideScreen() {
+        show { CarPlayerForTest(track = tracks[0], queue = tracks, caption = "Очередь · 12 из 48", queueName = "С семьёй") }
+        snap("player_car_wide_2400")
+    }
+
+    /** Galaxy Z Fold 5, the cover screen (904×2316 px, ~360 dp wide): the portrait player fits, three cards with titles. */
+    @Test
+    @Config(qualifiers = "w360dp-h922dp-port-xhdpi")
+    fun foldCoverScreen() {
+        show { Phone(nextThree = true) }
+        snap("player_fold_cover_next3")
+    }
+
+    /** Galaxy Z Fold 5, the inner screen standing (~690×830 dp): the content keeps its width, centred. */
+    @Test
+    @Config(qualifiers = "w690dp-h830dp-port-xhdpi")
+    fun foldInnerScreenPortrait() {
+        show { Phone(nextThree = true) }
+        snap("player_fold_inner_port")
+    }
+
+    /** Galaxy Z Fold 5, the inner screen on its side (~830×690 dp, near-square): the wide rule's taller branch. */
+    @Test
+    @Config(qualifiers = "w830dp-h690dp-land-xhdpi")
+    fun foldInnerScreenLandscape() {
+        show { Phone(nextThree = true) }
+        snap("player_fold_inner_land")
+    }
+
+    /** Z Fold 5 cover screen on its side (2316×904 px, ~926×362 dp): the single «Далее» card never clips its title. */
+    @Test
+    @Config(qualifiers = "w926dp-h362dp-land-400dpi")
+    fun foldCoverLandscapeNextOne() {
+        show { Phone() }
+        snap("player_fold_cover_land_next1")
+    }
+
+    @Test
+    @Config(qualifiers = "w926dp-h362dp-land-400dpi")
+    fun foldCoverLandscapeNextThree() {
+        show { Phone(nextThree = true) }
+        snap("player_fold_cover_land_next3")
+    }
+
+    /** Z Fold 5 inner screen on its side (2176×1812 px, ~829×690 dp): the card's label and title centred together. */
+    @Test
+    @Config(qualifiers = "w829dp-h690dp-land-420dpi")
+    fun foldInnerLandscapeNextOne() {
+        show { Phone() }
+        snap("player_fold_inner_land_next1")
+    }
+
+    @Test
+    @Config(qualifiers = "w829dp-h690dp-land-420dpi")
+    fun foldInnerLandscapeNextThree() {
+        show { Phone(nextThree = true) }
+        snap("player_fold_inner_land_next3")
+    }
+
+    /** Z Fold 5 inner on its side: «Настроить волну» is the main screen's panel, on the controls' side — the cover block stays in view. */
+    @Test
+    @Config(qualifiers = "ru-rRU-w829dp-h690dp-land-420dpi")
+    fun foldInnerLandscapeTuneOpen() {
+        show { Phone(tuneOpen = true) }
+        snapScreen("player_fold_inner_land_tune")
+    }
+
+    /**
+     * "Large controls" on a phone in landscape (2340×1080 px, ~891×387 dp after the bars): the ⋮ · queue row keeps a
+     * 48 dp touch target instead of shrinking with the car scale (user, 2026-11-18).
+     */
+    @Test
+    @Config(qualifiers = "w891dp-h387dp-land-420dpi")
+    fun largeControlsOnAPhoneInLandscape() {
+        show { CarPlayerForTest(track = tracks[0], queue = tracks, nextThree = false, showClock = false, queueName = "YouTube") }
+        snap("player_large_phone_land")
+    }
+
+    /**
+     * "Large controls" on the Fold 5 inner screen on its side: the controls block centred vertically, Prev · Play · Next
+     * scaled together so Next is never squeezed (user, 2026-11-18).
+     */
+    @Test
+    @Config(qualifiers = "w829dp-h690dp-land-420dpi")
+    fun largeControlsOnTheFoldInnerNextOne() {
+        show { CarPlayerForTest(track = tracks[0], queue = tracks, nextThree = false, queueName = "Clayderman") }
+        snap("player_large_fold_inner_land_next1")
+    }
+
+    @Test
+    @Config(qualifiers = "w829dp-h690dp-land-420dpi")
+    fun largeControlsOnTheFoldInnerNextThree() {
+        show { CarPlayerForTest(track = tracks[0], queue = tracks, queueName = "Clayderman") }
+        snap("player_large_fold_inner_land_next3")
+    }
+
+    /** A 16:10 car screen (1280×800). */
+    @Test
+    @Config(qualifiers = "w1280dp-h800dp-land-mdpi")
+    fun carOn1280x800() {
+        show { CarPlayerForTest(track = tracks[0], queue = tracks, caption = "Очередь · 12 из 48", queueName = "С семьёй") }
+        snap("player_car_1280x800")
     }
 }

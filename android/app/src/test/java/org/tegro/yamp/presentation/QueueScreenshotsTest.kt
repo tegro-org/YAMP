@@ -336,6 +336,79 @@ class QueueScreenshotsTest {
         snap("wave_queue_button")
     }
 
+    /** The queue dropdown and "Настроить волну" at the wheel side's edge: left-hand — at the left edge. */
+    @Test
+    fun homeControlsLeftHand() {
+        show {
+            HomeScreen(
+                waveTrack = shown[0], isPlaying = true, isLoading = false, isLiked = true, progress = { 70_000L },
+                shelf = waveShelfOf(true, shown.drop(1), emptyList()), shimmer = false,
+                onPlayPause = {}, onLike = {}, onDislike = {}, onOpenPlayer = {}, onShelfClick = {}, queueName = "With family",
+                controlsOnLeft = true
+            )
+        }
+        snap("home_controls_left")
+    }
+
+    /** Right-hand: at the right edge (the default). */
+    @Test
+    fun homeControlsRightHand() {
+        show {
+            HomeScreen(
+                waveTrack = shown[0], isPlaying = true, isLoading = false, isLiked = true, progress = { 70_000L },
+                shelf = waveShelfOf(true, shown.drop(1), emptyList()), shimmer = false,
+                onPlayPause = {}, onLike = {}, onDislike = {}, onOpenPlayer = {}, onShelfClick = {}, queueName = "With family",
+                controlsOnLeft = false
+            )
+        }
+        snap("home_controls_right")
+    }
+
+    /** Head unit, left-hand: the queue dropdown at the screen's left edge, the title on the right (user, 2026-11-18). */
+    @Test
+    @Config(qualifiers = WIDE_HEAD_UNIT)
+    fun headHomeControlsLeftHand() {
+        show {
+            HomeScreen(
+                waveTrack = shown[0], isPlaying = true, isLoading = false, isLiked = true, progress = { 70_000L },
+                shelf = waveShelfOf(true, shown.drop(1), emptyList()), shimmer = false,
+                onPlayPause = {}, onLike = {}, onDislike = {}, onOpenPlayer = {}, onShelfClick = {}, queueName = "With family",
+                controlsOnLeft = true
+            )
+        }
+        snap("head_home_controls_left")
+    }
+
+    /** Head unit, right-hand: the queue dropdown at the screen's right edge. */
+    @Test
+    @Config(qualifiers = WIDE_HEAD_UNIT)
+    fun headHomeControlsRightHand() {
+        show {
+            HomeScreen(
+                waveTrack = shown[0], isPlaying = true, isLoading = false, isLiked = true, progress = { 70_000L },
+                shelf = waveShelfOf(true, shown.drop(1), emptyList()), shimmer = false,
+                onPlayPause = {}, onLike = {}, onDislike = {}, onOpenPlayer = {}, onShelfClick = {}, queueName = "With family",
+                controlsOnLeft = false
+            )
+        }
+        snap("head_home_controls_right")
+    }
+
+    /** Z Fold 5 cover on its side (2316×904): the dropdown and «Настроить волну» in one row at the left edge. */
+    @Test
+    @Config(qualifiers = "ru-rRU-w926dp-h362dp-land-400dpi")
+    fun foldCoverHomeRowLeftHand() {
+        show {
+            HomeScreen(
+                waveTrack = shown[0], isPlaying = true, isLoading = false, isLiked = true, progress = { 70_000L },
+                shelf = waveShelfOf(true, shown.drop(1), emptyList()), shimmer = false,
+                onPlayPause = {}, onLike = {}, onDislike = {}, onOpenPlayer = {}, onShelfClick = {}, queueName = "Моя волна",
+                controlsOnLeft = true
+            )
+        }
+        snap("home_fold_cover_row_left")
+    }
+
     /** The "With family" queue, playing its second track. */
     private val familyQueue = ActiveQueue(
         queue = PlayQueue(id = 1L, name = "With family", kind = QueueKind.STATIC),

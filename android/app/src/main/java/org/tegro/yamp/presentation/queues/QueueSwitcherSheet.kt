@@ -66,7 +66,6 @@ import org.tegro.yamp.R
 import org.tegro.yamp.domain.queue.QueueKind
 import org.tegro.yamp.presentation.car.carScaleOf
 import org.tegro.yamp.presentation.hifi.GlassCircleButton
-import org.tegro.yamp.presentation.hifi.GlassPillButton
 import org.tegro.yamp.presentation.hifi.HiFi
 import org.tegro.yamp.presentation.hifi.HiFiProgressBar
 import org.tegro.yamp.presentation.hifi.HiFiSheetPanel
@@ -124,7 +123,7 @@ internal fun QueueSwitcherSheet(
     var removedOpen by remember { mutableStateOf(false) }
     val chooseAccount = radio != null && state.multiAccount
     val newLabel = stringResource(if (radio != null) R.string.radio_new else R.string.queue_new)
-    HiFiSheetPanel(onDismiss = onDismiss, side = side, sheetHeight = 0.78f, panelWidth = if (car) (720f * carScale).dp else 460.dp) { landscape ->
+    HiFiSheetPanel(onDismiss = onDismiss, side = side, sheetHeight = 0.78f, panelWidth = if (car) (760f * carScale).dp else 560.dp, glass = true) { landscape ->
         val d = RowDims(big = car && landscape, factor = if (car && landscape) carScale else 1f)
         QueueSheetHeader(
             title = stringResource(
@@ -137,18 +136,13 @@ internal fun QueueSwitcherSheet(
             subtitle = adding?.subtitle ?: radio?.seed?.title ?: stringResource(R.string.queue_switcher_hint).takeIf { onLongPress != null && !d.big },
             d = d,
             onClose = onDismiss,
-            trailing = if (d.big) {
-                {
-                    GlassCircleButton(onClick = onNew, contentDescription = newLabel, size = d.dp(44f, 60f)) {
-                        Icon(Icons.Rounded.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(d.dp(20f, 28f)))
-                    }
-                }
-            } else null
+            onNew = onNew,
+            newLabel = newLabel
         )
         LazyColumn(
             Modifier.fillMaxWidth().weight(1f),
-            contentPadding = PaddingValues(horizontal = d.dp(8f, 14f), vertical = d.dp(4f, 6f)),
-            verticalArrangement = Arrangement.spacedBy(d.dp(4f, 6f))
+            contentPadding = PaddingValues(horizontal = if (landscape) d.dp(14f, 20f) else d.dp(8f, 14f), vertical = if (landscape) d.dp(8f, 10f) else d.dp(4f, 6f)),
+            verticalArrangement = Arrangement.spacedBy(if (landscape) d.dp(8f, 10f) else d.dp(4f, 6f))
         ) {
             if (radio != null) {
                 item(key = "keep") { KeepRow(keepHistory, onKeepHistory, d) }
@@ -184,14 +178,7 @@ internal fun QueueSwitcherSheet(
                 modifier = Modifier.padding(start = d.dp(20f, 34f), end = d.dp(20f, 34f), bottom = if (d.big) 26.dp else 0.dp)
             )
         }
-        if (!d.big) {
-            GlassPillButton(
-                text = newLabel,
-                onClick = onNew,
-                icon = Icons.Rounded.Add,
-                modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 24.dp)
-            )
-        }
+        Spacer(Modifier.height(if (landscape) 16.dp else 20.dp))
     }
 }
 
@@ -286,11 +273,19 @@ private fun KeepRow(checked: Boolean, onChange: (Boolean) -> Unit, d: RowDims) {
 }
 
 @Composable
-private fun QueueSheetHeader(title: String, subtitle: String?, d: RowDims, onClose: () -> Unit, trailing: (@Composable () -> Unit)?) {
+private fun QueueSheetHeader(title: String, subtitle: String?, d: RowDims, onClose: () -> Unit, onNew: () -> Unit, newLabel: String) {
+    // "New" (+) at the top-left, the mirror of the close button at the top-right: same size, same row, same inset
+    val button = d.dp(44f, 60f)
+    val glyph = d.dp(18f, 26f)
+    val inset = d.dp(16f, 24f)
     Row(
-        Modifier.fillMaxWidth().padding(start = d.dp(20f, 28f), end = d.dp(16f, 24f), top = d.dp(6f, 26f), bottom = d.dp(10f, 14f)),
+        Modifier.fillMaxWidth().padding(start = inset, end = inset, top = d.dp(6f, 26f), bottom = d.dp(10f, 14f)),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        GlassCircleButton(onClick = onNew, contentDescription = newLabel, size = button) {
+            Icon(Icons.Rounded.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(glyph))
+        }
+        Spacer(Modifier.width(d.dp(12f, 16f)))
         Column(Modifier.weight(1f)) {
             Text(
                 title,
@@ -306,13 +301,9 @@ private fun QueueSheetHeader(title: String, subtitle: String?, d: RowDims, onClo
                 Text(subtitle, color = HiFi.TextSecondary, fontSize = d.sp(13f, 17f), lineHeight = d.sp(18f, 22f), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-        if (trailing != null) {
-            Spacer(Modifier.width(d.dp(10f, 10f)))
-            trailing()
-        }
-        Spacer(Modifier.width(d.dp(10f, 10f)))
-        GlassCircleButton(onClick = onClose, contentDescription = stringResource(R.string.cd_zakryt), size = d.dp(44f, 60f)) {
-            Icon(Icons.Rounded.Close, contentDescription = null, tint = Color.White, modifier = Modifier.size(d.dp(18f, 26f)))
+        Spacer(Modifier.width(d.dp(12f, 16f)))
+        GlassCircleButton(onClick = onClose, contentDescription = stringResource(R.string.cd_zakryt), size = button) {
+            Icon(Icons.Rounded.Close, contentDescription = null, tint = Color.White, modifier = Modifier.size(glyph))
         }
     }
 }

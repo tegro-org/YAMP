@@ -195,6 +195,45 @@ class ScreenshotTest {
         snap("library")
     }
 
+    /** Left-hand wheel side: the settings gear at the left edge, the title aligned to the right. */
+    @Composable
+    private fun LibraryLeftHand() {
+        LibraryScreen(
+            tracks = shown, isLoading = false, currentTrackId = "1", isPlaying = true, likedTrackIds = setOf("1", "2", "3"), downloadedTrackIds = setOf("2"),
+            downloadProgress = null, onTrackClick = {}, onPlayAllClick = {}, onShuffleClick = {},
+            onDownloadAllClick = {}, onCancelDownload = {}, onToggleLike = {},
+            playlists = playlists, historyCount = 23, controlsOnLeft = true
+        )
+    }
+
+    @Test
+    fun libraryLeftHand() {
+        show { LibraryLeftHand() }
+        snap("library_left_hand")
+    }
+
+    @Test
+    @Config(qualifiers = HEAD_UNIT)
+    fun libraryLeftHandHeadUnit() {
+        show { LibraryLeftHand() }
+        snap("head_library_left_hand")
+    }
+
+    /** Right-hand (the default) on the head unit: the title at the left, the gear at the right. */
+    @Test
+    @Config(qualifiers = HEAD_UNIT)
+    fun libraryRightHandHeadUnit() {
+        show {
+            LibraryScreen(
+                tracks = shown, isLoading = false, currentTrackId = "1", isPlaying = true, likedTrackIds = setOf("1", "2", "3"), downloadedTrackIds = setOf("2"),
+                downloadProgress = null, onTrackClick = {}, onPlayAllClick = {}, onShuffleClick = {},
+                onDownloadAllClick = {}, onCancelDownload = {}, onToggleLike = {},
+                playlists = playlists, historyCount = 23
+            )
+        }
+        snap("head_library_right_hand")
+    }
+
     @Test
     fun wavePlaying() {
         show {
@@ -360,6 +399,16 @@ class ScreenshotTest {
     @Test
     @Config(qualifiers = "w411dp-h2400dp")
     fun settingsPlayback() = settings("settings_playback", org.tegro.yamp.presentation.main.components.SettingsPage.PLAYBACK)
+
+    /** Z Fold 5 cover screen (~360 dp), Russian: segmented controls wrap or stack, never cut a label (user, 2026-11-18). */
+    @Test
+    @Config(qualifiers = "ru-rRU-w360dp-h2400dp-port-xhdpi")
+    fun settingsPlaybackFoldCoverRu() = settings("settings_playback_fold_cover_ru", org.tegro.yamp.presentation.main.components.SettingsPage.PLAYBACK)
+
+    /** Z Fold 5 inner screen on its side, Russian: «Переход» shows «Затухание и нарастание» in full. */
+    @Test
+    @Config(qualifiers = "ru-rRU-w829dp-h690dp-land-420dpi")
+    fun settingsPlaybackFoldInnerRu() = settings("settings_playback_fold_inner_ru", org.tegro.yamp.presentation.main.components.SettingsPage.PLAYBACK)
 
     /** Settings → Player (canvas `pl-settings`): the layout, the next tracks, likes by gestures. */
     @Test

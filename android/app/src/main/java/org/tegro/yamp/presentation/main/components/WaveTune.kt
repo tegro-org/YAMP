@@ -293,7 +293,13 @@ private fun TuneStrip(options: List<String>, selected: Int, onSelect: (Int) -> U
  * on the right, so the wave stays in view.
  */
 @Composable
-fun WaveTuneSheet(tuning: WaveTuning, onChange: (WaveTuning) -> Unit, onDismiss: () -> Unit) {
+fun WaveTuneSheet(
+    tuning: WaveTuning,
+    onChange: (WaveTuning) -> Unit,
+    onDismiss: () -> Unit,
+    /** Landscape: the panel slides in on the wheel side, by the queue dropdown it was opened from. */
+    onLeft: Boolean = false
+) {
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     val visible = remember { MutableTransitionState(false).apply { targetState = true } }
     LaunchedEffect(visible.currentState, visible.targetState) {
@@ -312,9 +318,15 @@ fun WaveTuneSheet(tuning: WaveTuning, onChange: (WaveTuning) -> Unit, onDismiss:
             }
             AnimatedVisibility(
                 visibleState = visible,
-                enter = if (isLandscape) slideInHorizontally(HiFiMotion.large()) { it } else slideInVertically(HiFiMotion.large()) { it },
-                exit = if (isLandscape) slideOutHorizontally(HiFiMotion.standard()) { it } else slideOutVertically(HiFiMotion.standard()) { it },
-                modifier = Modifier.align(if (isLandscape) Alignment.CenterEnd else Alignment.BottomCenter)
+                enter = if (isLandscape) slideInHorizontally(HiFiMotion.large()) { if (onLeft) -it else it } else slideInVertically(HiFiMotion.large()) { it },
+                exit = if (isLandscape) slideOutHorizontally(HiFiMotion.standard()) { if (onLeft) -it else it } else slideOutVertically(HiFiMotion.standard()) { it },
+                modifier = Modifier.align(
+                    when {
+                        !isLandscape -> Alignment.BottomCenter
+                        onLeft -> Alignment.CenterStart
+                        else -> Alignment.CenterEnd
+                    }
+                )
             ) {
                 val shape = if (isLandscape) RoundedCornerShape(28.dp) else RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp)
                 Column(
@@ -345,7 +357,8 @@ fun WaveTuneSheet(tuning: WaveTuning, onChange: (WaveTuning) -> Unit, onDismiss:
                             Icon(Icons.Rounded.Close, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                         }
                     }
-                    WaveTuneChoices(tuning, onChange, segments = isLandscape, optionHeight = if (isLandscape) 52.dp else 44.dp, fontSize = if (isLandscape) 14.sp else 15.sp)
+                    // Chips wrap to the next line instead of squeezing into one strip
+                    WaveTuneChoices(tuning, onChange, segments = false, optionHeight = if (isLandscape) 48.dp else 44.dp, fontSize = 15.sp)
                     Text(
                         stringResource(R.string.wave_tune_note),
                         color = HiFi.TextTertiary,

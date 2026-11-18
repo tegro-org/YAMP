@@ -51,42 +51,65 @@ import org.tegro.yamp.presentation.hifi.PlayPauseGlyph
 
 // --- Controls ---------------------------------------------------------------------------------------
 
-/** Glass dislike · metal previous · large metal play · metal next · glass like. Shrinks to fit narrow phones. */
+/** Prev · Play · Next in portrait, in dp: the knobs and the gap between them. */
+internal data class PortraitTransport(val skip: Float, val play: Float, val gap: Float) {
+    val total: Float get() = skip * 2 + play + gap * 2
+}
+
+/**
+ * Sizes of the portrait transport row for a row [widthDp] wide. Pure; unit-tested.
+ *
+ * The gap grows with the width (about 19 dp on a 320 dp row, at most 40 dp), so the three knobs never sit glued
+ * together now that like/dislike live beside the title. A row too narrow for them scales the whole row down, never
+ * below 60 %; wide rows (the Fold's inner screen) keep the base sizes — nothing grows past them.
+ */
+internal fun portraitTransport(widthDp: Float): PortraitTransport {
+    val gap = (widthDp * GAP_SHARE).coerceIn(GAP_MIN, GAP_MAX)
+    val base = PortraitTransport(skip = 68f, play = 96f, gap = gap)
+    val k = (widthDp / base.total).coerceIn(MIN_SCALE, 1f)
+    return if (k >= 1f) base else PortraitTransport(base.skip * k, base.play * k, base.gap * k)
+}
+
+private const val GAP_SHARE = 0.06f
+private const val GAP_MIN = 16f
+private const val GAP_MAX = 40f
+private const val MIN_SCALE = 0.6f
+
+/**
+ * Metal previous · large metal play · metal next, with a gap that grows with the width (see [portraitTransport]).
+ * Like/dislike are beside the title, not here.
+ */
 @Composable
 internal fun PlayerControls(
     isPlaying: Boolean,
     isLoading: Boolean,
-    isLiked: Boolean,
     isRadio: Boolean,
-    compact: Boolean,
-    onDislike: () -> Unit,
     onPrev: () -> Unit,
     onPlayPause: () -> Unit,
-    onNext: () -> Unit,
-    onLike: () -> Unit,
-    /** Like/dislike exist for this track's service (not for Jellyfin yet): otherwise empty places keep the row centred. */
-    showLikes: Boolean = true
+    onNext: () -> Unit
 ) {
-    // Wide rows (landscape, tablets) keep the cluster together instead of spreading it to the edges
-    BoxWithConstraints(Modifier.fillMaxWidth().wrapContentWidth(Alignment.CenterHorizontally).widthIn(max = 420.dp)) {
-        // 52 + 68 + 96 + 68 + 52 = 336 dp of buttons; narrower rows scale them down
-        val fit = (maxWidth / 344.dp).coerceIn(0.7f, 1f)
-        val k = if (compact) fit * 0.8f else fit
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            if (showLikes) DislikeButton(onDislikeClick = onDislike, size = 52.dp * k) else Spacer(Modifier.size(52.dp * k))
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val sz = portraitTransport(maxWidth.value)
+        val skip = sz.skip.dp
+        val play = sz.play.dp
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(sz.gap.dp, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             HiFiKnob(
                 onClick = onPrev,
                 contentDescription = stringResource(if (isRadio) R.string.cd_prev_station else R.string.cd_predyduschiy_trek),
-                size = 68.dp * k
+                size = skip
             ) {
-                Icon(Icons.Rounded.SkipPrevious, contentDescription = null, tint = HiFi.OnMetal, modifier = Modifier.size(30.dp * k))
+                Icon(Icons.Rounded.SkipPrevious, contentDescription = null, tint = HiFi.OnMetal, modifier = Modifier.size(skip * 0.44f))
             }
-            HiFiKnob(onClick = onPlayPause, contentDescription = stringResource(R.string.cd_vosproizvedenie_ili_pauza), size = 96.dp * k) {
-                PlayPauseGlyph(isPlaying = isPlaying, isLoading = isLoading, size = 40.dp * k)
+            HiFiKnob(onClick = onPlayPause, contentDescription = stringResource(R.string.cd_vosproizvedenie_ili_pauza), size = play) {
+                PlayPauseGlyph(isPlaying = isPlaying, isLoading = isLoading, size = play * 0.42f)
             }
             // Never disabled (D81): loading / failed only decorate it; the whole knob stays the tap target
             val look = if (isRadio) NextLook.READY else LocalPlaybackAux.current.next()
-            NextStateDecor(look, size = 68.dp * k) {
+            NextStateDecor(look, size = skip) {
                 HiFiKnob(
                     onClick = onNext,
                     contentDescription = if (look == NextLook.READY) {
@@ -94,12 +117,11 @@ internal fun PlayerControls(
                     } else {
                         nextLookLabel(look)
                     },
-                    size = 68.dp * k
+                    size = skip
                 ) {
-                    Icon(Icons.Rounded.SkipNext, contentDescription = null, tint = HiFi.OnMetal, modifier = Modifier.size(30.dp * k))
+                    Icon(Icons.Rounded.SkipNext, contentDescription = null, tint = HiFi.OnMetal, modifier = Modifier.size(skip * 0.44f))
                 }
             }
-            if (showLikes) LikeHeartButton(isLiked = isLiked, onToggleLike = onLike, size = 52.dp * k) else Spacer(Modifier.size(52.dp * k))
         }
     }
 }

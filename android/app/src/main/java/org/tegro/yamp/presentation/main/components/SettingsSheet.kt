@@ -387,7 +387,7 @@ private fun interfaceSummary(state: SettingsUiState): String {
 
 @Composable
 private fun playerSummary(state: SettingsUiState): String {
-    val layout = stringResource(if (state.playerCarLayout) R.string.settings_player_layout_car else R.string.settings_player_layout_phone)
+    val layout = stringResource(if (state.playerCarLayout) R.string.settings_player_large_on else R.string.settings_player_large_off)
     val next = if (state.playerNextThree) "3" else "1"
     val likes = stringResource(if (state.likeGestures) R.string.settings_player_likes_gestures else R.string.settings_player_likes_buttons)
     return stringResource(R.string.settings_summary_player, layout.unbroken(), next, likes.unbroken())
@@ -605,13 +605,9 @@ private fun ColumnScope.PlaybackPage(state: SettingsUiState, actions: SettingsAc
 @Composable
 private fun ColumnScope.PlayerPage(state: SettingsUiState, actions: SettingsActions) {
     SettingsGroup(stringResource(R.string.settings_section_player)) {
-        SegmentedRow(Icons.Rounded.DirectionsCar, stringResource(R.string.settings_player_layout), stringResource(R.string.settings_player_layout_hint)) {
-            HiFiSegmented(
-                options = listOf(stringResource(R.string.settings_player_layout_phone), stringResource(R.string.settings_player_layout_car)),
-                selectedIndex = if (state.playerCarLayout) 1 else 0,
-                onSelect = { actions.onPlayerCarLayoutChange(it == 1) }
-            )
-        }
+        // "Large controls" (canvas `pl-settings`): the same layouts with car-sized controls, the ring around Play and
+        // the clock; stored under the old "Car layout" key, so a car layout chosen before is "on"
+        SwitchRow(Icons.Rounded.DirectionsCar, stringResource(R.string.settings_player_large), stringResource(R.string.settings_player_large_hint), state.playerCarLayout, actions.onPlayerCarLayoutChange)
         SegmentedRow(Icons.Rounded.MusicNote, stringResource(R.string.settings_player_next), stringResource(R.string.settings_player_next_hint)) {
             HiFiSegmented(
                 options = listOf("1", "3"),

@@ -180,10 +180,10 @@
     <string name="cd_media_menu">Действия с альбомом или исполнителем</string>
     <string name="settings_section_player">Плеер</string>
     <string name="settings_summary_player">%1$s · далее %2$s · %3$s</string>
-    <string name="settings_player_layout">Вид</string>
-    <string name="settings_player_layout_hint">Выбирается здесь, никогда автоматически</string>
-    <string name="settings_player_layout_phone">Телефон</string>
-    <string name="settings_player_layout_car">Автомобиль</string>
+    <string name="settings_player_large">Крупные кнопки</string>
+    <string name="settings_player_large_hint">Только в горизонтальном режиме (головное устройство, телефон горизонтально): кнопки как в машине, кольцо вокруг «Пуск» и часы</string>
+    <string name="settings_player_large_on">крупные кнопки</string>
+    <string name="settings_player_large_off">обычные кнопки</string>
     <string name="settings_player_next">Следующие треки</string>
     <string name="settings_player_next_hint">1: одна строка, нажатие открывает очередь · 3: карточки</string>
     <string name="settings_player_likes">Лайк жестами</string>

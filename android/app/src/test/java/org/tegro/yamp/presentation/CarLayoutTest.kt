@@ -8,7 +8,10 @@ import org.tegro.yamp.presentation.player.LikeGesture
 import org.tegro.yamp.presentation.player.PlayerGesture
 import org.tegro.yamp.presentation.player.QueueDrag
 import org.tegro.yamp.presentation.player.WideSpec
-import org.tegro.yamp.presentation.player.coverFitOf
+import org.tegro.yamp.presentation.player.CLOCK_INSET
+import org.tegro.yamp.presentation.player.PlayerMenuItem
+import org.tegro.yamp.presentation.player.playerMenuItems
+import org.tegro.yamp.presentation.player.wideGeometryOf
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -31,22 +34,80 @@ class CarLayoutTest {
         assertEquals(1208f / 1200f, carScaleOf(960.dp, 1280.dp, 1208.dp, isLandscape = false), 0.0001f)
     }
 
+    /** The block fills the full height between the same top and bottom padding (canvas `plWideLayout`). */
+    private fun assertFullHeight(spec: WideSpec, w: Float, h: Float, three: Boolean) {
+        val g = wideGeometryOf(spec, w, h, three, isRadio = false)
+        val next = if (three) org.tegro.yamp.presentation.player.NEXT_BLOCK_GAP + org.tegro.yamp.presentation.player.nextCardsExtra(spec) + g.card
+        else org.tegro.yamp.presentation.player.NEXT_BLOCK_GAP + spec.oneHeight
+        assertEquals("top = the top row's padding", spec.top, g.coverTop, 0f)
+        assertEquals("bottom = the same padding", h - spec.top, g.coverTop + g.cover + next, 0.5f)
+        assertTrue("never under the minimum far padding", g.coverX + g.cover <= w - spec.pad + 0.01f)
+    }
+
     @Test
-    fun theCoverStaysClearOfTheClock() {
-        // Wide enough: the cover sits beside the clock, as large as the height leaves (plc-unit-1760)
-        val wide = coverFitOf(widthDp = 1000f, heightDp = 668f, nextDp = 220f, gapDp = 22f, maxDp = 420f, clockDp = 230f, belowClockDp = 96f)
-        assertEquals(0f, wide.top, 0f)
-        assertTrue(wide.size <= 1000f - 2 * 230f)
-        // Too narrow beside the clock: it starts under it instead
-        val narrow = coverFitOf(widthDp = 600f, heightDp = 668f, nextDp = 220f, gapDp = 22f, maxDp = 420f, clockDp = 230f, belowClockDp = 96f)
-        assertEquals(96f, narrow.top, 0f)
-        assertTrue(narrow.size + narrow.top + 220f + 22f <= 668f)
-        // The 1760×720 unit: beside the clock the cover would shrink; under it it gets the phone-landscape share
-        val unit = coverFitOf(widthDp = 794f, heightDp = 668f, nextDp = 108f, gapDp = 22f, maxDp = 458f, clockDp = 230f, belowClockDp = 96f)
-        assertEquals(96f, unit.top, 0f)
-        assertTrue(unit.size > 794f - 2 * 230f)
-        // No clock (the phone): only the width, the height and the maximum count
-        assertEquals(262f, coverFitOf(400f, 400f, 63f, 22f, 262f, 0f, 0f).size, 0f)
+    fun theCoverBlockSpansTheFullHeightOnEveryScreen() {
+        // Layout units: the screen in dp divided by the spec's scale
+        for ((w, h) in listOf(1760f to 720f, 1920f to 720f, 1280f to 800f, 2400f to 720f)) {
+            val s = WideSpec.Car.scaleFor(w, h)
+            assertFullHeight(WideSpec.Car, w / s, h / s, three = true)
+            assertFullHeight(WideSpec.Car, w / s, h / s, three = false)
+        }
+        // A 2340×1080 phone on its side at ~2.6×: about 900×415 dp
+        val s = WideSpec.Phone.scaleFor(900f, 415f)
+        assertFullHeight(WideSpec.Phone, 900f / s, 415f / s, three = true)
+        assertFullHeight(WideSpec.Phone, 900f / s, 415f / s, three = false)
+    }
+
+    @Test
+    fun aFoldsScreensKeepTheBlockInsideTheScreen() {
+        // Galaxy Z Fold 5: the inner screen on its side ≈ 830×690 dp (near-square), the cover screen ≈ 360 dp wide
+        // (portrait only). On the inner screen the width stops the cover first: the block ends at the far padding and
+        // sits centred in the height, the controls keep their minimum
+        val spec = WideSpec.Phone
+        val s = spec.scaleFor(830f, 690f)
+        val w = 830f / s
+        val h = 690f / s
+        val g = wideGeometryOf(spec, w, h, nextThree = true, isRadio = false)
+        assertEquals(w - spec.pad, g.coverX + g.cover, 0.5f)
+        assertTrue(g.controlsW >= spec.driverW * 0.68f - 0.5f)
+        assertTrue(g.coverTop >= spec.top)
+        val blockBottom = g.coverTop + g.cover + org.tegro.yamp.presentation.player.NEXT_BLOCK_GAP + org.tegro.yamp.presentation.player.nextCardsExtra(spec) + g.card
+        assertTrue(blockBottom <= h - spec.top + 0.5f)
+        assertEquals("centred in the height", g.coverTop, h - blockBottom, 1f)
+    }
+
+    @Test
+    fun aTallerScreenGivesTheControlsTheRestAndAWideOneCentresTheBlock() {
+        // A 4:3 unit (1024×768): no spare width — the block ends at the minimum far padding, the controls take the rest.
+        // (1280×800 still has a little spare width once the whole layout scales to the screen's width: centred.)
+        val tall = WideSpec.Car.let { spec -> val s = spec.scaleFor(1024f, 768f); wideGeometryOf(spec, 1024f / s, 768f / s, nextThree = true, isRadio = false) to 1024f / s }
+        assertEquals(tall.second - WideSpec.Car.pad, tall.first.coverX + tall.first.cover, 0.5f)
+        assertTrue(tall.first.controlsW < WideSpec.Car.driverW / WideSpec.Car.baseW * tall.second)
+        // 2400×720: the controls stop at their share; the block is centred in the space beside them
+        val spec = WideSpec.Car
+        val s = spec.scaleFor(2400f, 720f)
+        val w = 2400f / s
+        val wide = wideGeometryOf(spec, w, 720f / s, nextThree = true, isRadio = false)
+        assertEquals(spec.driverW / spec.baseW * w, wide.controlsW, 0.5f)
+        val areaStart = spec.pad + wide.controlsW
+        val areaEnd = w - spec.pad
+        assertEquals((areaStart + areaEnd) / 2f, wide.coverX + wide.cover / 2f, 0.5f)
+    }
+
+    @Test
+    fun theClockHasOneFixedPlaceInsideTheCoverOnATallerScreen() {
+        val spec = WideSpec.Car
+        for ((w, h) in listOf(1760f to 720f, 1280f to 800f, 1024f to 768f, 2400f to 720f)) {
+            val s = spec.scaleFor(w, h)
+            val g = wideGeometryOf(spec, w / s, h / s, nextThree = true, isRadio = false)
+            assertEquals(spec.pad + CLOCK_INSET, g.clockEnd, 0f)
+            assertEquals(spec.top + CLOCK_INSET, g.clockTop, 0f)
+        }
+        // On a taller screen (4:3) the cover reaches the minimum padding: the clock's corner lies inside the cover
+        val s = spec.scaleFor(1024f, 768f)
+        val w = 1024f / s
+        val g = wideGeometryOf(spec, w, 768f / s, nextThree = true, isRadio = false)
+        assertTrue(w - g.clockEnd <= g.coverX + g.cover && g.clockTop >= g.coverTop)
     }
 
     @Test
@@ -109,23 +170,20 @@ class CarLayoutTest {
     }
 
     @Test
-    fun theMoreMenuOffersLikesOnlyWithGesturesAndAServiceThatHasThem() {
-        val base = listOf(
-            org.tegro.yamp.presentation.player.WideMenuItem.SLEEP,
-            org.tegro.yamp.presentation.player.WideMenuItem.ADD_TO_PLAYLIST,
-            org.tegro.yamp.presentation.player.WideMenuItem.QUALITY
-        )
-        org.junit.Assert.assertEquals(base, org.tegro.yamp.presentation.player.wideMenuItems(likeGestures = false, supportsLikes = true, isRadio = false))
-        org.junit.Assert.assertEquals(
-            base + listOf(org.tegro.yamp.presentation.player.WideMenuItem.LIKE, org.tegro.yamp.presentation.player.WideMenuItem.DISLIKE),
-            org.tegro.yamp.presentation.player.wideMenuItems(likeGestures = true, supportsLikes = true, isRadio = false)
-        )
-        // Jellyfin has no likes yet: gestures on, still no Like / Dislike rows
-        org.junit.Assert.assertEquals(base, org.tegro.yamp.presentation.player.wideMenuItems(likeGestures = true, supportsLikes = false, isRadio = false))
-        // FM radio: only the sleep timer
-        org.junit.Assert.assertEquals(
-            listOf(org.tegro.yamp.presentation.player.WideMenuItem.SLEEP),
-            org.tegro.yamp.presentation.player.wideMenuItems(likeGestures = true, supportsLikes = true, isRadio = true)
-        )
+    fun theMoreMenuFollowsTheQueueTheServiceAndTheGestures() {
+        fun items(gestures: Boolean = false, likes: Boolean = true, radio: Boolean = false, wave: Boolean = false, canRadio: Boolean = true, trackWave: Boolean = false) =
+            playerMenuItems(gestures, likes, radio, wave, canRadio, trackWave)
+        val tail = listOf(PlayerMenuItem.SEARCH, PlayerMenuItem.SLEEP, PlayerMenuItem.ADD_TO_PLAYLIST, PlayerMenuItem.QUALITY)
+        // My Wave: "Tune the wave" first (and "Back to My Wave" on a wave by a track)
+        assertEquals(listOf(PlayerMenuItem.TUNE) + tail, items(wave = true))
+        assertEquals(listOf(PlayerMenuItem.TUNE, PlayerMenuItem.BACK_TO_WAVE) + tail, items(wave = true, trackWave = true))
+        // Another Yandex queue: "Start radio" by the current track
+        assertEquals(listOf(PlayerMenuItem.START_RADIO) + tail, items())
+        // Jellyfin: no radio, no likes even with gestures
+        assertEquals(tail, items(gestures = true, likes = false, canRadio = false))
+        // Likes as a fallback only with gestures on
+        assertEquals(listOf(PlayerMenuItem.START_RADIO) + tail + listOf(PlayerMenuItem.LIKE, PlayerMenuItem.DISLIKE), items(gestures = true))
+        // FM radio: search and the sleep timer only
+        assertEquals(listOf(PlayerMenuItem.SEARCH, PlayerMenuItem.SLEEP), items(gestures = true, radio = true))
     }
 }

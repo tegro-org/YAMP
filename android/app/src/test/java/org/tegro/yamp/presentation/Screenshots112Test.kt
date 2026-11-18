@@ -243,6 +243,14 @@ class Screenshots112Test {
         snapScreen("v112_small_wave_tune_sheet")
     }
 
+    /** Z Fold 5 inner screen on its side, Russian: the chips wrap, nothing is cut («Спокойное» in full). */
+    @Test
+    @Config(qualifiers = "ru-rRU-w829dp-h690dp-land-420dpi")
+    fun waveTuneSheetFoldInner() {
+        show { WaveTuneSheet(tuned, onChange = {}, onDismiss = {}, onLeft = true) }
+        snapScreen("wave_tune_fold_inner_main")
+    }
+
     @Test
     @Config(qualifiers = HEAD_UNIT)
     fun waveTuneSheetHeadUnit() {
@@ -394,14 +402,14 @@ class Screenshots112Test {
     @Config(qualifiers = "+land")
     fun carTuneOpenLeftWheel() {
         show { Car(isLandscape = true, tuneOpen = true) }
-        snap("v112_car_tune_left")
+        snapScreen("v112_car_tune_left")
     }
 
     @Test
     @Config(qualifiers = "+land")
     fun carTuneOpenRightWheel() {
         show { Car(isLandscape = true, wheelOnLeft = false, tuneOpen = true) }
-        snap("v112_car_tune_right")
+        snapScreen("v112_car_tune_right")
     }
 
     @Test
@@ -421,7 +429,7 @@ class Screenshots112Test {
     @Test
     fun carPortraitTuneOpen() {
         show { Car(isLandscape = false, tuneOpen = true) }
-        snap("v112_car_portrait_tune")
+        snapScreen("v112_car_portrait_tune")
     }
 
     @Test
@@ -434,7 +442,7 @@ class Screenshots112Test {
     @Config(qualifiers = HEAD_UNIT)
     fun headUnitCarTuneOpen() {
         show { Car(isLandscape = true, tuneOpen = true) }
-        snap("v112_head_car_tune")
+        snapScreen("v112_head_car_tune")
     }
 
     @Test
@@ -463,14 +471,14 @@ class Screenshots112Test {
     @Config(qualifiers = SMALL_PHONE)
     fun smallPhoneCarTuneOpen() {
         show { Car(isLandscape = false, tuneOpen = true) }
-        snap("v112_small_car_tune")
+        snapScreen("v112_small_car_tune")
     }
 
     @Test
     @Config(qualifiers = GEELY)
     fun geelyCarTuneOpen() {
         show { Car(isLandscape = false, tuneOpen = true) }
-        snap("v112_geely_car_tune")
+        snapScreen("v112_geely_car_tune")
     }
 
     @Test
@@ -482,7 +490,7 @@ class Screenshots112Test {
                 Car(isLandscape = true, tuneOpen = true)
             }
         }
-        snap("v112_car_scaled_tune")
+        snapScreen("v112_car_scaled_tune")
     }
 
     // --- 1.12.2: "Далее" as a row of covers ---

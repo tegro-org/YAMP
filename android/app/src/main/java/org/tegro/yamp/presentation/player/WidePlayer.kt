@@ -50,6 +50,7 @@ import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Waves
 import androidx.compose.material3.Icon
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -121,7 +122,7 @@ import org.tegro.yamp.presentation.hifi.hifiAnodized
 import org.tegro.yamp.presentation.hifi.hifiGlass
 import org.tegro.yamp.presentation.hifi.hifiSoftShadow
 import org.tegro.yamp.presentation.main.components.WavePill
-import org.tegro.yamp.presentation.main.components.WaveTuneChoices
+import org.tegro.yamp.presentation.main.components.WaveTuneSheet
 import org.tegro.yamp.presentation.main.components.waveTuningSummary
 import org.tegro.yamp.utils.CoverSize
 import org.tegro.yamp.utils.browserUserAgent
@@ -188,25 +189,89 @@ internal data class WideSpec(
     }
 }
 
+/** The top row's (⋮ · queue) smallest height: a touch target, whatever the layout's scale. */
+internal val MIN_TOP_ROW = 48.dp
+
 /**
- * Where the cover goes in the far column of [widthDp] × [heightDp], with [nextDp] under it for the next tracks and,
- * in the car, the clock ([clockDp] wide) in the far corner: the largest square that fits (up to [maxDp]) and stays
- * clear of the clock (`plc-unit-1760`). The column spans the full usable height — from the top row's top to the
- * bottom margin — so the cover takes all of it the next block leaves. Too narrow beside the clock: the cover starts
- * under it ([belowClockDp] down). Pure; unit-tested.
+ * The top row's visual height per sp of its label — the portrait player's pill proportions (17 sp in a 44 dp pill).
+ * The visuals hug the label; the 48 dp touch target comes from [minimumInteractiveComponentSize], not from a fatter
+ * pill (user, 2026-11-18: a big circle and pill around small text looked odd).
  */
-internal data class CoverFit(val size: Float, val top: Float)
+private const val TOP_ROW_PER_SP = 44f / 17f
+
+/** The top row's smallest visual height (a 14 sp label still gets a readable pill). */
+private val MIN_TOP_ROW_VISUAL = 36.dp
 
 /** The gap between the three next-track cards, in layout units. */
-private const val NEXT_CARD_GAP = 20f
+internal const val NEXT_CARD_GAP = 20f
 
-internal fun coverFitOf(widthDp: Float, heightDp: Float, nextDp: Float, gapDp: Float, maxDp: Float, clockDp: Float, belowClockDp: Float): CoverFit {
-    val byHeight = heightDp - nextDp - gapDp
-    if (clockDp <= 0f) return CoverFit(minOf(maxDp, widthDp, byHeight).coerceAtLeast(0f), 0f)
-    val besideClock = minOf(maxDp, byHeight, widthDp - 2 * clockDp).coerceAtLeast(0f)
-    val belowClock = minOf(maxDp, widthDp, byHeight - belowClockDp).coerceAtLeast(0f)
-    // Whichever gives the larger cover: on a 1760-wide unit it goes under the clock at full size
-    return if (besideClock >= belowClock) CoverFit(besideClock, 0f) else CoverFit(belowClock, belowClockDp)
+/** The clock's inset from the minimum right padding and from the top padding, in layout units (canvas `plWideLayout`). */
+internal const val CLOCK_INSET = 20f
+
+/**
+ * Where everything goes in a wide player of [widthU] × [heightU] layout units (canvas `plWideLayout()`, approved
+ * 2026-11-18), measured from the controls' side (mirrored by the caller for the right-hand wheel):
+ * - the cover + next block spans the full height: from [WideSpec.top] (the ⋮ · queue row's top padding) down to the
+ *   same margin at the bottom; the cover is square and takes what the next block leaves;
+ * - the far side keeps at least [WideSpec.pad] (the progress bar's edge padding) as its padding;
+ * - a taller screen: the controls take all that is left and the block ends at that minimum padding;
+ * - a wider screen: the controls stop at their share of the width ([WideSpec.driverW] of [WideSpec.baseW]) and the
+ *   block is centred in the space beside them;
+ * - the clock has one fixed place on every screen: [CLOCK_INSET] inside the minimum right padding and the top padding —
+ *   inside the cover's corner when the cover reaches that padding (taller screens), wherever it falls otherwise.
+ * Pure; unit-tested.
+ */
+internal data class WideGeometry(
+    val controlsX: Float,
+    val controlsW: Float,
+    val coverX: Float,
+    val coverTop: Float,
+    val cover: Float,
+    val card: Float,
+    /** The clock's offsets from the far edge and from the top. */
+    val clockEnd: Float,
+    val clockTop: Float
+)
+
+/** The gap between the cover and the next block, in layout units. */
+internal const val NEXT_BLOCK_GAP = 22f
+
+/** What the three cards add besides their own square: the "Далее" line, its gap, the title and artist lines, air. */
+internal fun nextCardsExtra(spec: WideSpec): Float = spec.nextCaps * 1.4f + 10f + 6f + spec.cardTitle * 1.3f + spec.cardArtist * 1.3f + 8f
+
+internal fun wideGeometryOf(spec: WideSpec, widthU: Float, heightU: Float, nextThree: Boolean, isRadio: Boolean): WideGeometry {
+    val edge = spec.pad
+    val gapMin = spec.gap
+    val minControls = spec.driverW * 0.68f
+    val avail = heightU - 2 * spec.top
+    val byHeight = when {
+        isRadio -> avail
+        // cover + gap + extra + card = avail, card = (cover − 2 · cardGap) / 3
+        nextThree -> (avail - NEXT_BLOCK_GAP - nextCardsExtra(spec) + 2 * NEXT_CARD_GAP / 3f) * 3f / 4f
+        else -> avail - NEXT_BLOCK_GAP - spec.oneHeight
+    }
+    val cover = minOf(byHeight, widthU - 2 * edge - gapMin - minControls).coerceAtLeast(120f)
+    val card = if (nextThree && !isRadio) ((cover - 2 * NEXT_CARD_GAP) / 3f).coerceAtLeast(0f) else 0f
+    val cap = spec.driverW / spec.baseW * widthU
+    val fit = widthU - 2 * edge - gapMin - cover
+    // A spare of less than two minimum gaps is not worth centring: it goes to the controls
+    val centred = fit - cap >= 2 * gapMin
+    val controlsW = if (centred) cap else fit
+    val areaStart = edge + controlsW
+    val areaEnd = widthU - edge
+    val coverX = if (centred) (areaStart + areaEnd - cover) / 2f else areaEnd - cover
+    // A near-square screen (a foldable's inner screen on its side) lets the width stop the cover before the height:
+    // the block is then centred vertically instead of leaving all the spare height at the bottom
+    val blockH = cover + when {
+        isRadio -> 0f
+        nextThree -> NEXT_BLOCK_GAP + nextCardsExtra(spec) + card
+        else -> NEXT_BLOCK_GAP + spec.oneHeight
+    }
+    val coverTop = if (cover < byHeight - 0.5f) ((heightU - blockH) / 2f).coerceAtLeast(spec.top) else spec.top
+    return WideGeometry(
+        controlsX = edge, controlsW = controlsW, coverX = coverX, coverTop = coverTop, cover = cover, card = card,
+        clockEnd = edge + CLOCK_INSET, clockTop = spec.top + CLOCK_INSET
+    )
 }
 
 /**
@@ -332,64 +397,79 @@ internal fun WidePlayer(
         fun u(v: Float): Dp = (v * s).dp
         fun t(v: Float): TextUnit = (v * s).sp
 
+        // Where everything goes (canvas `plWideLayout()`), in layout units from the controls' side; mirrored below
+        val g = wideGeometryOf(spec, maxWidth.value / s, maxHeight.value / s, nextThree, isRadio)
+        val widthU = maxWidth.value / s
+        fun xOf(start: Float, width: Float) = if (controlsOnLeft) start else widthU - start - width
+
+        // The top row (user, 2026-11-18): only ⋮ and the queue dropdown; ⋮ at the outer edge — `⋮ · queue ▾` on the
+        // left, `queue ▾ · ⋮` on the right. Everything else is in ⋮.
+        // The row scales with the layout, like the transport below it, but never below a 48 dp touch target: the car
+        // spec on a phone in landscape ("Large controls" on a 400 dp tall screen) would otherwise shrink it to ~28 dp
+        // while the labels, set in sp, stay large (user, 2026-11-18). Text and icons follow the row's real height.
+        // The queue name never outgrows the artist line under the title (user, 2026-11-18): it takes the artist's
+        // size, which follows the layout's scale (the smaller of the width and height factors), not the 48 dp floor.
+        // The pill and ⋮ hug that label (portrait proportions); their touch targets stay ≥ 48 dp invisibly.
+        val barFontSp = t(spec.artist)
+        val barH = maxOf(minOf(u(spec.bar), (barFontSp.value * TOP_ROW_PER_SP).dp), MIN_TOP_ROW_VISUAL)
         val topRow: @Composable () -> Unit = {
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(u(spec.barGap), if (controlsOnLeft) Alignment.Start else Alignment.End),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                val items = buildList<@Composable () -> Unit> {
-                    add { QueueDropdown(queueName, queueAccount, height = u(spec.bar), fontSize = t(spec.barFont + 2f), onClick = onQueues, modifier = Modifier.weight(1f, fill = false)) }
-                    add {
-                        WaveButtons(
-                            track, waveActive, waveTuning, trackWaveSeed, onTrackWave, onBackToMyWave,
-                            onTune = { tuneOpen = true }, height = u(spec.bar), fontSize = t(spec.barFont)
-                        )
-                    }
-                    add {
-                        Box(
-                            Modifier.size(u(spec.bar)).hifiGlass(CircleShape).clickable(role = Role.Button, onClickLabel = stringResource(R.string.tab_search), onClick = onSearch),
-                            contentAlignment = Alignment.Center
-                        ) { Icon(Icons.Rounded.Search, contentDescription = stringResource(R.string.tab_search), tint = Color.White, modifier = Modifier.size(u(spec.bar * 0.45f))) }
-                    }
-                    add {
-                        WideMoreButton(
-                            items = wideMenuItems(!likeButtons, track.supportsLikes, isRadio),
-                            size = u(spec.bar),
-                            itemHeight = if (spec.car) u(64f) else 48.dp,
-                            fontSize = if (spec.car) t(spec.barFont + 2f) else 16.sp,
-                            isLiked = isLiked,
-                            sleepTimer = sleepTimer,
-                            onSleepTimer = onSleepTimer,
-                            onSleepAtEndOfTrack = onSleepAtEndOfTrack,
-                            onCancelSleepTimer = onCancelSleepTimer,
-                            onAddToPlaylist = onAddToPlaylist,
-                            onQuality = onQuality,
-                            onLike = onLike,
-                            onDislike = onDislikeWithUndo,
-                            initialOpen = initialMoreOpen
-                        )
-                    }
+                val more: @Composable () -> Unit = {
+                    PlayerMoreButton(
+                        items = playerMenuItems(
+                            likeGestures = !likeButtons, supportsLikes = track.supportsLikes, isRadio = isRadio,
+                            waveActive = waveActive, canStartRadio = onTrackWave != null && track.supportsLikes, trackWave = trackWaveSeed != null
+                        ),
+                        size = barH,
+                        itemHeight = if (spec.car) maxOf(u(64f), MIN_TOP_ROW) else MIN_TOP_ROW,
+                        fontSize = if (spec.car) maxOf(barFontSp.value, 16f).sp else 16.sp,
+                        isLiked = isLiked,
+                        waveTuning = waveTuning,
+                        sleepTimer = sleepTimer,
+                        onTune = { tuneOpen = true },
+                        onStartRadio = { onTrackWave?.invoke() },
+                        onBackToMyWave = onBackToMyWave,
+                        onSearch = onSearch,
+                        onSleepTimer = onSleepTimer,
+                        onSleepAtEndOfTrack = onSleepAtEndOfTrack,
+                        onCancelSleepTimer = onCancelSleepTimer,
+                        onAddToPlaylist = onAddToPlaylist,
+                        onQuality = onQuality,
+                        onLike = onLike,
+                        onDislike = onDislikeWithUndo,
+                        initialOpen = initialMoreOpen
+                    )
                 }
-                (if (controlsOnLeft) items else items.reversed()).forEach { it() }
+                val dropdown: @Composable () -> Unit = {
+                    QueueDropdown(queueName, queueAccount, height = barH, fontSize = barFontSp, onClick = onQueues, modifier = Modifier.weight(1f, fill = false))
+                }
+                if (controlsOnLeft) { more(); dropdown() } else { dropdown(); more() }
             }
         }
 
         val driver: @Composable () -> Unit = {
-            Column(Modifier.width(u(spec.driverW)).fillMaxHeight()) {
+            Column(Modifier.padding(start = u(xOf(g.controlsX, g.controlsW)), top = u(spec.top)).width(u(g.controlsW)).fillMaxHeight()) {
                 topRow()
+                // The block (labels, progress, transport) is centred vertically between the top row and the bottom
+                // padding — on near-square screens (the Fold inner screen) it used to sink to the bottom (user, 2026-11-18)
                 Spacer(Modifier.weight(1f))
                 // The labels centred between dislike and like (the buttons keep their place when hidden)
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     val likes = likeButtons && track.supportsLikes
+                    // Never below a 48 dp touch target (large controls on a phone in landscape scale them down)
+                    val likeSize = maxOf(u(spec.like), MIN_TOP_ROW)
                     if (likes) {
-                        GlassRound(u(spec.like), stringResource(R.string.cd_ne_nravitsya), onDislike) {
+                        GlassRound(likeSize, stringResource(R.string.cd_ne_nravitsya), onDislike) {
                             Icon(Icons.Rounded.HeartBroken, contentDescription = null, tint = Color.White.copy(alpha = 0.88f), modifier = Modifier.size(u(spec.likeIcon)))
                         }
-                    } else Spacer(Modifier.size(u(spec.like)))
+                    } else Spacer(Modifier.size(likeSize))
                     WideLabels(track, caption, s, spec, Modifier.weight(1f).padding(horizontal = u(16f)))
                     if (likes) {
-                        GlassRound(u(spec.like), stringResource(R.string.cd_nravitsya), onLike) {
+                        GlassRound(likeSize, stringResource(R.string.cd_nravitsya), onLike) {
                             Icon(
                                 if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                                 contentDescription = null,
@@ -397,128 +477,100 @@ internal fun WidePlayer(
                                 modifier = Modifier.size(u(spec.likeIcon))
                             )
                         }
-                    } else Spacer(Modifier.size(u(spec.like)))
+                    } else Spacer(Modifier.size(likeSize))
                 }
                 Spacer(Modifier.height(u(14f)))
                 if (isRadio) HiFiLiveLine(Modifier.fillMaxWidth(), unit = u(spec.timelineUnit))
                 else PlayerTimeline(progress, durationMs, isPlaying, onSeek, unit = u(spec.timelineUnit), timeSize = t(spec.timeSize))
                 Spacer(Modifier.height(u(8f)))
-                // Prev · Play (the car: in the ring) · Next
+                // Prev · Play (the car: in the ring) · Next — scaled together to fit a narrow column, so Next is never
+                // squeezed smaller than Prev (the Fold inner screen in landscape, user 2026-11-18)
+                val ringU = if (spec.ring > 0f) spec.ring else spec.play
+                val tk = (g.controlsW / (2 * spec.skip + ringU + 2 * spec.transportGap)).coerceAtMost(1f)
                 Row(
                     Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(u(spec.transportGap), Alignment.CenterHorizontally),
+                    horizontalArrangement = Arrangement.spacedBy(u(spec.transportGap * tk), Alignment.CenterHorizontally),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    HiFiKnob(onClick = onPrev, contentDescription = stringResource(R.string.cd_predyduschiy_trek), size = u(spec.skip)) {
-                        Icon(Icons.Rounded.SkipPrevious, contentDescription = null, tint = HiFi.OnMetal, modifier = Modifier.size(u(spec.skipIcon)))
+                    HiFiKnob(onClick = onPrev, contentDescription = stringResource(R.string.cd_predyduschiy_trek), size = u(spec.skip * tk)) {
+                        Icon(Icons.Rounded.SkipPrevious, contentDescription = null, tint = HiFi.OnMetal, modifier = Modifier.size(u(spec.skipIcon * tk)))
                     }
-                    val ringSize = if (spec.ring > 0f) spec.ring else spec.play
+                    val ringSize = ringU * tk
                     Box(Modifier.size(u(ringSize)), contentAlignment = Alignment.Center) {
                         if (spec.ring > 0f) {
                             SpectrumRing(
                                 mode = ringMode,
                                 progress = fraction,
                                 bars = if (LocalHiFiLite.current) 60 else 90,
-                                innerRadius = u(spec.play / 2f + spec.play * 0.04f),
-                                maxLength = u((spec.ring - spec.play) / 2f - spec.play * 0.06f),
+                                innerRadius = u((spec.play / 2f + spec.play * 0.04f) * tk),
+                                maxLength = u(((spec.ring - spec.play) / 2f - spec.play * 0.06f) * tk),
                                 barWidth = u(3f),
                                 modifier = Modifier.size(u(ringSize))
                             )
                         }
-                        HiFiKnob(onClick = onPlayPause, contentDescription = stringResource(R.string.cd_vosproizvedenie_ili_pauza), size = u(spec.play)) {
-                            PlayPauseGlyph(isPlaying = isPlaying, size = u(spec.play * 0.28f))
+                        HiFiKnob(onClick = onPlayPause, contentDescription = stringResource(R.string.cd_vosproizvedenie_ili_pauza), size = u(spec.play * tk)) {
+                            PlayPauseGlyph(isPlaying = isPlaying, size = u(spec.play * 0.28f * tk))
                         }
                     }
                     val nextLook = LocalPlaybackAux.current.next()
-                    NextStateDecor(nextLook, size = u(spec.skip)) {
+                    NextStateDecor(nextLook, size = u(spec.skip * tk)) {
                         HiFiKnob(
                             onClick = onNext,
                             contentDescription = if (nextLook == NextLook.READY) stringResource(R.string.cd_sleduyuschiy_trek) else nextLookLabel(nextLook),
-                            size = u(spec.skip)
+                            size = u(spec.skip * tk)
                         ) {
-                            Icon(Icons.Rounded.SkipNext, contentDescription = null, tint = HiFi.OnMetal, modifier = Modifier.size(u(spec.skipIcon)))
+                            Icon(Icons.Rounded.SkipNext, contentDescription = null, tint = HiFi.OnMetal, modifier = Modifier.size(u(spec.skipIcon * tk)))
                         }
                     }
                 }
+                Spacer(Modifier.weight(1f))
                 Spacer(Modifier.height(u(spec.top)))
             }
         }
 
-        val far: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {
-            val farAlpha by androidx.compose.animation.core.animateFloatAsState(if (tuneOpen) 0f else 1f, HiFiMotion.standard(), label = "wide_far")
-            BoxWithConstraints(Modifier.weight(1f).fillMaxHeight().graphicsLayer { alpha = farAlpha }) {
-                val clock = spec.car && showClock
-                // Three cards span the cover's width (as in the phone landscape player): sized from the largest cover
-                // first, then from the cover that fits
-                fun cardsFor(cover: Float) = ((cover - 2 * NEXT_CARD_GAP) / 3f).coerceAtLeast(0f)
-                fun blockFor(card: Float) = when {
-                    isRadio -> 0f
-                    // What NextCards draws: the caption line, 10, the card, 6, the title and artist lines, a little air
-                    nextThree -> spec.nextCaps * 1.4f + 10f + card + 6f + spec.cardTitle * 1.3f + spec.cardArtist * 1.3f + 8f
-                    else -> spec.oneHeight
-                }
-                // The block spans the full usable height: from the top row's top (the row's own top padding) down to
-                // the same bottom margin the controls keep. The cover takes whatever height the next block leaves —
-                // no fixed cap — and stays square.
-                val columnW = maxWidth.value / s
-                val columnH = maxHeight.value / s - spec.top
-                fun fitFor(nextDp: Float) = coverFitOf(
-                    widthDp = columnW, heightDp = columnH, nextDp = nextDp,
-                    gapDp = if (isRadio) 0f else 22f, maxDp = maxOf(columnW, columnH),
-                    clockDp = if (clock) 230f else 0f, belowClockDp = 96f
-                )
-                // Three cards are as wide as the cover, so their height depends on it: a second pass settles both
-                val firstFit = fitFor(blockFor(cardsFor(minOf(columnW, columnH))))
-                val fit = if (nextThree) fitFor(blockFor(cardsFor(firstFit.size))) else firstFit
-                val cardSize = if (nextThree) cardsFor(fit.size) else 0f
-                Column(
-                    Modifier.fillMaxSize().padding(top = u(fit.top), bottom = u(spec.top)),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(u(22f), Alignment.CenterVertically)
-                ) {
-                    Box(Modifier.size(u(fit.size)).then(coverGestures)) {
-                        WideCover(track, s, Modifier.fillMaxSize())
-                        coverOverlay()
+        // The tune panel is an overlay: the cover block stays in place underneath
+        val farAlpha = 1f
+        // The cover + next block: the full height, at the place the geometry gives
+        Column(
+            Modifier
+                .padding(start = u(xOf(g.coverX, g.cover)), top = u(g.coverTop))
+                .width(u(g.cover))
+                .graphicsLayer { alpha = farAlpha },
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(Modifier.size(u(g.cover)).then(coverGestures)) {
+                WideCover(track, s, Modifier.fillMaxSize())
+                coverOverlay()
+            }
+            if (!isRadio) {
+                Spacer(Modifier.height(u(NEXT_BLOCK_GAP)))
+                Box(Modifier.onGloballyPositioned { onNextBounds(it.boundsInRoot()) }) {
+                    if (nextThree) {
+                        NextCards(upcoming, upcomingLoading, s, spec, u(g.card), onClick = onUpcomingClick)
+                    } else {
+                        upcoming.firstOrNull()?.let { next ->
+                            NextOne(next, s, spec, Modifier.width(u(g.cover)), onClick = onOpenQueue)
+                        } ?: Spacer(Modifier.height(u(spec.oneHeight)))
                     }
-                    if (!isRadio) {
-                        Box(Modifier.onGloballyPositioned { onNextBounds(it.boundsInRoot()) }) {
-                            if (nextThree) {
-                                NextCards(upcoming, upcomingLoading, s, spec, u(cardSize), mirrored = !controlsOnLeft, onClick = onUpcomingClick)
-                            } else {
-                                upcoming.firstOrNull()?.let { next ->
-                                    NextOne(next, s, spec, Modifier.width(u(fit.size)), onClick = onOpenQueue)
-                                } ?: Spacer(Modifier.height(u(spec.oneHeight)))
-                            }
-                        }
-                    }
-                }
-                if (clock) {
-                    Box(Modifier.align(if (controlsOnLeft) Alignment.TopEnd else Alignment.TopStart)) { CarClock(s) }
                 }
             }
         }
-
-        Row(Modifier.fillMaxSize().padding(start = u(spec.pad), end = u(spec.pad), top = u(spec.top))) {
-            if (controlsOnLeft) {
-                driver(); Spacer(Modifier.width(u(spec.gap))); far()
-            } else {
-                far(); Spacer(Modifier.width(u(spec.gap))); driver()
-            }
-        }
-
-        // "Tune the wave" over the far column: the controls stay free
-        if (tuneOpen) {
-            Box(Modifier.fillMaxSize().clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { tuneOpen = false })
-            val panelWidth = min(u(560f), maxWidth - u(spec.pad * 2 + spec.driverW + spec.gap)).coerceAtLeast(u(380f))
-            TunePanel(
-                waveTuning, onWaveTuningChange, s,
-                onClose = { tuneOpen = false },
-                modifier = Modifier
+        // driver() draws itself at its own place
+        driver()
+        // The clock: one fixed place on every screen (see wideGeometryOf), over the cover or beside it
+        if (spec.car && showClock) {
+            Box(
+                Modifier
                     .align(if (controlsOnLeft) Alignment.TopEnd else Alignment.TopStart)
-                    .padding(top = u(spec.top + spec.bar + 16f), start = u(spec.pad), end = u(spec.pad), bottom = u(spec.top))
-                    .width(panelWidth),
-                segments = panelWidth >= u(460f)
-            )
+                    .padding(top = u(g.clockTop), start = u(g.clockEnd), end = u(g.clockEnd))
+                    .graphicsLayer { alpha = farAlpha }
+            ) { CarClock(s) }
+        }
+
+        // "Tune the wave": the same panel as the main screen, slid in on the controls' (wheel) side, so the
+        // cover block on the far side stays in view
+        if (tuneOpen) {
+            WaveTuneSheet(waveTuning, onChange = onWaveTuningChange, onDismiss = { tuneOpen = false }, onLeft = controlsOnLeft)
         }
     }
     }
@@ -527,7 +579,7 @@ internal fun WidePlayer(
 
 /** "ОЧЕРЕДЬ · 12 ИЗ 48", the title and the artist, centred. */
 @Composable
-private fun WideLabels(track: Track, caption: String, s: Float, spec: WideSpec, modifier: Modifier) {
+internal fun WideLabels(track: Track, caption: String, s: Float, spec: WideSpec, modifier: Modifier) {
     AnimatedContent(
         targetState = track,
         contentKey = { it.id },
@@ -566,93 +618,42 @@ private fun WideLabels(track: Track, caption: String, s: Float, spec: WideSpec, 
     }
 }
 
-/** The wave's buttons in the top row: "Tune the wave" on My Wave; off it "Start radio" (D54). */
-@Composable
-private fun WaveButtons(
-    track: Track,
-    waveActive: Boolean,
-    tuning: WaveTuning,
-    trackWaveSeed: Track?,
-    onTrackWave: (() -> Unit)?,
-    onBackToMyWave: () -> Unit,
-    onTune: () -> Unit,
-    height: Dp,
-    fontSize: TextUnit
-) {
-    Row(horizontalArrangement = Arrangement.spacedBy(height * 0.2f), verticalAlignment = Alignment.CenterVertically) {
-        when {
-            !waveActive -> if (onTrackWave != null && track.supportsLikes && !track.isRadio) {
-                WavePill(Icons.Rounded.Sensors, stringResource(R.string.radio_start), active = false, height = height, fontSize = fontSize, onClick = onTrackWave)
-            }
-            trackWaveSeed != null -> {
-                WavePill(Icons.Rounded.Waves, stringResource(R.string.wave_back_to_mine), active = false, height = height, fontSize = fontSize, onClick = onBackToMyWave)
-                WavePill(Icons.Rounded.Tune, stringResource(R.string.wave_tune_short), active = !tuning.isDefault, height = height, fontSize = fontSize,
-                    onClick = onTune, description = stringResource(R.string.wave_tune_title))
-            }
-            else -> {
-                val summary = waveTuningSummary(tuning)
-                WavePill(Icons.Rounded.Tune, summary ?: stringResource(R.string.wave_tune_title), active = summary != null, height = height, fontSize = fontSize,
-                    onClick = onTune, description = summary?.let { stringResource(R.string.wave_tune_cd, it) } ?: stringResource(R.string.wave_tune_title))
-            }
-        }
-    }
-}
-
-/** "Настроить волну": big enough to hit without aiming; scrolls inside its place on a cramped screen. */
-@Composable
-private fun TunePanel(tuning: WaveTuning, onChange: (WaveTuning) -> Unit, s: Float, onClose: () -> Unit, modifier: Modifier, segments: Boolean) {
-    fun u(v: Float): Dp = (v * s).dp
-    val shape = RoundedCornerShape(u(30f))
-    Column(
-        modifier
-            .clip(shape)
-            .background(HiFi.SheetFill.copy(alpha = 0.97f))
-            .border(1.dp, Color.White.copy(alpha = 0.12f), shape)
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
-            .verticalScroll(rememberScrollState())
-            .padding(start = u(24f), end = u(18f), top = u(16f), bottom = u(22f))
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.wave_tune_title), color = Color.White, fontSize = (28 * s).sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
-            Box(Modifier.size(u(56f)).hifiGlass(CircleShape).clickable(role = Role.Button, onClick = onClose), contentAlignment = Alignment.Center) {
-                Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.cd_zakryt), tint = Color.White, modifier = Modifier.size(u(24f)))
-            }
-        }
-        WaveTuneChoices(tuning, onChange, segments = segments, optionHeight = u(56f), fontSize = (15 * s).sp, captionSize = (14 * s).sp, gap = u(12f))
-    }
-}
-
 /**
- * The queue dropdown (canvas `PlDropdown`): anodized, the active queue's name and a chevron — opens the queue
+ * The queue dropdown (canvas `PlDropdown`): glass, the active queue's name and a chevron — opens the queue
  * switcher. Used on the main screen and in the wide player.
  */
 @Composable
 internal fun QueueDropdown(name: String, account: AccountTag?, height: Dp, fontSize: TextUnit, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(height / 2)
+    // Icons follow the label, not the row: a 48 dp floor around a small label must not make them loom
+    val iconSize = minOf(height * 0.46f, (fontSize.value * 1.5f).dp)
     val label = stringResource(R.string.cd_queues)
     Row(
         modifier
+            // A ≥ 48 dp touch target around a pill that hugs its label
+            .minimumInteractiveComponentSize()
             .heightIn(min = height)
             .widthIn(max = height * 6.8f)
-            .hifiAnodized(shape)
+            // The player's glass, like the ⋮ beside it
+            .hifiGlass(shape, fill = Color.White.copy(alpha = 0.06f), border = Color.White.copy(alpha = 0.14f))
             .clickable(role = Role.Button, onClickLabel = label, onClick = onClick)
             .padding(start = height * 0.3f, end = height * 0.25f),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(Icons.Rounded.Layers, contentDescription = null, tint = Color.White, modifier = Modifier.size(height * 0.46f))
+        Icon(Icons.Rounded.Layers, contentDescription = null, tint = Color.White, modifier = Modifier.size(iconSize))
         Spacer(Modifier.width(height * 0.2f))
         if (account != null) {
-            AccountMark(account, height * 0.46f)
+            AccountMark(account, iconSize)
             Spacer(Modifier.width(height * 0.17f))
         }
         Text(name, color = Color.White, fontSize = fontSize, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
         Spacer(Modifier.width(height * 0.12f))
-        Icon(Icons.Rounded.ExpandMore, contentDescription = null, tint = HiFi.TextSecondary, modifier = Modifier.size(height * 0.46f))
+        Icon(Icons.Rounded.ExpandMore, contentDescription = null, tint = HiFi.TextSecondary, modifier = Modifier.size(iconSize))
     }
 }
 
 @Composable
-private fun GlassRound(size: Dp, description: String, onClick: () -> Unit, content: @Composable () -> Unit) {
+internal fun GlassRound(size: Dp, description: String, onClick: () -> Unit, content: @Composable () -> Unit) {
     Box(
         Modifier
             .size(size)
@@ -680,10 +681,22 @@ private fun CarClock(s: Float) {
             delay((60_000L - now % 60_000L).coerceIn(1_000L, 60_000L))
         }
     }
-    Column(horizontalAlignment = Alignment.End) {
+    // White with a soft dark shadow and a faint scrim behind: readable over any cover (canvas `plc-clock-light/-dark`)
+    val shadow = androidx.compose.ui.graphics.Shadow(Color.Black.copy(alpha = 0.55f), Offset(0f, (2 * s)), blurRadius = 14 * s)
+    Column(
+        Modifier.drawWithCache {
+            val scrim = Brush.radialGradient(
+                0f to Color.Black.copy(alpha = 0.32f), 1f to Color.Transparent,
+                center = Offset(size.width * 0.5f, size.height * 0.5f), radius = maxOf(size.width, size.height) * 0.5f
+            )
+            onDrawBehind { drawRect(scrim) }
+        },
+        horizontalAlignment = Alignment.End
+    ) {
         Text(time, color = Color.White, fontSize = (46 * s).sp, lineHeight = (50 * s).sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.02).em,
-            style = androidx.compose.ui.text.TextStyle(fontFeatureSettings = "tnum"))
-        Text(date, color = Color.White.copy(alpha = 0.60f), fontSize = (15 * s).sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.16.em, maxLines = 1)
+            style = androidx.compose.ui.text.TextStyle(fontFeatureSettings = "tnum", shadow = shadow))
+        Text(date, color = Color.White.copy(alpha = 0.78f), fontSize = (15 * s).sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.16.em, maxLines = 1,
+            style = androidx.compose.ui.text.TextStyle(shadow = shadow))
     }
 }
 
@@ -737,7 +750,7 @@ private fun WideCover(track: Track, s: Float, modifier: Modifier) {
  * shows the next track's state (D81) and stays the whole tap target.
  */
 @Composable
-private fun NextCards(tracks: List<Track>, loading: Boolean, s: Float, spec: WideSpec, card: Dp, mirrored: Boolean, onClick: (Track) -> Unit) {
+internal fun NextCards(tracks: List<Track>, loading: Boolean, s: Float, spec: WideSpec, card: Dp, onClick: (Track) -> Unit) {
     if (tracks.isEmpty() && !loading) {
         Spacer(Modifier.height(card))
         return
@@ -751,7 +764,8 @@ private fun NextCards(tracks: List<Track>, loading: Boolean, s: Float, spec: Wid
         )
         Spacer(Modifier.height((10 * s).dp))
         Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-            val slots = if (mirrored) listOf(2, 1, 0) else listOf(0, 1, 2)
+            // Reading order on both wheel sides (canvas: the right-hand side keeps the next cards in order)
+            val slots = listOf(0, 1, 2)
             slots.forEach { slot ->
                 val track = tracks.getOrNull(slot)
                 when {
@@ -772,9 +786,9 @@ private fun NextCard(track: Track, size: Dp, s: Float, spec: WideSpec, look: Nex
     val play = stringResource(R.string.car_next_play_cd, title)
     val description = if (look == NextLook.READY) play else "$play. ${nextLookLabel(look)}"
     Column(
+        // Not clipped to the cover's rounded corner: that would cut the first letter of the lines under it
         Modifier
             .width(size)
-            .clip(shape)
             .clickable(role = Role.Button, onClickLabel = description, onClick = onClick)
             .semantics(mergeDescendants = true) { contentDescription = description }
     ) {
@@ -803,14 +817,15 @@ private fun NextOne(next: Track, s: Float, spec: WideSpec, modifier: Modifier, o
     val context = LocalContext.current
     val h = (spec.oneHeight * s).dp
     val shape = RoundedCornerShape(h * 0.29f)
+    // At least [h] tall, growing with its text (a large system font) instead of clipping the title
     Row(
         modifier
-            .height(h)
+            .heightIn(min = h)
             .clip(shape)
             .background(Color.White.copy(alpha = 0.07f))
             .border(1.dp, Color.White.copy(alpha = 0.12f), shape)
             .clickable(role = Role.Button, onClick = onClick)
-            .padding(start = h * 0.16f, end = h * 0.22f),
+            .padding(start = h * 0.16f, end = h * 0.22f, top = h * 0.10f, bottom = h * 0.10f),
         verticalAlignment = Alignment.CenterVertically
     ) {
         AsyncImage(
@@ -820,43 +835,75 @@ private fun NextOne(next: Track, s: Float, spec: WideSpec, modifier: Modifier, o
             modifier = Modifier.size(h * 0.68f).clip(RoundedCornerShape(h * 0.16f)).background(HiFi.Placeholder)
         )
         Spacer(Modifier.width(h * 0.19f))
-        Column(Modifier.weight(1f)) {
-            Text(stringResource(R.string.car_next).uppercase(), color = Color.White.copy(alpha = 0.62f), fontSize = (spec.nextCaps * s).sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.14.em, maxLines = 1)
-            Text(next.title.ifEmpty { stringResource(R.string.bez_nazvaniya) }, color = Color.White, fontSize = (spec.cardTitle * 1.3f * s).sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        // «ДАЛЕЕ» and the title as one block, centred beside the thumbnail, lines kept tight
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(h * 0.04f, Alignment.CenterVertically)) {
+            val caps = (spec.nextCaps * s).sp
+            val title = (spec.cardTitle * 1.3f * s).sp
+            Text(
+                stringResource(R.string.car_next).uppercase(), color = Color.White.copy(alpha = 0.62f), fontSize = caps,
+                lineHeight = caps * 1.15f, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.14.em, maxLines = 1
+            )
+            Text(
+                next.title.ifEmpty { stringResource(R.string.bez_nazvaniya) }, color = Color.White, fontSize = title,
+                lineHeight = title * 1.15f, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis
+            )
         }
         Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = null, tint = Color.White.copy(alpha = 0.62f), modifier = Modifier.size(h * 0.34f))
     }
 }
 
-/** What the wide player's ⋮ menu offers (user, 2026-11-18). */
-internal enum class WideMenuItem { SLEEP, ADD_TO_PLAYLIST, QUALITY, LIKE, DISLIKE }
+/** What the player's ⋮ menu offers (user, 2026-11-18), in this order. */
+internal enum class PlayerMenuItem { TUNE, BACK_TO_WAVE, START_RADIO, SEARCH, SLEEP, ADD_TO_PLAYLIST, QUALITY, LIKE, DISLIKE }
 
 /**
- * The ⋮ menu of the wide layouts: the sleep timer always; for a track, "Add to playlist…" and its quality; and only
- * with likes by gestures (no buttons on screen) Like / Dislike as a fallback, for a service that has likes.
+ * The ⋮ menu of every player layout (canvas `pl-player-more`, `pl-land-more`, `plc-more`): "Tune the wave" on My Wave
+ * (with "Back to My Wave" on a wave by a track), "Start radio" by the current track on another Yandex queue (none on
+ * Jellyfin, D54), Search, the sleep timer; for a track "Add to playlist…" and its quality; and only with likes by
+ * gestures Like / Dislike as a fallback, for a service that has likes. Pure; unit-tested.
  */
-internal fun wideMenuItems(likeGestures: Boolean, supportsLikes: Boolean, isRadio: Boolean): List<WideMenuItem> = buildList {
-    add(WideMenuItem.SLEEP)
+@Suppress("LongParameterList")
+internal fun playerMenuItems(
+    likeGestures: Boolean,
+    supportsLikes: Boolean,
+    isRadio: Boolean,
+    waveActive: Boolean,
+    canStartRadio: Boolean,
+    trackWave: Boolean
+): List<PlayerMenuItem> = buildList {
+    when {
+        waveActive -> {
+            add(PlayerMenuItem.TUNE)
+            if (trackWave) add(PlayerMenuItem.BACK_TO_WAVE)
+        }
+        canStartRadio && !isRadio -> add(PlayerMenuItem.START_RADIO)
+    }
+    add(PlayerMenuItem.SEARCH)
+    add(PlayerMenuItem.SLEEP)
     if (!isRadio) {
-        add(WideMenuItem.ADD_TO_PLAYLIST)
-        add(WideMenuItem.QUALITY)
+        add(PlayerMenuItem.ADD_TO_PLAYLIST)
+        add(PlayerMenuItem.QUALITY)
         if (likeGestures && supportsLikes) {
-            add(WideMenuItem.LIKE)
-            add(WideMenuItem.DISLIKE)
+            add(PlayerMenuItem.LIKE)
+            add(PlayerMenuItem.DISLIKE)
         }
     }
 }
 
-/** The ⋮ at the end of the top row and its menu; the sleep timer opens a second level in the same menu. */
-@Suppress("LongParameterList", "LongMethod")
+/** The ⋮ of the top row and its menu; the sleep timer opens a second level in the same menu. */
+@Suppress("LongParameterList", "LongMethod", "CyclomaticComplexMethod")
 @Composable
-private fun WideMoreButton(
-    items: List<WideMenuItem>,
+internal fun PlayerMoreButton(
+    items: List<PlayerMenuItem>,
     size: Dp,
     itemHeight: Dp,
     fontSize: TextUnit,
     isLiked: Boolean,
+    waveTuning: WaveTuning,
     sleepTimer: org.tegro.yamp.data.player.SleepTimerState?,
+    onTune: () -> Unit,
+    onStartRadio: () -> Unit,
+    onBackToMyWave: () -> Unit,
+    onSearch: () -> Unit,
     onSleepTimer: (Int) -> Unit,
     onSleepAtEndOfTrack: () -> Unit,
     onCancelSleepTimer: () -> Unit,
@@ -872,6 +919,8 @@ private fun WideMoreButton(
     Box {
         Box(
             Modifier
+                // A ≥ 48 dp touch target around a circle as tall as the queue pill beside it
+                .minimumInteractiveComponentSize()
                 .size(size)
                 .then(if (sleepTimer != null) Modifier.hifiAnodized(CircleShape) else Modifier.hifiGlass(CircleShape))
                 .clickable(role = Role.Button, onClickLabel = stringResource(R.string.wide_menu_more)) { expanded = true },
@@ -905,18 +954,25 @@ private fun WideMoreButton(
                 } else {
                     val quality = org.tegro.yamp.utils.LocalStreamQuality.current
                     for (item in items) when (item) {
-                        WideMenuItem.SLEEP -> row(stringResource(R.string.cd_sleep_timer), Icons.Rounded.Bedtime) { sleepLevel = true }
-                        WideMenuItem.ADD_TO_PLAYLIST ->
+                        PlayerMenuItem.TUNE -> {
+                            val summary = waveTuningSummary(waveTuning)
+                            row(summary?.let { stringResource(R.string.wave_tune_cd, it) } ?: stringResource(R.string.wave_tune_title), Icons.Rounded.Tune) { close(); onTune() }
+                        }
+                        PlayerMenuItem.BACK_TO_WAVE -> row(stringResource(R.string.wave_back_to_mine), Icons.Rounded.Waves) { close(); onBackToMyWave() }
+                        PlayerMenuItem.START_RADIO -> row(stringResource(R.string.radio_start), Icons.Rounded.Sensors) { close(); onStartRadio() }
+                        PlayerMenuItem.SEARCH -> row(stringResource(R.string.tab_search), Icons.Rounded.Search) { close(); onSearch() }
+                        PlayerMenuItem.SLEEP -> row(stringResource(R.string.cd_sleep_timer), Icons.Rounded.Bedtime) { sleepLevel = true }
+                        PlayerMenuItem.ADD_TO_PLAYLIST ->
                             row(stringResource(R.string.track_context_menu_dobavit_v_pleylist), Icons.AutoMirrored.Rounded.PlaylistAdd) { close(); onAddToPlaylist() }
-                        WideMenuItem.QUALITY -> row(
+                        PlayerMenuItem.QUALITY -> row(
                             quality?.let { stringResource(R.string.wide_menu_quality, it) } ?: stringResource(R.string.wide_menu_quality_unknown),
                             Icons.Rounded.GraphicEq
                         ) { close(); onQuality() }
-                        WideMenuItem.LIKE -> row(
+                        PlayerMenuItem.LIKE -> row(
                             stringResource(if (isLiked) R.string.track_menu_unlike else R.string.track_menu_like),
                             if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder
                         ) { close(); onLike() }
-                        WideMenuItem.DISLIKE -> row(stringResource(R.string.cd_ne_nravitsya), Icons.Rounded.HeartBroken) { close(); onDislike() }
+                        PlayerMenuItem.DISLIKE -> row(stringResource(R.string.cd_ne_nravitsya), Icons.Rounded.HeartBroken) { close(); onDislike() }
                     }
                 }
             }

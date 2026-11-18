@@ -103,17 +103,24 @@ fun Modifier.fadeUnderHeader(topPx: () -> Float, fadePx: Float): Modifier = this
 
 /** The page title; it shrinks towards its start as [collapse] goes from 0 to 1. */
 @Composable
-fun HiFiCollapsingTitle(text: String, collapse: () -> Float, modifier: Modifier = Modifier) {
+fun HiFiCollapsingTitle(
+    text: String,
+    collapse: () -> Float,
+    modifier: Modifier = Modifier,
+    /** Right-aligned, shrinking towards the right edge (the left-hand header: its button sits at the left). */
+    alignEnd: Boolean = false
+) {
     Text(
         text = text,
         style = HiFiType.LargeTitle,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
+        textAlign = if (alignEnd) androidx.compose.ui.text.style.TextAlign.End else null,
         modifier = modifier.graphicsLayer {
             val scale = 1f - (1f - CollapsedTitleScale) * collapse()
             scaleX = scale
             scaleY = scale
-            transformOrigin = TransformOrigin(0f, 0.5f)
+            transformOrigin = TransformOrigin(if (alignEnd) 1f else 0f, 0.5f)
         }
     )
 }

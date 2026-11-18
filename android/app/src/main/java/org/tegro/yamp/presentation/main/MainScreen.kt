@@ -616,7 +616,13 @@ private fun PlayerHost(
         onUpcomingClick = { viewModel.playTrack(it.id, queue, now.source, byUser = false) },
         caption = caption,
         queueName = activeQueue?.queue?.name ?: stringResource(org.tegro.yamp.R.string.queue_switcher_title),
-        onQueues = { queueSwitcher?.open(org.tegro.yamp.presentation.queues.QueueSwitcherRequest.Switch()) },
+        onQueues = {
+            queueSwitcher?.open(
+                org.tegro.yamp.presentation.queues.QueueSwitcherRequest.Switch(
+                    side = if (steeringWheelOnLeft) org.tegro.yamp.presentation.hifi.PanelSide.LEFT else org.tegro.yamp.presentation.hifi.PanelSide.RIGHT
+                )
+            )
+        },
         onSearch = onSearch,
         showClock = showClock,
         waveTuning = waveTuning,

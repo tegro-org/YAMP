@@ -32,6 +32,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -312,7 +314,11 @@ fun IconPlaque(icon: ImageVector, modifier: Modifier = Modifier, size: Dp = 34.d
     }
 }
 
-/** Segmented control: a recessed track with a metal piece sliding under the selected option. */
+/**
+ * Segmented control: a recessed track with a metal piece sliding under the selected option. Labels may take two
+ * lines; when an option still doesn't fit its segment (a narrow screen, long words), the options stack as
+ * radio-style rows instead, so no label is ever cut.
+ */
 @Composable
 fun HiFiSegmented(
     options: List<String>,
@@ -322,11 +328,44 @@ fun HiFiSegmented(
     fontSize: TextUnit = 15.sp,
     height: androidx.compose.ui.unit.Dp = 44.dp
 ) {
+    val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+        val segmentPx = with(density) { ((maxWidth - 6.dp) / options.size - 10.dp).roundToPx().coerceAtLeast(1) }
+        val style = androidx.compose.ui.text.TextStyle(fontSize = fontSize, fontWeight = FontWeight.Bold)
+        val layouts = options.map {
+            measurer.measure(
+                it, style,
+                constraints = androidx.compose.ui.unit.Constraints(maxWidth = segmentPx),
+                maxLines = 2,
+                softWrap = true
+            )
+        }
+        val stacked = layouts.any { it.hasVisualOverflow }
+        if (stacked) {
+            SegmentedStack(options, selectedIndex, onSelect, fontSize, height)
+        } else {
+            val twoLines = layouts.any { it.lineCount > 1 }
+            SegmentedStrip(options, selectedIndex, onSelect, fontSize, if (twoLines) height * 1.45f else height, twoLines)
+        }
+    }
+}
+
+@Composable
+private fun SegmentedStrip(
+    options: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    fontSize: TextUnit,
+    height: androidx.compose.ui.unit.Dp,
+    twoLines: Boolean
+) {
+    val corner = if (twoLines) 18.dp else height / 2
     BoxWithConstraints(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
             .height(height)
-            .hifiRecessed(height / 2)
+            .hifiRecessed(corner)
             .padding(3.dp)
     ) {
         val segment = maxWidth / options.size
@@ -336,7 +375,7 @@ fun HiFiSegmented(
                 .offset { IntOffset(offset.roundToPx(), 0) }
                 .width(segment)
                 .fillMaxHeight()
-                .hifiAnodized(RoundedCornerShape(height / 2 - 3.dp))
+                .hifiAnodized(RoundedCornerShape(corner - 3.dp))
         )
         Row(Modifier.fillMaxWidth().fillMaxHeight()) {
             options.forEachIndexed { index, label ->
@@ -345,18 +384,62 @@ fun HiFiSegmented(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .clip(RoundedCornerShape(height / 2 - 3.dp))
-                        .selectable(selected = selected, role = Role.RadioButton) { onSelect(index) },
+                        .clip(RoundedCornerShape(corner - 3.dp))
+                        .selectable(selected = selected, role = Role.RadioButton) { onSelect(index) }
+                        .padding(horizontal = 5.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         label,
                         color = if (selected) Color.White else Color.White.copy(alpha = 0.70f),
                         fontSize = fontSize,
+                        lineHeight = fontSize * 1.2f,
                         fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
-                        maxLines = 1
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        maxLines = 2
                     )
                 }
+            }
+        }
+    }
+}
+
+/** The narrow-screen form: one row per option, the selected one lifted like the strip's metal piece. */
+@Composable
+private fun SegmentedStack(
+    options: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    fontSize: TextUnit,
+    height: androidx.compose.ui.unit.Dp
+) {
+    val corner = 16.dp
+    androidx.compose.foundation.layout.Column(
+        Modifier
+            .fillMaxWidth()
+            .hifiRecessed(corner)
+            .padding(3.dp)
+            .selectableGroup(),
+        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(2.dp)
+    ) {
+        options.forEachIndexed { index, label ->
+            val selected = index == selectedIndex
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = height)
+                    .clip(RoundedCornerShape(corner - 3.dp))
+                    .then(if (selected) Modifier.hifiAnodized(RoundedCornerShape(corner - 3.dp)) else Modifier)
+                    .selectable(selected = selected, role = Role.RadioButton) { onSelect(index) }
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                Text(
+                    label,
+                    color = if (selected) Color.White else Color.White.copy(alpha = 0.78f),
+                    fontSize = fontSize,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold
+                )
             }
         }
     }

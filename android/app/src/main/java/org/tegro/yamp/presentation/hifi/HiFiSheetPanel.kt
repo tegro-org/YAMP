@@ -74,6 +74,8 @@ fun HiFiSheetPanel(
     side: PanelSide = PanelSide.RIGHT,
     sheetHeight: Float? = 0.78f,
     panelWidth: Dp = 460.dp,
+    /** The player's glass instead of the plain sheet surface: translucent, tinted by the cover, a soft rim. */
+    glass: Boolean = false,
     content: @Composable ColumnScope.(landscape: Boolean) -> Unit
 ) {
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
@@ -115,9 +117,9 @@ fun HiFiSheetPanel(
                 )
             ) {
                 if (isLandscape) {
-                    SidePanel(panelWidth, back, content)
+                    SidePanel(panelWidth, back, glass, content)
                 } else {
-                    BottomSheet(sheetHeight, back, close, content)
+                    BottomSheet(sheetHeight, back, close, glass, content)
                 }
             }
         }
@@ -125,7 +127,7 @@ fun HiFiSheetPanel(
 }
 
 @Composable
-private fun SidePanel(width: Dp, back: Animatable<Float, *>, content: @Composable ColumnScope.(Boolean) -> Unit) {
+private fun SidePanel(width: Dp, back: Animatable<Float, *>, glass: Boolean, content: @Composable ColumnScope.(Boolean) -> Unit) {
     val shape = RoundedCornerShape(28.dp)
     Column(
         Modifier
@@ -135,9 +137,7 @@ private fun SidePanel(width: Dp, back: Animatable<Float, *>, content: @Composabl
             .statusBarsPadding()
             .navigationBarsPadding()
             .padding(12.dp)
-            .clip(shape)
-            .background(HiFi.SheetFill)
-            .border(1.dp, HiFi.Hairline, shape)
+            .then(if (glass) Modifier.hifiSheetGlass(shape) else Modifier.clip(shape).background(HiFi.SheetFill).border(1.dp, HiFi.Hairline, shape))
             .pointerInput(Unit) { detectTapGestures { } }
     ) {
         content(true)
@@ -145,7 +145,7 @@ private fun SidePanel(width: Dp, back: Animatable<Float, *>, content: @Composabl
 }
 
 @Composable
-private fun BottomSheet(height: Float?, back: Animatable<Float, *>, close: () -> Unit, content: @Composable ColumnScope.(Boolean) -> Unit) {
+private fun BottomSheet(height: Float?, back: Animatable<Float, *>, close: () -> Unit, glass: Boolean, content: @Composable ColumnScope.(Boolean) -> Unit) {
     // Pull the sheet down by its handle to close it; the predictive gesture lowers it under the finger
     val density = LocalDensity.current
     val drag = remember { Animatable(0f) }
@@ -159,8 +159,10 @@ private fun BottomSheet(height: Float?, back: Animatable<Float, *>, close: () ->
             .widthIn(max = 640.dp)
             .fillMaxWidth()
             .then(if (height != null) Modifier.fillMaxHeight(height) else Modifier)
-            .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
-            .background(HiFi.SheetFill)
+            .then(
+                if (glass) Modifier.hifiSheetGlass(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                else Modifier.clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)).background(HiFi.SheetFill)
+            )
             .pointerInput(Unit) { detectTapGestures { } }
             .navigationBarsPadding()
     ) {
@@ -188,4 +190,25 @@ private fun BottomSheet(height: Float?, back: Animatable<Float, *>, close: () ->
         }
         content(false)
     }
+}
+
+/**
+ * The player's glass for a sheet or panel: the sheet ground made translucent, the cover's tint washing down from the
+ * top edge, and the soft glass rim — the look of the ⋮ menu and the player's queue over the cover-tinted backdrop.
+ * No live blur: the app's glass never blurs (cheap on weak head units).
+ */
+@Composable
+private fun Modifier.hifiSheetGlass(shape: androidx.compose.ui.graphics.Shape): Modifier {
+    val tint = LocalArtworkTint.current
+    return this
+        .clip(shape)
+        .background(HiFi.SheetFill.copy(alpha = 0.86f))
+        .background(
+            androidx.compose.ui.graphics.Brush.verticalGradient(
+                0f to tint.primary.copy(alpha = 0.20f),
+                0.45f to tint.secondary.copy(alpha = 0.10f),
+                1f to androidx.compose.ui.graphics.Color.Transparent
+            )
+        )
+        .border(1.dp, HiFi.GlassBorder, shape)
 }

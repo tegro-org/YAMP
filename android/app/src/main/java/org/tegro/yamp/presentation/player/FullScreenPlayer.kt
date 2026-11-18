@@ -43,6 +43,8 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.size
 import org.tegro.yamp.R
 import org.tegro.yamp.data.player.PlaylistSource
 import org.tegro.yamp.data.player.SleepTimerState
@@ -60,6 +62,10 @@ import org.tegro.yamp.presentation.hifi.rememberPredictiveBack
 import org.tegro.yamp.utils.CoverSize
 import org.tegro.yamp.utils.toCoverUrl
 import kotlinx.coroutines.launch
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.HeartBroken
 
 /** The queue around the current track: what plays now and what follows it. */
 data class QueueSplit(val current: Track?, val next: List<Track>, val nextEntryIds: List<Long> = emptyList())
@@ -246,53 +252,12 @@ fun FullScreenPlayer(
     val sheetShare = if (isLandscape) QueueSheetHeight.FULL else QueueSheetHeight.PART
     val cornerPx = with(LocalDensity.current) { 28.dp.toPx() }
 
-    val header = @Composable {
-        PlayerHeader(
-            sourceLabel = sourceLabel,
-            isRadio = track.isRadio,
-            sleepTimer = sleepTimer,
-            onCollapse = onCollapse,
-            onQueue = openQueue,
-            onSleepTimer = onSleepTimer,
-            onSleepAtEndOfTrack = onSleepAtEndOfTrack,
-            onCancelSleepTimer = onCancelSleepTimer
-        )
-        SleepTimerCaption(state = sleepTimer)
-    }
     val cover = @Composable { modifier: Modifier ->
         Box(modifier.then(coverGestures), contentAlignment = Alignment.Center) {
             PlayerCover(track, direction, isPlaying, coverModifier, onPrevClick, onNextClick, Modifier.fillMaxSize())
             LikeBurst(burst)
         }
     }
-    val details = @Composable { compact: Boolean ->
-        TitleRow(track, direction, compact, onAddToPlaylist, onTrackWave, waveActive)
-        Spacer(Modifier.height(10.dp))
-        QualityChip(track.isRadio, onQualityClick)
-        Spacer(Modifier.height(if (compact) 4.dp else 12.dp))
-        if (track.isRadio) {
-            HiFiLiveLine(height = 44f)
-            Spacer(Modifier.height(12.dp))
-        } else {
-            PlayerTimeline(progress, durationMs, isPlaying, onSeekTo)
-        }
-        Spacer(Modifier.height(if (compact) 6.dp else 14.dp))
-        PlayerControls(
-            isPlaying = isPlaying,
-            isLoading = isLoading,
-            isLiked = isLiked,
-            isRadio = track.isRadio,
-            compact = compact,
-            onDislike = onDislikeClick,
-            onPrev = onPrevClick,
-            onPlayPause = onPlayPauseClick,
-            onNext = onNextClick,
-            onLike = onToggleLike,
-            // Jellyfin has no likes yet (Phase 5): no buttons that do nothing
-            showLikes = !gestures && !likeGestures && track.ref.service != org.tegro.yamp.domain.account.Provider.JELLYFIN
-        )
-    }
-
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -413,6 +378,12 @@ fun FullScreenPlayer(
                 initialMoreOpen = initialMoreOpen
             )
         } else {
+            // Portrait (canvas `pl-player-*`, approved 2026-11-18): the top row ⋮ · queue (everything else in ⋮), the
+            // cover, the labels centred between dislike and like, the progress with times, Prev · Play · Next and the
+            // next track(s) — one plate, or three cards of the landscape kind. Swipe down closes, swipe up — the queue.
+            var tuneOpen by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(initialTuneOpen) }
+            if (tuneOpen) androidx.activity.compose.BackHandler { tuneOpen = false }
+            val likes = !likeGestures && track.supportsLikes && !track.isRadio
             Column(
                 modifier = Modifier
                     .fillMaxHeight()
@@ -421,22 +392,89 @@ fun FullScreenPlayer(
                     .systemBarsPadding()
                     .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 16.dp)
             ) {
-                header()
-                cover(Modifier.weight(1f).fillMaxWidth().padding(top = 20.dp, start = 22.dp, end = 22.dp))
-                Spacer(Modifier.height(22.dp))
-                details(false)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PlayerMoreButton(
+                        items = playerMenuItems(
+                            likeGestures = likeGestures, supportsLikes = track.supportsLikes, isRadio = track.isRadio,
+                            waveActive = waveActive, canStartRadio = onTrackWave != null && track.supportsLikes, trackWave = trackWaveSeed != null
+                        ),
+                        size = 44.dp, itemHeight = 48.dp, fontSize = 16.sp,
+                        isLiked = isLiked, waveTuning = waveTuning, sleepTimer = sleepTimer,
+                        onTune = { tuneOpen = true },
+                        onStartRadio = { onTrackWave?.invoke() },
+                        onBackToMyWave = onBackToMyWave,
+                        onSearch = onSearch,
+                        onSleepTimer = onSleepTimer,
+                        onSleepAtEndOfTrack = onSleepAtEndOfTrack,
+                        onCancelSleepTimer = onCancelSleepTimer,
+                        onAddToPlaylist = onAddToPlaylist,
+                        onQuality = onAccountQuality,
+                        onLike = onToggleLike,
+                        onDislike = onDislikeGesture,
+                        initialOpen = initialMoreOpen
+                    )
+                    QueueDropdown(queueName, queueAccount, height = 44.dp, fontSize = 17.sp, onClick = onQueues, modifier = Modifier.weight(1f, fill = false))
+                }
+                SleepTimerCaption(state = sleepTimer)
+                cover(Modifier.weight(1f).fillMaxWidth().padding(top = 16.dp, start = 22.dp, end = 22.dp))
+                Spacer(Modifier.height(18.dp))
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    if (likes) {
+                        GlassRound(44.dp, androidx.compose.ui.res.stringResource(R.string.cd_ne_nravitsya), onDislikeClick) {
+                            androidx.compose.material3.Icon(
+                                Icons.Rounded.HeartBroken, contentDescription = null,
+                                tint = Color.White.copy(alpha = 0.88f), modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    } else Spacer(Modifier.size(44.dp))
+                    WideLabels(track, caption, 1f, WideSpec.Phone, Modifier.weight(1f).padding(horizontal = 12.dp))
+                    if (likes) {
+                        GlassRound(44.dp, androidx.compose.ui.res.stringResource(R.string.cd_nravitsya), onToggleLike) {
+                            androidx.compose.material3.Icon(
+                                if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                                contentDescription = null,
+                                tint = if (isLiked) HiFi.Love else Color.White.copy(alpha = 0.88f),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    } else Spacer(Modifier.size(44.dp))
+                }
+                Spacer(Modifier.height(12.dp))
+                if (track.isRadio) {
+                    HiFiLiveLine(height = 44f)
+                    Spacer(Modifier.height(12.dp))
+                } else {
+                    PlayerTimeline(progress, durationMs, isPlaying, onSeekTo)
+                }
+                Spacer(Modifier.height(14.dp))
+                // The likes sit beside the title now; the three knobs keep a gap that grows with the width
+                PlayerControls(
+                    isPlaying = isPlaying,
+                    isLoading = isLoading,
+                    isRadio = track.isRadio,
+                    onPrev = onPrevClick,
+                    onPlayPause = onPlayPauseClick,
+                    onNext = onNextClick
+                )
                 if (!track.isRadio) {
-                    Spacer(Modifier.height(20.dp))
-                    // The plate's place is kept while the queue loads, so the controls do not jump; a swipe up from
-                    // here opens the queue
-                    Box(Modifier.onGloballyPositioned { nextBounds = it.boundsInRoot() }) {
+                    Spacer(Modifier.height(18.dp))
+                    // The place is kept while the queue loads, so the controls do not jump; a swipe up from here opens
+                    // the queue
+                    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().onGloballyPositioned { nextBounds = it.boundsInRoot() }) {
                         when {
                             nextTrack == null -> Spacer(Modifier.height(64.dp))
-                            nextThree -> NextStrip(shownUpcoming.take(3), onClick = pickUpcoming)
+                            nextThree -> {
+                                val card = (maxWidth - (NEXT_CARD_GAP * 2).dp) / 3
+                                NextCards(shownUpcoming.take(3), upcomingLoading, 1f, WideSpec.Phone, card, onClick = pickUpcoming)
+                            }
                             else -> NextPlate(nextTrack, onClick = openQueue)
                         }
                     }
                 }
+            }
+            if (tuneOpen) {
+                // The same panel as the main screen
+                org.tegro.yamp.presentation.main.components.WaveTuneSheet(waveTuning, onChange = onWaveTuningChange, onDismiss = { tuneOpen = false })
             }
         }
 

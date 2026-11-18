@@ -254,7 +254,7 @@
     <string name="settings_title">Настройки</string>
     <string name="settings_group_account">Аккаунт</string>
     <string name="settings_group_downloads">Загрузки</string>
-    <string name="settings_group_car">В авто</string>
+    <string name="settings_group_car">Автомобиль</string>
     <string name="settings_group_about">О приложении</string>
     <string name="settings_account_plus">Яндекс Плюс активен</string>
     <string name="settings_account_no_plus">Аккаунт Яндекса</string>
@@ -383,7 +383,7 @@
     <string name="settings_start_music_off">Не включать</string>
     <string name="settings_start_music_continue">Продолжить</string>
     <string name="settings_start_music_wave">Моя волна</string>
-    <string name="settings_start_music_note">Играет сразу, без нажатия на «Пуск». Вместе с «Открывать: В авто» в разделе «Интерфейс» магнитола включает «Мою волну» сама.</string>
+    <string name="settings_start_music_note">Играет сразу, без нажатия на «Пуск». Вместе с «Открывать: Плеер» в разделе «Интерфейс» магнитола сразу показывает плеер с музыкой.</string>
     <string name="settings_bluetooth">Bluetooth машины</string>
     <string name="settings_bluetooth_hint">Включать музыку при подключении к машине, пока приложение запущено</string>
     <string name="settings_explicit">Без ненормативной лексики</string>
@@ -397,7 +397,7 @@
     <string name="settings_storage_moving">Переносим треки: %1$d из %2$d</string>
     <string name="settings_open_page">Открывать</string>
     <string name="settings_open_last">Последний раздел</string>
-    <string name="settings_open_last_hint">Где закрыли, в том числе «В авто»</string>
+    <string name="settings_open_last_hint">Где закрыли, в том числе плеер</string>
     <string name="settings_open_wave">Моя волна</string>
     <string name="settings_open_car">Плеер</string>
     <string name="settings_open_car_hint">Сразу открывается плеер</string>
@@ -639,10 +639,10 @@
     <string name="cd_media_menu">Album or artist actions</string>
     <string name="settings_section_player">Player</string>
     <string name="settings_summary_player">%1$s · next %2$s · %3$s</string>
-    <string name="settings_player_layout">Layout</string>
-    <string name="settings_player_layout_hint">Chosen here, never automatically</string>
-    <string name="settings_player_layout_phone">Phone</string>
-    <string name="settings_player_layout_car">Car</string>
+    <string name="settings_player_large">Large controls</string>
+    <string name="settings_player_large_hint">Landscape only (head unit, phone in landscape): car-sized buttons, the ring around Play and the clock</string>
+    <string name="settings_player_large_on">large controls</string>
+    <string name="settings_player_large_off">normal controls</string>
     <string name="settings_player_next">Next tracks</string>
     <string name="settings_player_next_hint">1: one row, tap opens the queue · 3: cards</string>
     <string name="settings_player_likes">Like by gestures</string>

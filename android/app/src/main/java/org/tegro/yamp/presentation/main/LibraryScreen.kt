@@ -123,6 +123,8 @@ private val LibraryFadeLength = 22.dp
 @Composable
 fun LibraryScreen(
     tracks: List<Track>,
+    /** The wheel side (Settings → Interface): left-hand puts the header's settings button at the left edge. */
+    controlsOnLeft: Boolean = false,
     isLoading: Boolean,
     loadFailed: Boolean = false,
     downloadState: DownloadQueueState = DownloadQueueState.IDLE,
@@ -269,19 +271,36 @@ fun LibraryScreen(
                     }
                 }
             }
+            // The settings button at the wheel side's edge: left-hand — the gear at the left, the title to the right
             Row(
                 Modifier.fillMaxWidth().padding(start = contentStart, end = 20.dp, top = statusBar + 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                HiFiCollapsingTitle(stringResource(R.string.library_title), collapse = { collapse }, modifier = Modifier.weight(1f))
-                if (downloadState == DownloadQueueState.RUNNING) {
-                    HiFiWellButton(onClick = { showProgressModal = true }, contentDescription = stringResource(R.string.download_progress_modal_zagruzka_kollektsii)) {
-                        HiFiActivityIndicator(size = 18.dp)
-                    }
-                    Spacer(Modifier.width(10.dp))
+                val title: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {
+                    HiFiCollapsingTitle(stringResource(R.string.library_title), collapse = { collapse }, modifier = Modifier.weight(1f), alignEnd = controlsOnLeft)
                 }
-                HiFiWellButton(onClick = { showSettings = true }, contentDescription = stringResource(R.string.library_settings)) {
-                    Icon(Icons.Rounded.Settings, contentDescription = null, tint = Color.White.copy(alpha = 0.86f), modifier = Modifier.size(20.dp))
+                val downloads: @Composable () -> Unit = {
+                    if (downloadState == DownloadQueueState.RUNNING) {
+                        HiFiWellButton(onClick = { showProgressModal = true }, contentDescription = stringResource(R.string.download_progress_modal_zagruzka_kollektsii)) {
+                            HiFiActivityIndicator(size = 18.dp)
+                        }
+                    }
+                }
+                val gear: @Composable () -> Unit = {
+                    HiFiWellButton(onClick = { showSettings = true }, contentDescription = stringResource(R.string.library_settings)) {
+                        Icon(Icons.Rounded.Settings, contentDescription = null, tint = Color.White.copy(alpha = 0.86f), modifier = Modifier.size(20.dp))
+                    }
+                }
+                val running = downloadState == DownloadQueueState.RUNNING
+                if (controlsOnLeft) {
+                    gear()
+                    if (running) { Spacer(Modifier.width(10.dp)); downloads() }
+                    Spacer(Modifier.width(12.dp))
+                    title()
+                } else {
+                    title()
+                    if (running) { downloads(); Spacer(Modifier.width(10.dp)) }
+                    gear()
                 }
             }
             }

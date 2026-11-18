@@ -179,7 +179,9 @@ fun HomeScreen(
     /** A queue of the user's own with nothing in it yet: the bottom block says where to find music (`wl-jf-home`). */
     emptyQueue: Boolean = false,
     onOpenLibrary: () -> Unit = {},
-    onOpenSearch: () -> Unit = {}
+    onOpenSearch: () -> Unit = {},
+    /** The wheel side (Settings → Interface): the queue dropdown and "Настроить волну" sit at that edge. */
+    controlsOnLeft: Boolean = false
 ) {
     val wave = mode is HomeMode.Wave
     val title = when (mode) {
@@ -224,24 +226,44 @@ fun HomeScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
-                if (chipsOverKnob) chips(Modifier.padding(top = 4.dp, bottom = 4.dp))
+                if (controlsOnLeft) {
+                    // Left-hand: the queue dropdown and the chips sit at the screen's left edge, over the knob's
+                    // column — not at the left end of the right-hand column
+                    // One row: the dropdown at the edge, "Настроить волну" right after it
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        HomeQueueDropdown(queueName, onLeft = true)
+                        chips(Modifier.padding(start = 10.dp))
+                    }
+                } else if (chipsOverKnob) {
+                    chips(Modifier.padding(top = 4.dp, bottom = 4.dp))
+                }
                 BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                     instrument(minOf(maxWidth, maxHeight))
                 }
             }
             Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.Bottom) {
-                Row(verticalAlignment = Alignment.Top) {
-                    Column(Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            HiFiLargeTitle(title, modifier = Modifier.weight(1f, fill = false))
-                            HiFiLinkBadge()
+                val titleBlock: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        HiFiLargeTitle(title, modifier = Modifier.weight(1f, fill = false))
+                        HiFiLinkBadge()
+                    }
+                    if (account != null) AccountCaption(account, Modifier.padding(top = 4.dp))
+                }
+                if (controlsOnLeft) {
+                    // The title takes the opposite (right) side
+                    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End, content = titleBlock)
+                } else {
+                    HomeHeader(
+                        controlsOnLeft = false,
+                        titleBlock = titleBlock,
+                        controls = {
+                            // One row: "Настроить волну", then the dropdown at the right edge
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (!chipsOverKnob) chips(Modifier.padding(end = 10.dp))
+                                HomeQueueDropdown(queueName, onLeft = false)
+                            }
                         }
-                        if (account != null) AccountCaption(account, Modifier.padding(top = 4.dp))
-                    }
-                    Column(Modifier.padding(start = 8.dp), horizontalAlignment = Alignment.End) {
-                        HomeQueueDropdown(queueName)
-                        if (!chipsOverKnob) chips(Modifier.padding(top = 8.dp))
-                    }
+                    )
                 }
                 Spacer(Modifier.weight(1f))
                 if (emptyQueue) {
@@ -261,20 +283,22 @@ fun HomeScreen(
                 {
                     // The knob's place is counted from this height: it must not change with the title
                     Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 14.dp)) {
-                        Row(Modifier.fillMaxWidth().heightIn(min = 40.dp), verticalAlignment = Alignment.Top) {
-                            Column(Modifier.weight(1f)) {
+                        // The queue dropdown and "Настроить волну" at the wheel side's edge (canvas `pl-main`)
+                        HomeHeader(
+                            controlsOnLeft = controlsOnLeft,
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 40.dp),
+                            titleBlock = {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     HiFiLargeTitle(title, modifier = Modifier.weight(1f, fill = false))
                                     HiFiLinkBadge()
                                 }
                                 if (account != null) AccountCaption(account, Modifier.padding(top = 4.dp))
-                            }
-                            // The queue dropdown and "Настроить волну", right-aligned (canvas `pl-main`)
-                            Column(Modifier.padding(start = 8.dp), horizontalAlignment = Alignment.End) {
-                                HomeQueueDropdown(queueName)
+                            },
+                            controls = {
+                                HomeQueueDropdown(queueName, controlsOnLeft)
                                 chips(Modifier.padding(top = 8.dp).height(36.dp))
                             }
-                        }
+                        )
                     }
                 },
                 {
@@ -324,6 +348,28 @@ private val WaveInstrumentPadding = 8.dp
  * The empty queue's card (canvas `wl-jf-home`): what to do next, with the two ways there. Shown in place of the
  * track and the "next up" shelf while the active queue of the user's own has no entries.
  */
+/**
+ * The main screen's header row: the title block and the controls column (queue dropdown, "Настроить волну"). The
+ * controls sit at the wheel side's edge — left-hand: at the left, the title after them; right-hand: at the right.
+ */
+@Composable
+private fun HomeHeader(
+    controlsOnLeft: Boolean,
+    titleBlock: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
+    controls: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(modifier, verticalAlignment = Alignment.Top) {
+        if (controlsOnLeft) {
+            Column(Modifier.padding(end = 12.dp), horizontalAlignment = Alignment.Start, content = controls)
+            Column(Modifier.weight(1f), horizontalAlignment = Alignment.End, content = titleBlock)
+        } else {
+            Column(Modifier.weight(1f), content = titleBlock)
+            Column(Modifier.padding(start = 8.dp), horizontalAlignment = Alignment.End, content = controls)
+        }
+    }
+}
+
 @Composable
 internal fun EmptyQueueCard(big: Boolean, onOpenLibrary: () -> Unit, onOpenSearch: () -> Unit) {
     val shape = androidx.compose.foundation.shape.RoundedCornerShape(if (big) 30.dp else 24.dp)
@@ -663,13 +709,20 @@ private fun SkeletonBlock(modifier: Modifier, radius: Dp, phase: State<Float>?, 
 
 /** The queue dropdown at the top of the main screen (canvas `pl-main`): the active queue's name; opens the switcher. */
 @Composable
-private fun HomeQueueDropdown(name: String) {
+private fun HomeQueueDropdown(name: String, onLeft: Boolean) {
     val launcher = org.tegro.yamp.presentation.queues.LocalQueueSwitcher.current
     org.tegro.yamp.presentation.player.QueueDropdown(
         name = name.ifEmpty { stringResource(R.string.queue_switcher_title) },
         account = null,
         height = 40.dp,
         fontSize = 15.sp,
-        onClick = { launcher?.open(org.tegro.yamp.presentation.queues.QueueSwitcherRequest.Switch()) }
+        // The switcher opens on the dropdown's side (landscape: a panel at that edge)
+        onClick = {
+            launcher?.open(
+                org.tegro.yamp.presentation.queues.QueueSwitcherRequest.Switch(
+                    side = if (onLeft) org.tegro.yamp.presentation.hifi.PanelSide.LEFT else org.tegro.yamp.presentation.hifi.PanelSide.RIGHT
+                )
+            )
+        }
     )
 }

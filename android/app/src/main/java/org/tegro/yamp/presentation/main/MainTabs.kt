@@ -112,9 +112,10 @@ internal fun HomeTab(
     val seed by viewModel.waveSeed.collectAsStateWithLifecycle()
     val accountTags by viewModel.accountTags.collectAsStateWithLifecycle()
     val likeGestures by viewModel.likeGestures.collectAsStateWithLifecycle()
+    val steeringWheelOnLeft by viewModel.steeringWheelOnLeft.collectAsStateWithLifecycle()
     var tuneOpen by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     if (tuneOpen) {
-        org.tegro.yamp.presentation.main.components.WaveTuneSheet(tuning, onChange = viewModel::setWaveTuning, onDismiss = { tuneOpen = false })
+        org.tegro.yamp.presentation.main.components.WaveTuneSheet(tuning, onChange = viewModel::setWaveTuning, onDismiss = { tuneOpen = false }, onLeft = steeringWheelOnLeft)
     }
     HomeScreen(
         waveTrack = remember(now.track, pagePlays) { if (pagePlays) now.track else null },
@@ -145,6 +146,7 @@ internal fun HomeTab(
         onBackToMyWave = viewModel::returnToMyWave,
         queueName = active?.queue?.name.orEmpty(),
         likeButtons = !likeGestures,
+        controlsOnLeft = steeringWheelOnLeft,
         account = viewModel.markOf(accountTags, active?.queue?.account),
         mode = mode,
         // A queue of the user's own with nothing in it yet (a new Jellyfin account's default queue, D83)
@@ -313,6 +315,7 @@ internal fun LibraryTab(
 
     LibraryScreen(
         tracks = tracks,
+        controlsOnLeft = viewModel.steeringWheelOnLeft.collectAsStateWithLifecycle().value,
         isLoading = isLoading,
         loadFailed = loadFailed,
         downloadState = downloadState,
