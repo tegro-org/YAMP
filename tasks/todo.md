@@ -699,9 +699,16 @@ the next-track cards can't both fit well), so: **two screens**.
 
 ## Next: gaps after v0.5.0 (ordered)
 
-- [ ] (a) **Yandex seek restarts the track** (journal `START cut … <pos>` on a seek): check whether the
+Order (2026-11-19): 1) CI cache, (c) taller threshold, (b) Jellyfin downloads/offline, Audio Router awareness — no
+canvas; 2) one canvas round for Phase 4b folders + (e) Home/Library + (f) car albums; 3) build them; 4) (d) Android Auto
+check incl. folders. (a) watch only; (h) Phase 7 later.
+
+- [ ] (a) **Postponed — watch (user, 2026-11-19; not seen since):** **Yandex seek restarts the track** (journal `START cut … <pos>` on a seek): check whether the
       unseekable-reopen path misfires for Yandex, or whether the encrypted `encraw` source reports itself as
       unseekable. Fix it and add a test. *Done when* a seek in a Yandex stream is a plain seek: no START line, no gap.
+      Likely cause found (2026-11-19, code reading): the stall watchdog (`PlaybackController` ~:456-466, `LINK_STALL_MS`
+      6 s) treats buffering after a seek as a stall → `onStreamStalled` → `playCopy` at the position (= "START cut <pos>").
+      Fix when it recurs: count stalls by bytes, not by the buffering state; `seekable()` only after prepare.
 - [ ] (b) **Jellyfin downloads and offline playback** of a fully cached Jellyfin track. *Done when* a downloaded or
       fully cached Jellyfin track plays in airplane mode.
 - [ ] (c) **Wide-layout "taller" threshold:** taller when the controls would get **less than 1/3 of the width** after the full-height cover block (≈ **width/height < 1.66**; geometric form preferred — it includes the next block and paddings). 16:10 = 1.6 is taller, with the
@@ -712,9 +719,14 @@ the next-track cards can't both fit well), so: **two screens**.
       missing. *Done when* the Jellyfin queues are browsable and playable from Android Auto.
 - [ ] (e) **Home Jellyfin sections and merged Library rows** with service badges. Canvas first. *Done when* the
       boards are approved and built, and Yandex-only Home stays pixel-identical.
+- [ ] **Phase 4b — Jellyfin folder browsing (added to this milestone, user 2026-11-19):** per `docs/multi-source-player.md`
+      §Phase 4b — the folder tree opened at the library root, tap = open, play = the whole folder, filter on every level,
+      pinned folders on top, breadcrumbs. Canvas: refresh the existing `pf-*` boards to the new player/hand-side style,
+      in the same canvas round as (e) and (f). *Done when* a folder can be browsed and played from the phone and the car.
 - [ ] (f) **Car long press on album tiles.** This needs a car album view; canvas first. *Done when* a car album
       tile opens the album menu with car-sized rows.
 - [ ] **Audio Router (com.usbswitch) awareness:** while its USB routing is active it overwrites per-player volume every 2.5 s — detect it (its AudioPolicy / package running + routed) and fall back to hard cuts (no crossfade/fades), with a hint; until then the user sets crossfade 0 when routing to USB.
+- [ ] **CI: cache the Robolectric runtime downloads** (`~/.m2/repository/org/robolectric`, android-all-instrumented jars) in `ci.yml` and `release.yml` — Maven Central hiccups failed the v0.3.0 and v0.5.1 release test steps (re-run passed). Done when a run with a cold Maven Central still passes from the cache.
 - [ ] (g) **Foldable shape classes in the tests:**
       - the Fold 5 cover and inner screens;
       - Galaxy Z Fold 8 (specs from the user, 2026-11-18): **cover** 5.5", 1248×1972 px, 428 ppi (≈ 466×737 dp
@@ -722,4 +734,4 @@ the next-track cards can't both fit well), so: **two screens**.
         w/h 1.32 → the "taller" branch; also portrait 731×969 dp).
 
       Add the Fold 8 numbers once confirmed. *Done when* geometry tests and goldens cover them.
-- [ ] (h) **Phase 7 export/import:** design doc first. *Done when* the doc is approved.
+- [ ] (h) **Not in this milestone (user, 2026-11-19):** **Phase 7 export/import:** design doc first. *Done when* the doc is approved.
