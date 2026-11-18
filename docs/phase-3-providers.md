@@ -678,3 +678,30 @@ Canvas `wl-welcome`, `wl-welcome-head`, `wl-jf-home`, `wl-jf-library`, `wl-jf-ca
   jumps again and rises on from the current level). A focus loss, a call and "no data" pause at once; skips and picks
   keep their 150 ms fade and load-first. Journal: `FADE pause|play|seek N ms`. Under Poweramp DVC the per-player
   volume (so these fades) doesn't apply, as with the crossfade.
+
+### After stage 2 — unseekable Jellyfin transcodes, "Fade then rise" (as built, 2026-11-17, b108)
+
+- **The jump to the start** (ride 2026-11-17): checked against the dev server — `/Audio/{id}/universal` sends a file the
+  device plays as it is with its length and byte ranges (`206`, `Accept-Ranges: bytes`), but a **transcode** (the
+  "compatible" MP3 320, or a file over the limits) chunked with no length and `Accept-Ranges: none`; no option of this
+  server version gives a transcode a length. Media3 can't seek in such a stream (any seek lands at 0), silently restarts
+  it from 0 when its connection breaks mid-way (a "deferred retry"), and gives it no duration, so the end-of-track
+  trigger never fired.
+- Fix: the engine reports an unseekable network stream once (`unseekableStreamEvent`); the controller writes the playing
+  track's whole file to disk too (`NextTrackFetch.fetchPlaying`, a second write slot beside the next track's). A seek in
+  such a stream, or an unasked jump to its start (`JUMP` line; a seekable stream just seeks back), reopens the item from
+  the disk copy at the position — at once when the copy is complete, else after waiting for it (loading, the bar held
+  at the target, at most 60 s, then a NO_DATA failure). A next track queued behind (gapless) is taken off and queued again.
+  The transition is timed by the catalog's length (`ResolvedStream.durationMs`) when the stream has none. Transcodes are
+  asked at a constant bitrate (`EnableAudioVbrEncoding=false`), so every read of one has the same bytes. FORMAT lines say
+  `seekable` / `not seekable`, the duration or "length unknown".
+- Note: while the player itself still streams the track, its open cache span is locked, so the first full write may leave
+  that part out; the file completes once the player's own read reaches the end (it fills the cache too) or a second
+  write runs (seen on the emulator: complete within 2 s).
+- **Transition** (Settings → Playback, shown with crossfade on): "Crossfade" (both at once, equal-power) or "Fade then
+  rise" — the trigger comes at X/2 before the end, the current track fades out over X/2 (dB curve), stops, then the next
+  one starts and rises over X/2; never both at once. With the next track queued behind on the same player (crossfade's
+  gapless path now also serves "Fade then rise"), the fade-out runs on that player and the gapless arrival rises — no
+  second AudioTrack.
+- The full player hides like/dislike for Jellyfin tracks; Search with Jellyfin only shows a hint instead of an endless
+  skeleton (the starter charts are Yandex's).

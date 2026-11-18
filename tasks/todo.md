@@ -357,11 +357,31 @@ Workaround now: Poweramp Equalizer → Known Players → YAMP → "Fade" off.
   (4), Diag `EffectSummaryTest` (4) + fixture; golden new `settings_playback_poweramp`. Debug build b84.
 - [ ] User check: one ride with Poweramp Equalizer disabled
 
-## Player screen modes (KIV — user will describe the ideas later, 2026-11-16)
+## Main screen + new player screen (user, 2026-11-16 / 2026-11-17; canvas first)
 
-- [ ] Phone player and car screen are both reachable from the UI → confusing which to open. User's direction: redesign
-      both and choose the mode in Settings instead of offering both in the UI. Open: auto vs manual choice, whether
-      the other mode stays reachable, what to change in each, the phone UI on the head unit when parked.
+Problem: the player and the car screen are two similar screens with inconsistent navigation; the car screen's
+enter/exit behaviour feels like it wants to be the main page. A single merged screen doesn't work (the tab bar and
+the next-track cards can't both fit well), so: **two screens**.
+
+**Main screen** — unchanged, two small changes:
+- [ ] Queue dropdown at the top.
+- [ ] A tap around the Play button or on the track title below it opens the player; the "Player" label goes.
+- The mini player on the other tabs stays as it is (a tap opens the main screen).
+
+**Player screen** — new:
+- [ ] Next tracks setting: "1" = today's player layout as is (tap on the next track opens the queue); "3" = the card
+      row of the main screen / car mode (current big + three smaller). Landscape: the next track(s) under the cover.
+- [ ] Progress bar with times.
+- [ ] Swipe/drag up opens the queue; swipe down closes the open queue first, otherwise closes the player (as today).
+- [ ] Layout chosen in Settings (Phone / Car), no automatic logic. Car: bigger play controls and the ring around Play
+      (the main screen's ring, as used in car mode).
+- [ ] The car screen's extra controls (radio tiles, wave-by-track pill, tune panel) stay: placed per the
+      left/right-hand setting; option for wide screens: bottom (as now) or a vertical panel at the side.
+- [ ] Portrait layout unchanged except the next-track cards (per the setting).
+- [ ] Maybe drop the like/dislike buttons: double tap on the cover = like, long press = dislike, with a clear
+      visual confirmation — try both on the canvas.
+- [ ] The separate "In car" screen is dropped (its ideas live in the player's Car layout); its tab button becomes
+      "Player" / «Плеер» and opens the player.
 
 ## Home-screen shortcut per queue (idea, 2026-11-16)
 
@@ -585,5 +605,36 @@ Workaround now: Poweramp Equalizer → Known Players → YAMP → "Fade" off.
       (`PlayerRepositoryImpl`), controller user/media-button pause smooth, focus loss / "no data" plain; journal
       `FADE pause|play|seek N ms`; 7 engine + 2 controller tests.
 - [ ] Note: with Poweramp DVC on, per-player volume (and so these fades) don't apply — same as the crossfade.
-- [ ] Bug (found on b105): the full player shows like/dislike for a Jellyfin track — hide as on Home/car (`Track.supportsLikes`).
-- [ ] Search with Jellyfin only: the empty page stays on "loading" (starter charts are Yandex-only) — show a neutral empty state.
+- [x] Bug (found on b105): the full player shows like/dislike for a Jellyfin track — hide as on Home/car (`Track.supportsLikes`).
+- [x] Search with Jellyfin only: the empty page stays on "loading" (starter charts are Yandex-only) — show a neutral empty state.
+
+## Transition style: Crossfade or Fade then rise (user, 2026-11-17)
+
+- [x] Setting "Transition": "Crossfade" (simultaneous, equal-power — today) / "Fade then rise": the current track
+      fades out over X/2 (dB curve, like pause), the next starts right after and rises over X/2 (like play); total = X.
+      No overlap → works with Poweramp DVC on and decodes one track at a time (lighter CPU on the unit); the next
+      track is preloaded and can play gaplessly on the same player. Skips, picks and seek unchanged.
+- [x] After the jump-to-start bug (2026-11-17 ride) — done in b108.
+
+## Jellyfin jump to the start / unseekable transcode (2026-11-17 ride; b108)
+
+- [x] Cause: a transcode (`/Audio/{id}/universal` when the server converts) is sent chunked, no Content-Length,
+      `Accept-Ranges: none`; a file played as it is comes with its length and byte ranges. Media3 can't seek in the
+      former (a seek lands at 0), restarts it from 0 when its connection breaks mid-way, and gives it no duration.
+- [x] Journal: FORMAT says seekable / length unknown; `JUMP` for an unasked jump to the start; CACHE lines for the
+      playing track's write, a wait for it and a reopen from disk.
+- [x] The playing track's whole file goes to disk when its stream is unseekable (`NextTrackFetch.fetchPlaying`); a seek
+      or a recovery waits for it (loading, bar held, max 60 s) and reopens from disk at the position.
+- [x] End-of-track transition timed by the catalog's length when the stream has none (`ResolvedStream.durationMs`).
+- [x] Transcodes asked at a constant bitrate (`EnableAudioVbrEncoding=false`).
+- [ ] Ride check: a weak link mid-track with "Совместимое" on — no jump to 0; seeks land.
+
+
+## Quality per account, unmetered vs metered (user, 2026-11-17)
+
+- [ ] Settings → Accounts → account: two choices — quality on unmetered networks / on metered networks (Android's
+      metered flag: mobile data, or a Wi-Fi the user marks as metered — e.g. the car's 4G travel router on the head
+      unit). Yandex: Lossless (FLAC) / Compatible (MP3). Jellyfin: Original (seekable, no server transcoding) /
+      Converted MP3 320. New accounts start from the current global setting; the global Playback row goes (or
+      becomes the default for new accounts). A network change applies from the next track.
+- [ ] Fallback if the unit's Android hides "metered" for Wi-Fi: a per-network override in YAMP (later, only if needed).
