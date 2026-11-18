@@ -41,6 +41,8 @@ data class SettingsUiState(
     val keepBothPlayersRunning: Boolean = false,
     /** "Fixed output format" (D69). */
     val fixedOutputFormat: Boolean = false,
+    /** Transition at a track's end: false = crossfade, true = fade then rise. */
+    val transitionFadeThenRise: Boolean = false,
     val equalizerAvailable: Boolean = false,
     /** Poweramp Equalizer is installed: Settings → Playback shows how to set it for a clean crossfade. */
     val powerampEqualizer: Boolean = false,
@@ -87,6 +89,7 @@ data class SettingsActions(
     val onResumeWhenQuietChange: (Boolean) -> Unit = {},
     val onKeepBothPlayersRunningChange: (Boolean) -> Unit = {},
     val onFixedOutputFormatChange: (Boolean) -> Unit = {},
+    val onTransitionFadeThenRiseChange: (Boolean) -> Unit = {},
     val onOpenEqualizer: () -> Unit = {},
     val onOpenPowerampEqualizer: () -> Unit = {},
     val onStartMusicChange: (StartMusic) -> Unit = {},

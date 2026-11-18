@@ -387,6 +387,11 @@
     <string name="settings_both_players_hint">Experiment against stutter on skips: the idle player plays silence, so no audio stream opens or closes. Wins over "Keep audio streams open"</string>
     <string name="settings_fixed_output">Fixed output format</string>
     <string name="settings_fixed_output_hint">Players resample every track to the system mixer\'s rate, so the audio output never changes format between tracks. Experiment against stutter on track changes; applies from the next track</string>
+    <string name="settings_transition">Transition</string>
+    <string name="settings_transition_crossfade">Crossfade</string>
+    <string name="settings_transition_fade_rise">Fade then rise</string>
+    <string name="settings_transition_hint">Crossfade: the next track rises while the current one fades. Fade then rise: the current one fades out over half the length, then the next one rises over the other half — never both at once</string>
+    <string name="search_jellyfin_only_hint">Search your Jellyfin library: type an artist, album or track</string>
     <string name="settings_start_music">Музыка при запуске</string>
     <string name="settings_start_music_off">Не включать</string>
     <string name="settings_start_music_continue">Продолжить</string>

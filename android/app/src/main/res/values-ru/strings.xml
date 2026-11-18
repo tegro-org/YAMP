@@ -64,6 +64,11 @@
     <string name="settings_both_players_hint">Эксперимент против заиканий при переключении: свободный плеер играет тишину, звуковые потоки не открываются и не закрываются. Главнее, чем «Не закрывать звуковые потоки»</string>
     <string name="settings_fixed_output">Фиксированный формат вывода</string>
     <string name="settings_fixed_output_hint">Плеер сам пересчитывает каждый трек в частоту системного микшера, и формат звукового потока не меняется между треками. Эксперимент против заиканий при смене трека; действует со следующего трека</string>
+    <string name="settings_transition">Переход</string>
+    <string name="settings_transition_crossfade">Кроссфейд</string>
+    <string name="settings_transition_fade_rise">Затухание и нарастание</string>
+    <string name="settings_transition_hint">Кроссфейд: следующий трек нарастает, пока текущий затухает. Затухание и нарастание: текущий затухает за половину времени, затем следующий нарастает за вторую половину — никогда вместе</string>
+    <string name="search_jellyfin_only_hint">Поиск по вашей библиотеке Jellyfin: введите исполнителя, альбом или трек</string>
     <string name="radio_start">Запустить радио</string>
     <string name="radio_picker_title">Запустить радио</string>
     <string name="radio_new">Новое радио</string>

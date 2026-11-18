@@ -124,10 +124,21 @@ internal fun DiscoverList(
     columns: Int,
     onTrackClick: (String, List<Track>) -> Unit,
     onLoadMoreHits: () -> Unit,
-    onLoadMoreTrends: () -> Unit
+    onLoadMoreTrends: () -> Unit,
+    yandex: Boolean = true
 ) {
     val hits = weeklyHits.ifEmpty { trendTracks.take(20) }
     val trends = trendTracks.ifEmpty { weeklyHits }
+    if (!yandex && hits.isEmpty() && trends.isEmpty()) {
+        // The starter charts are Yandex's: with Jellyfin only there is nothing to load, so no endless skeleton
+        androidx.compose.material3.Text(
+            text = androidx.compose.ui.res.stringResource(org.tegro.yamp.R.string.search_jellyfin_only_hint),
+            color = org.tegro.yamp.presentation.hifi.HiFi.TextSecondary,
+            fontSize = 15.sp,
+            modifier = Modifier.padding(start = contentStart, end = contentStart, top = top + 24.dp)
+        )
+        return
+    }
     if (hits.isEmpty() && trends.isEmpty()) {
         HiFiSkeletonRows(Modifier.padding(top = top), count = 6)
         return

@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -62,7 +63,9 @@ internal fun PlayerControls(
     onPrev: () -> Unit,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
-    onLike: () -> Unit
+    onLike: () -> Unit,
+    /** Like/dislike exist for this track's service (not for Jellyfin yet): otherwise empty places keep the row centred. */
+    showLikes: Boolean = true
 ) {
     // Wide rows (landscape, tablets) keep the cluster together instead of spreading it to the edges
     BoxWithConstraints(Modifier.fillMaxWidth().wrapContentWidth(Alignment.CenterHorizontally).widthIn(max = 420.dp)) {
@@ -70,7 +73,7 @@ internal fun PlayerControls(
         val fit = (maxWidth / 344.dp).coerceIn(0.7f, 1f)
         val k = if (compact) fit * 0.8f else fit
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            DislikeButton(onDislikeClick = onDislike, size = 52.dp * k)
+            if (showLikes) DislikeButton(onDislikeClick = onDislike, size = 52.dp * k) else Spacer(Modifier.size(52.dp * k))
             HiFiKnob(
                 onClick = onPrev,
                 contentDescription = stringResource(if (isRadio) R.string.cd_prev_station else R.string.cd_predyduschiy_trek),
@@ -96,7 +99,7 @@ internal fun PlayerControls(
                     Icon(Icons.Rounded.SkipNext, contentDescription = null, tint = HiFi.OnMetal, modifier = Modifier.size(30.dp * k))
                 }
             }
-            LikeHeartButton(isLiked = isLiked, onToggleLike = onLike, size = 52.dp * k)
+            if (showLikes) LikeHeartButton(isLiked = isLiked, onToggleLike = onLike, size = 52.dp * k) else Spacer(Modifier.size(52.dp * k))
         }
     }
 }

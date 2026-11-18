@@ -490,6 +490,18 @@ private fun ColumnScope.PlaybackPage(state: SettingsUiState, actions: SettingsAc
     SettingsGroup(stringResource(R.string.settings_g_sound)) {
         SoundQualityRow(state.compatibleSound, actions.onCompatibleSoundChange)
         CrossfadeRow(state.crossfadeSeconds, actions.onCrossfadeChange)
+        if (state.crossfadeSeconds > 0) {
+            SegmentedRow(Icons.Rounded.GraphicEq, stringResource(R.string.settings_transition)) {
+                HiFiSegmented(
+                    options = listOf(stringResource(R.string.settings_transition_crossfade), stringResource(R.string.settings_transition_fade_rise)),
+                    selectedIndex = if (state.transitionFadeThenRise) 1 else 0,
+                    onSelect = { actions.onTransitionFadeThenRiseChange(it == 1) },
+                    fontSize = 13.sp
+                )
+                Spacer(Modifier.heightIn(min = 10.dp))
+                SettingsHint(stringResource(R.string.settings_transition_hint))
+            }
+        }
         if (state.powerampEqualizer) {
             SettingsRow(icon = Icons.Rounded.Equalizer, title = stringResource(R.string.settings_poweramp_eq), subtitle = stringResource(R.string.settings_poweramp_eq_hint), onClick = actions.onOpenPowerampEqualizer)
         }

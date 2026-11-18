@@ -48,7 +48,8 @@ class SettingsViewModel @Inject constructor(
     private data class Sound(
         val compatible: Boolean, val crossfade: Int, val normalize: Boolean, val startMusic: StartMusic,
         val bluetooth: Boolean, val explicit: Boolean, val announce: Boolean = true, val history: Boolean = true, val keepStreams: Boolean = false,
-        val duck: Boolean = true, val bothPlayers: Boolean = false, val resumeQuiet: Boolean = true, val fixedOutput: Boolean = false
+        val duck: Boolean = true, val bothPlayers: Boolean = false, val resumeQuiet: Boolean = true, val fixedOutput: Boolean = false,
+        val fadeThenRise: Boolean = false
     )
     private data class Look(val startPage: StartPage, val expand: Boolean, val swipe: Boolean, val left: Boolean, val clock: Boolean)
     private data class Scale(val auto: Boolean, val manual: Float, val animations: AnimationMode)
@@ -64,6 +65,7 @@ class SettingsViewModel @Inject constructor(
             sound.copy(duck = duck, bothPlayers = both, resumeQuiet = quiet)
         }
         .combine(settings.fixedOutputFormat) { sound, fixed -> sound.copy(fixedOutput = fixed) }
+        .combine(settings.transitionFadeThenRise) { sound, fadeRise -> sound.copy(fadeThenRise = fadeRise) }
 
     private val look: Flow<Look> = combine(
         settings.startPage, settings.expandPlayerOnPlay, settings.swipeToCloseMiniPlayer, settings.steeringWheelOnLeft, settings.carClock, ::Look
@@ -97,6 +99,7 @@ class SettingsViewModel @Inject constructor(
             resumeWhenQuiet = s.resumeQuiet,
             keepBothPlayersRunning = s.bothPlayers,
             fixedOutputFormat = s.fixedOutput,
+            transitionFadeThenRise = s.fadeThenRise,
             equalizerAvailable = equalizer.isAvailable(),
             powerampEqualizer = equalizer.powerampEqualizerInstalled(),
             startMusic = s.startMusic,
@@ -143,6 +146,7 @@ class SettingsViewModel @Inject constructor(
     fun setResumeWhenQuiet(enabled: Boolean) = save { setResumeWhenQuiet(enabled) }
     fun setKeepBothPlayersRunning(enabled: Boolean) = save { setKeepBothPlayersRunning(enabled) }
     fun setFixedOutputFormat(enabled: Boolean) = save { setFixedOutputFormat(enabled) }
+    fun setTransitionFadeThenRise(enabled: Boolean) = save { setTransitionFadeThenRise(enabled) }
     fun setGroupQueues(enabled: Boolean) = save { setGroupQueuesByAccount(enabled) }
     fun openEqualizer() = equalizer.open()
     fun openPowerampEqualizer() = equalizer.openPowerampEqualizer()

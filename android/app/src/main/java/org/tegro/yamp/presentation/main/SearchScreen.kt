@@ -122,7 +122,9 @@ fun SearchScreen(
     onSubmit: () -> Unit = {},
     initiallyShowHistory: Boolean = false,
     /** The results mix providers: provider badges on the rows (D21, D75). */
-    badges: Boolean = false
+    badges: Boolean = false,
+    /** A Yandex account is signed in: the starter charts come from it; without one a hint shows instead. */
+    yandex: Boolean = true
 ) {
     val isLandscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation ==
         android.content.res.Configuration.ORIENTATION_LANDSCAPE
@@ -172,7 +174,8 @@ fun SearchScreen(
                     columns = if (isLandscape) landscapeColumns(org.tegro.yamp.utils.currentWindowSizeDp().widthDp) else 2,
                     onTrackClick = onTrackClick,
                     onLoadMoreHits = onLoadMoreHits,
-                    onLoadMoreTrends = onLoadMoreTrends
+                    onLoadMoreTrends = onLoadMoreTrends,
+                    yandex = yandex
                 )
                 isSearching -> HiFiSkeletonRows(Modifier.padding(top = listTop), count = 6)
                 else -> ResultsList(

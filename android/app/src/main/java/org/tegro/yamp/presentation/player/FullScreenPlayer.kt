@@ -43,6 +43,7 @@ import org.tegro.yamp.R
 import org.tegro.yamp.data.player.PlaylistSource
 import org.tegro.yamp.data.player.SleepTimerState
 import org.tegro.yamp.domain.media.Track
+import org.tegro.yamp.domain.queue.service
 import org.tegro.yamp.presentation.common.coverUri
 import org.tegro.yamp.presentation.common.id
 import org.tegro.yamp.presentation.common.isRadio
@@ -199,7 +200,9 @@ fun FullScreenPlayer(
             onPrev = onPrevClick,
             onPlayPause = onPlayPauseClick,
             onNext = onNextClick,
-            onLike = onToggleLike
+            onLike = onToggleLike,
+            // Jellyfin has no likes yet (Phase 5): no buttons that do nothing
+            showLikes = track.ref.service != org.tegro.yamp.domain.account.Provider.JELLYFIN
         )
     }
 

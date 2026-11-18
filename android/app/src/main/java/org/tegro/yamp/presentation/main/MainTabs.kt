@@ -204,6 +204,7 @@ internal fun SearchTab(
             catalogVm.open(org.tegro.yamp.presentation.catalog.CatalogPage.Album(album.ref.id, album.title, account))
         },
         badges = found.showBadges,
+        yandex = viewModel.isAuthorized.collectAsStateWithLifecycle().value,
         onRemoveFromHistory = { searchVm.removeFromHistory(it) },
         onClearHistory = { searchVm.clearHistory() },
         onSubmit = { searchVm.rememberQuery() }
@@ -286,6 +287,7 @@ internal fun LibraryTab(
             onResumeWhenQuietChange = settingsVm::setResumeWhenQuiet,
             onKeepBothPlayersRunningChange = settingsVm::setKeepBothPlayersRunning,
             onFixedOutputFormatChange = settingsVm::setFixedOutputFormat,
+            onTransitionFadeThenRiseChange = settingsVm::setTransitionFadeThenRise,
             onNormalizeVolumeChange = settingsVm::setNormalizeVolume,
             onOpenEqualizer = settingsVm::openEqualizer,
             onOpenPowerampEqualizer = settingsVm::openPowerampEqualizer,
