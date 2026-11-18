@@ -2,6 +2,7 @@ package org.tegro.yamp.data.player
 
 import android.media.MediaCodecList
 import android.media.MediaFormat
+import org.tegro.yamp.domain.account.AccountId
 import org.tegro.yamp.domain.repository.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,10 +25,17 @@ import javax.inject.Singleton
 class SoundMode(
     private val chosen: Flow<Boolean?>,
     private val save: suspend (Boolean) -> Unit,
-    private val hasFlacDecoder: () -> Boolean
+    private val hasFlacDecoder: () -> Boolean,
+    /** Each account's own choice for unmetered / metered networks; an account without one follows the global choice. */
+    private val perAccount: AccountQualitySource = AccountQualitySource.None,
+    /** Told the effective choice for an account whenever it changes (the journal's QUALITY line). */
+    private val onEffective: (String) -> Unit = {}
 ) {
     @Inject
-    constructor(settings: SettingsRepository) : this(settings.compatibleSound, settings::setCompatibleSound, ::deviceHasFlacDecoder)
+    constructor(settings: SettingsRepository, store: AccountQualityStore, journal: PlaybackJournal) : this(
+        settings.compatibleSound, settings::setCompatibleSound, ::deviceHasFlacDecoder, store,
+        { journal.record(PlaybackJournal.Kind.QUALITY, detail = it) }
+    )
 
     private val decoderPresent by lazy(hasFlacDecoder)
 
@@ -39,6 +47,29 @@ class SoundMode(
 
     /** Always the saved choice: a request must not slip through while it loads. */
     suspend fun isCompatible(): Boolean = isCompatible(chosen.first())
+
+    /**
+     * Compatible for [account] on the network in use: its own choice for a metered or unmetered network, else the
+     * global one. Answers from memory (main thread, link keys); a network change applies from the next track.
+     */
+    fun compatibleFor(account: AccountId?): Boolean = perAccount.chosen(account).let { own -> effective(account, own, own ?: compatible.value) }
+
+    /** [compatibleFor], waiting for the saved global choice when the account has none of its own. */
+    suspend fun isCompatible(account: AccountId?): Boolean = perAccount.chosen(account).let { own ->
+        effective(account, own, own ?: isCompatible())
+    }
+
+    private fun AccountQualitySource.chosen(account: AccountId?): Boolean? = account?.let { chosen(it.value, isMetered()) }
+
+    private val lastNoted = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    private fun effective(account: AccountId?, own: Boolean?, result: Boolean): Boolean {
+        val key = account?.value ?: "context"
+        val line = "$key ${if (perAccount.isMetered()) "metered" else "unmetered"} → ${if (result) "compatible" else "best"}" +
+            if (own == null) " (global)" else " (account)"
+        if (lastNoted.put(key, line) != line) onEffective(line)
+        return result
+    }
 
     /** Returns once [compatible] says so too, so what happens next already sees the new mode. */
     suspend fun choose(enabled: Boolean) {

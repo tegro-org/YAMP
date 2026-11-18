@@ -223,8 +223,7 @@ class PlayerEngineTest {
     }
 
     @Test
-    fun aBurstOfSkipsBuildsNoSilentPlayersAndOneAudioTrackPerTrack() {
-        val engine = engineKeepingBothPlayersRunning()
+    fun aBurstOfSkipsBuildsOneAudioTrackPerTrack() {
         startAndSound(engine, b, "t1")
         var started = 1
         repeat(6) { n ->
@@ -237,40 +236,8 @@ class PlayerEngineTest {
             incoming.becomeReady()
             advance(400)
             started++
-            assertTrue("no silent clip during the burst", PlayerRepositoryImpl.PARKED_ID !in a.playlist + b.playlist)
         }
-        assertEquals("one AudioTrack per started track, none for silence", started, a.tracksOpened + b.tracksOpened)
-
-        // Calm again: the standby starts idling on the silent clip ("keep both players running")
-        advance(PlayerRepositoryImpl.SETTLE_MS + 500)
-        val standby = if (a.isPlaying && a.itemId?.startsWith("s") == true) b else a
-        assertEquals(listOf(PlayerRepositoryImpl.PARKED_ID), standby.playlist)
-        engine.release()
-    }
-
-    @Test
-    fun aPauseSilencesAnIdlingStandbySoNothingOfOursCountsAsMusic() {
-        val engine = engineKeepingBothPlayersRunning()
-        startAndSound(engine, b, "t1")
-        advance(PlayerRepositoryImpl.SETTLE_MS + 500)
-        assertEquals("idling", listOf(PlayerRepositoryImpl.PARKED_ID), a.playlist)
-        assertTrue(a.playWhenReady)
-
-        engine.pause() // e.g. a focus loss (F1 then checks "is other music playing")
-        looper.idle()
-        assertTrue("nothing of ours plays on", !a.playWhenReady && !b.playWhenReady)
-
-        // Warming the next track up behind the silence, then a pause: the clip stops too, and comes back on play
-        engine.resume()
-        engine.prepareNextTrack("t2", org.tegro.yamp.domain.provider.ResolvedStream("https://stream.example/t2.mp3"), "T2", "Artist", null)
-        settle { a.playlist == listOf(PlayerRepositoryImpl.PARKED_ID, "t2") }
-        engine.pause()
-        looper.idle()
-        assertTrue("the warm-up's silence stops", !a.playWhenReady && !b.playWhenReady)
-        engine.resume()
-        looper.idle()
-        assertTrue("and plays out into the warm-up again", a.playWhenReady)
-        engine.release()
+        assertEquals("one AudioTrack per started track", started, a.tracksOpened + b.tracksOpened)
     }
 
     @Test
@@ -362,29 +329,23 @@ class PlayerEngineTest {
     }
 
     @Test
-    fun aSilenceThatNeverHandsOverLoadsTheTrackDirectly() {
-        val engine = engineKeepingBothPlayersRunning()
-        startAndSound(engine, b, "t1")
-        advance(PlayerRepositoryImpl.SETTLE_MS + 500)
-        assertEquals("idling", listOf(PlayerRepositoryImpl.PARKED_ID), a.playlist)
-        playOn(engine, "t2")
-        settle { a.playlist == listOf(PlayerRepositoryImpl.PARKED_ID, "t2") }
-        // The silence never plays out into t2 (the b83 ride: a pick "started" the silent clip, with no title)
-        advance(PlayerRepositoryImpl.SILENCE_HANDOVER_MAX_MS + 500)
-        assertEquals("t2 is loaded on its own", listOf("t2"), a.playlist)
+    fun aReadyPickWaitsUntilTheOldPlayerIsStoppedAndFlushed() {
+        firstTrackSounds()
+        val stoppedWhenStarted = mutableListOf<Boolean>()
+        a.addListener(object : androidx.media3.common.Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (isPlaying) stoppedWhenStarted += b.playbackState == androidx.media3.common.Player.STATE_IDLE
+            }
+        })
+        play("t2", pick = true)
+        settle { a.itemId == "t2" }
         a.becomeReady()
-        advance(PlayerRepositoryImpl.CROSSFADE_DURATION_MS + 1_000)
-        assertEquals("t2", engine.currentTrackId.value)
+        advance(1_000)
         assertTrue("t2 sounds", a.isPlaying)
-        engine.release()
+        assertEquals("t1 was stopped (not only paused) when t2 started", listOf(true), stoppedWhenStarted)
     }
 
     // endregion
-
-    private fun engineKeepingBothPlayersRunning() = PlayerRepositoryImpl(
-        a, b, TrackDownloadManager(app, OkHttpClient()), PlaybackWakeLockHelper(app),
-        parking = PlayerRepositoryImpl.ParkingPolicy(kotlinx.coroutines.flow.flowOf(false), "asset:///silence.mp3", kotlinx.coroutines.flow.flowOf(true))
-    )
 
     private fun playOn(engine: PlayerRepositoryImpl, id: String) =
         engine.playTrack(id, org.tegro.yamp.domain.provider.ResolvedStream("https://stream.example/$id.mp3"), id.uppercase(), "Artist", null,

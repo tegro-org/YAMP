@@ -41,11 +41,11 @@ class EngineDiagnostics(
         players[playerIdx] = player
         player.addListener(object : androidx.media3.common.Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
-                if (isPlaying && !isSilence(player)) sounding(player)
+                if (isPlaying) sounding(player)
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
-                if (playbackState == androidx.media3.common.Player.STATE_READY && !isSilence(player)) ready(player)
+                if (playbackState == androidx.media3.common.Player.STATE_READY) ready(player)
             }
         })
         player.addAnalyticsListener(object : AnalyticsListener {
@@ -117,7 +117,7 @@ class EngineDiagnostics(
         )
         lastCause[playerIdx] = null
         releasedAt[playerIdx] = null
-        journal?.record(PlaybackJournal.Kind.OUTPUT, player.mediaMetadata.title?.toString()?.takeUnless { isSilence(player) }, parts.joinToString(" "))
+        journal?.record(PlaybackJournal.Kind.OUTPUT, player.mediaMetadata.title?.toString(), parts.joinToString(" "))
     }
 
     /** The FORMAT line for [player]'s track: codec, rate, channels, bitrate (what the stream turned out to be). */
@@ -215,8 +215,6 @@ class EngineDiagnostics(
         journal?.record(PlaybackJournal.Kind.TIMING, t.title?.toString(), parts.joinToString(", "))
         format(player, t.title)
     }
-
-    private fun isSilence(player: ExoPlayer) = player.currentMediaItem?.mediaId == org.tegro.yamp.data.repository.PlayerRepositoryImpl.PARKED_ID
 
     private companion object {
         const val UNDERRUN_LOG_INTERVAL_MS = 500L

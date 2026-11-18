@@ -66,4 +66,12 @@ class PlaylistDiffTest {
             PlaylistDiff.reorder(listOf("a", "b"), listOf("b", "a")) { "alb_$it" }
         )
     }
+
+    @Test
+    fun albumGoesInAsOneInsertInItsOrder() {
+        assertEquals(
+            """[{"op":"insert","at":0,"tracks":[{"id":"1","albumId":"9"},{"id":"2","albumId":"9"},{"id":"3","albumId":"9"}]}]""",
+            PlaylistDiff.insertAll(0, listOf("1" to "9", "2" to "9", "3" to "9"))
+        )
+    }
 }

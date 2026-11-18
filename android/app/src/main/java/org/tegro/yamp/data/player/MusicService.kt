@@ -79,11 +79,11 @@ class MusicService : MediaLibraryService() {
 
     /** "Keep playing under announcements" (Settings → Playback). */
     @Volatile
-    private var duckForAnnouncements = true
+    private var duckForAnnouncements = false
 
     /** "Resume when nothing else plays" (Settings → Playback, D66). */
     @Volatile
-    private var resumeWhenQuiet = true
+    private var resumeWhenQuiet = false
 
     /** After a permanent loss: plays on once nothing else plays — only if YAMP was playing at the loss (D66). */
     private val focusResumer by lazy {
@@ -187,20 +187,8 @@ class MusicService : MediaLibraryService() {
         AppPresence.playerServiceRunning = true
         audioManager = getSystemService(AUDIO_SERVICE) as? AudioManager
         diagnosticLog.event("SERVICE", "created")
-        // The device mixer's native output: a track at another rate is resampled by the system (F6) — or by the
-        // players themselves while "Fixed output format" is on (D69); applies from the next track
-        serviceScope.launch {
-            var first = true
-            settings.fixedOutputFormat.collect { on ->
-                fixedOutput.setEnabled(on)
-                if (first) {
-                    first = false
-                    val mode = if (on) "fixed output ${fixedOutput.mixerRateHz} Hz" else "fixed output off"
-                    journal.record(PlaybackJournal.Kind.AUDIO, detail = "${mixerLine(audioManager)}, $mode")
-                }
-            }
-        }
-        serviceScope.launch { settings.announceEqualizer.collect { equalizer.announcing = it } }
+        // The device mixer's native output: the players resample every track to it (fixed output format, D69)
+        journal.record(PlaybackJournal.Kind.AUDIO, detail = "${mixerLine(audioManager)}, fixed output ${fixedOutput.mixerRateHz} Hz")
         serviceScope.launch { settings.duckForAnnouncements.collect { duckForAnnouncements = it } }
         serviceScope.launch { settings.resumeWhenQuiet.collect { resumeWhenQuiet = it } }
         // Equalizer apps hear about the one session once, when the sound first starts; closed in onDestroy (D70)

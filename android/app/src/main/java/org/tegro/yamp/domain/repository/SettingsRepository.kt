@@ -47,6 +47,13 @@ interface SettingsRepository {
     val compatibleSound: Flow<Boolean?>
     suspend fun setCompatibleSound(enabled: Boolean)
 
+    /**
+     * Quality per account (Settings → Accounts → the account): "compatible" chosen for unmetered and for metered
+     * networks, keyed by [accountQualityKey]. An account without a choice uses [compatibleSound].
+     */
+    val accountQualities: Flow<Map<String, Boolean>> get() = kotlinx.coroutines.flow.flowOf(emptyMap())
+    suspend fun setAccountQuality(account: String, metered: Boolean, compatible: Boolean) {}
+
     /** What plays by itself when the app starts. */
     val startMusic: Flow<StartMusic>
     suspend fun setStartMusic(value: StartMusic)
@@ -90,52 +97,20 @@ interface SettingsRepository {
 
 
     /**
-     * Tell equalizer apps about our audio sessions (the OPEN_AUDIO_EFFECT_CONTROL_SESSION broadcast). Off for a
-     * head unit whose sound chain takes audio focus when it attaches to the session — the music paused by itself
-     * a second after every start on the user's unit (diagnosed from the log, 2026-11-12).
-     */
-    val announceEqualizer: Flow<Boolean>
-    suspend fun setAnnounceEqualizer(enabled: Boolean)
-
-    /**
-     * Keep the two players' audio streams open between tracks (a finished player is parked on a silent clip
-     * instead of being stopped). An experiment for a head unit that takes the sound whenever a new stream
-     * appears (2026-11-13).
-     */
-    val keepAudioStreams: Flow<Boolean>
-    suspend fun setKeepAudioStreams(enabled: Boolean)
-
-    /**
      * Keep playing, quieter, while another app speaks (a navigator, a radar detector) even when it asks for the
-     * sound to itself (a transient focus loss); a phone call still pauses. Default on (2026-11-14): other players
-     * keep playing under such prompts.
+     * sound to itself (a transient focus loss); a phone call still pauses. Default off since 2026-11-18 (the user
+     * watches whether it is needed); a stored choice stays.
      */
     val duckForAnnouncements: Flow<Boolean>
     suspend fun setDuckForAnnouncements(enabled: Boolean)
 
     /**
      * After a permanent focus loss, play on a moment later when nothing else plays (D66) — only if YAMP was
-     * playing at the loss; a paused or idle app never starts by itself. Default on (2026-11-16): an equalizer app
-     * on the head unit took the focus whenever a session closed, with nothing else playing.
+     * playing at the loss; a paused or idle app never starts by itself. Default off since 2026-11-18: the cause (an
+     * equalizer app taking the focus when a session closed) is fixed by one stable session (D70); a stored choice stays.
      */
     val resumeWhenQuiet: Flow<Boolean>
     suspend fun setResumeWhenQuiet(enabled: Boolean)
-
-    /**
-     * Experimental (2026-11-14): the player that is not needed loops a silent clip instead of stopping, so both
-     * audio streams stay open all the time; the next track is queued behind the silence. Wins over
-     * [keepAudioStreams] when both are on.
-     */
-    val keepBothPlayersRunning: Flow<Boolean>
-    suspend fun setKeepBothPlayersRunning(enabled: Boolean)
-
-    /**
-     * "Fixed output format" (D69, F5): both players resample every track to the device mixer's native rate, so the
-     * system no longer resamples and the audio output's format is the same for every track. Default off until
-     * compared on the head unit; applies from the next track.
-     */
-    val fixedOutputFormat: Flow<Boolean>
-    suspend fun setFixedOutputFormat(enabled: Boolean)
 
     /**
      * How one track hands over to the next at its natural end, over the crossfade length X: false — "Crossfade",
@@ -144,6 +119,21 @@ interface SettingsRepository {
      */
     val transitionFadeThenRise: Flow<Boolean>
     suspend fun setTransitionFadeThenRise(enabled: Boolean)
+
+    /** Settings → Player → Layout: false — Phone, true — Car (bigger controls, the ring around Play). Never automatic. */
+    val playerCarLayout: Flow<Boolean>
+    suspend fun setPlayerCarLayout(enabled: Boolean)
+
+    /** Settings → Player → Next tracks: false — one (tap opens the queue), true — three cards. */
+    val playerNextThree: Flow<Boolean>
+    suspend fun setPlayerNextThree(enabled: Boolean)
+
+    /**
+     * Settings → Player → Like by gestures: double tap on the cover = like, hold = dislike (with Undo); the like and
+     * dislike buttons are hidden everywhere (player, car layout, Home).
+     */
+    val likeGestures: Flow<Boolean>
+    suspend fun setLikeGestures(enabled: Boolean)
 
     /**
      * "Group" in Settings → Accounts (D64): with more than one account the queue lists show a section per account
@@ -161,6 +151,9 @@ interface SettingsRepository {
     suspend fun setListeningHistory(enabled: Boolean)
 
     companion object {
+        /** The key of one per-account quality choice: the account id and the kind of network. */
+        fun accountQualityKey(account: String, metered: Boolean) = "quality|$account|" + if (metered) "metered" else "unmetered"
+
         const val DEFAULT_CROSSFADE_SECONDS = 3
         const val MAX_CROSSFADE_SECONDS = 12
         /** Left-hand drive is the global majority, so it is the default. */

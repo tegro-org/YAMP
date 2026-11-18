@@ -15,21 +15,9 @@ class FixedOutputRateTest {
     private val track441 = AudioFormat(44_100, 2, C.ENCODING_PCM_16BIT)
 
     @Test
-    fun offLeavesTheTrackRateAlone() {
+    fun resamplesA441TrackToTheMixerRate_16BitStereo() {
         val fixed = FixedOutputRate(48_000)
         val resampler = fixed.newResampler()
-
-        val out = resampler.configure(track441)
-
-        assertFalse(resampler.isActive)
-        assertEquals(44_100, out.sampleRate)
-    }
-
-    @Test
-    fun onResamplesA441TrackToTheMixerRate_16BitStereo() {
-        val fixed = FixedOutputRate(48_000)
-        val resampler = fixed.newResampler()
-        fixed.setEnabled(true)
 
         val out = resampler.configure(track441)
 
@@ -44,7 +32,6 @@ class FixedOutputRateTest {
         // Media3 resets the sink's processors when a player stops; the next track must still be resampled
         val fixed = FixedOutputRate(48_000)
         val resampler = fixed.newResampler()
-        fixed.setEnabled(true)
         resampler.configure(track441)
 
         resampler.reset()
@@ -54,24 +41,9 @@ class FixedOutputRateTest {
     }
 
     @Test
-    fun theSwitchAppliesAtTheNextConfigure() {
-        val fixed = FixedOutputRate(48_000)
-        val resampler = fixed.newResampler()
-        assertEquals(44_100, resampler.configure(track441).sampleRate)
-
-        fixed.setEnabled(true)
-        assertEquals(48_000, resampler.configure(track441).sampleRate)
-
-        fixed.setEnabled(false)
-        resampler.configure(track441)
-        assertFalse(resampler.isActive)
-    }
-
-    @Test
     fun aTrackAlreadyAtTheMixerRatePassesThrough() {
         val fixed = FixedOutputRate(48_000)
         val resampler = fixed.newResampler()
-        fixed.setEnabled(true)
 
         resampler.configure(AudioFormat(48_000, 2, C.ENCODING_PCM_16BIT))
 

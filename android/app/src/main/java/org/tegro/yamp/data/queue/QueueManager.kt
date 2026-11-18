@@ -47,6 +47,9 @@ data class ActiveQueue(
         entries.size == shown.size && entries.indices.all { entries[it].ref.id == shown[it].ref.id }
 }
 
+/** An entry taken out of a queue at [index] (its place in play order then), kept so it can be put back. */
+data class RemovedEntry(val index: Int, val entry: QueueEntry)
+
 /**
  * Owns the list of queues and the active one (docs/phase-1-queues.md §3). Every operation is written to the
  * store before it returns (E3): nothing is held only in memory. The controller reads [active] and asks for
@@ -194,6 +197,19 @@ class QueueManager @Inject constructor(
         store.removeEntry(entryId)
         store.reorder(active.queue.id, store.entries(active.queue.id).map { it.entryId })
         refreshActive()
+    }
+
+    /**
+     * Puts removed entries back where they were (Undo of a dislike): each at its old index, lowest first, so the
+     * later ones land where they stood too. Returns the new entries in the same order as [removed] sorted by index.
+     */
+    suspend fun restore(queueId: Long, removed: List<RemovedEntry>): List<QueueEntry> = mutation {
+        val written = removed.sortedBy { it.index }.flatMap { r ->
+            val size = store.entries(queueId).size
+            store.insertEntries(queueId, r.index.coerceIn(0, size), listOf(r.entry))
+        }
+        refreshIfActive(queueId)
+        written
     }
 
     /** Moves an entry to the place of [targetEntryId] (drag in the queue sheet). */

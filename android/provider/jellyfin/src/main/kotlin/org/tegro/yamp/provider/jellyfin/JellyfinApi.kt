@@ -85,6 +85,18 @@ interface JellyfinApi {
         @Query("Fields") fields: String? = null
     ): ItemsResultDto
 
+    /** A new playlist of the user's, with its first tracks. */
+    @POST("Playlists")
+    suspend fun createPlaylist(@Body body: CreatePlaylistDto): CreatePlaylistResultDto
+
+    /** Appends items to a playlist (comma-separated ids). */
+    @POST("Playlists/{playlistId}/Items")
+    suspend fun addToPlaylist(
+        @Path("playlistId") playlistId: String,
+        @Query("ids") ids: String,
+        @Query("userId") userId: String
+    )
+
     /** Play reporting (step 26): the server's "now playing", play count and resume position. */
     @POST("Sessions/Playing")
     suspend fun reportPlaying(@Body body: PlaybackReportDto)

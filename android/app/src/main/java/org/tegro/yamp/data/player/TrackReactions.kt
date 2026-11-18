@@ -15,7 +15,10 @@ import org.tegro.yamp.domain.repository.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
@@ -71,15 +74,36 @@ class TrackReactions @Inject constructor(
         }
     }
 
+    private val _dislikes = MutableSharedFlow<Dislike>(extraBufferCapacity = 4)
+
+    /** Every track dislike, from any place (screen, gesture, notification, car): the app offers Undo for it. */
+    val dislikes: SharedFlow<Dislike> = _dislikes.asSharedFlow()
+
     /** "Не нравится": the track leaves the wave and the next one plays; a station leaves the favourites. */
     fun dislike(track: Track) {
         if (track.isRadio) {
             scope.launch { radioRepository.removeFavorite(stationId(track)) }
             return
         }
-        libraryRepository.dislike(track.toYandexTrack())
-        playbackController.onTrackDisliked(track.idString)
+        val wasLiked = libraryRepository.dislike(track.toYandexTrack())
+        val queue = playbackController.onTrackDisliked(track.idString)
         scope.launch { downloadManager.removeTrack(track.idString) }
+        _dislikes.tryEmit(Dislike(track, wasLiked, queue))
+    }
+
+    /**
+     * Undo of [dislike]: the track leaves the dislikes (liked again if it was), comes back to its place in the
+     * queue and, if it was playing, plays on from where it was. A liked track is downloaded again when
+     * auto-download is on.
+     */
+    fun undoDislike(dislike: Dislike) {
+        libraryRepository.undoDislike(dislike.track.toYandexTrack(), dislike.wasLiked)
+        playbackController.undoDislike(dislike.queue)
+        if (dislike.wasLiked) {
+            scope.launch {
+                if (settingsRepository.autoDownloadLikedTracks.first()) downloadScheduler.downloadTrack(dislike.track.idString)
+            }
+        }
     }
 
     private suspend fun flushPendingReactions() {
@@ -98,3 +122,10 @@ class TrackReactions @Inject constructor(
         const val TAG = "TrackReactions"
     }
 }
+
+/** A track dislike that can still be undone with [TrackReactions.undoDislike]. */
+class Dislike internal constructor(
+    val track: Track,
+    internal val wasLiked: Boolean,
+    internal val queue: DislikeUndo
+)

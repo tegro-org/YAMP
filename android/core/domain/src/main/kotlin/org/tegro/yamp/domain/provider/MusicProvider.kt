@@ -27,6 +27,9 @@ interface MusicProvider {
     val search: Search? get() = null
     val catalog: Catalog? get() = null
 
+    /** Creating playlists and adding tracks to them; null where the service doesn't allow it. */
+    val playlistEdit: PlaylistEdit? get() = null
+
     /** Paged lists of a library too big to load at once (Jellyfin, docs/phase-3-providers.md step 22). */
     val browse: Browse? get() = null
 
@@ -48,6 +51,15 @@ interface Library {
 
     /** [playlist]'s tracks in playlist order. */
     suspend fun playlistTracks(playlist: MediaRef): Outcome<List<Track>>
+}
+
+/** The account's playlists as something to add to (D84: only the tracks of this account). */
+interface PlaylistEdit {
+    /** Adds [tracks] to [playlist], skipping those already in it; how many were added. */
+    suspend fun add(playlist: MediaRef, tracks: List<Track>): Outcome<Int>
+
+    /** A new playlist holding [tracks]. */
+    suspend fun create(title: String, tracks: List<Track>): Outcome<Playlist>
 }
 
 /** What a query finds, per type, in the service's order; rows are short (the service's top hits). */

@@ -53,6 +53,9 @@ class YandexPlaylists @Inject constructor(private val repository: UserPlaylistsR
     /** Null when the playlist is gone. */
     suspend fun addTrack(ref: MediaRef, track: Track): AddTrackResult? = serviceOf(ref)?.let { repository.addTrack(it, track) }
 
+    /** Adds several tracks in one change; how many were new. */
+    suspend fun addTracks(ref: MediaRef, tracks: List<Track>): Int? = serviceOf(ref)?.let { repository.addTracks(it, tracks) }
+
     suspend fun removeTrack(ref: MediaRef, trackId: String): Boolean =
         serviceOf(ref)?.let { repository.removeTrack(it, trackId); true } ?: false
 

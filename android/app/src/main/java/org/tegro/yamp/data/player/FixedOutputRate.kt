@@ -12,29 +12,19 @@ import androidx.media3.exoplayer.audio.SilenceSkippingAudioProcessor
 import java.nio.ByteBuffer
 
 /**
- * "Fixed output format" (D69, F5). Every player's audio sink gets a [Resampler] in front of Media3's own processors;
- * while the switch is on it resamples to the device mixer's native rate. The system then no longer resamples, and
+ * Fixed output format (D69, F5; always on since 2026-11-18). Every player's audio sink gets a [Resampler] in front
+ * of Media3's own processors; it resamples to the device mixer's native rate. The system then no longer resamples, and
  * the audio output has the same format for every track and both players (44.1, 48 or 96 kHz sources alike). Output
  * stays 16-bit PCM; offload is never used.
  *
  * The target is read each time the sink configures its processors — Media3 resets processors when a player stops,
- * so the rate is re-applied on every configure rather than set once. A change of the switch reaches a player the
- * next time it configures a new track's format; a restart makes it apply to everything at once.
+ * so the rate is re-applied on every configure rather than set once.
  */
 @OptIn(UnstableApi::class)
 class FixedOutputRate(val mixerRateHz: Int) {
 
-    @Volatile
-    var enabled: Boolean = false
-        private set
-
-    /** The rate the sinks should produce now, or [SonicAudioProcessor.SAMPLE_RATE_NO_CHANGE] when off. */
-    val targetRateHz: Int
-        get() = if (enabled) mixerRateHz else SonicAudioProcessor.SAMPLE_RATE_NO_CHANGE
-
-    fun setEnabled(on: Boolean) {
-        enabled = on
-    }
+    /** The rate the sinks produce: the mixer's own. */
+    val targetRateHz: Int get() = mixerRateHz
 
     /** A sink for one player; call once per player. */
     fun buildSink(context: Context, enableFloatOutput: Boolean, enableAudioTrackPlaybackParams: Boolean): AudioSink =

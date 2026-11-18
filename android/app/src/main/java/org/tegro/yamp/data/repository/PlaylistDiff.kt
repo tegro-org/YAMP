@@ -24,6 +24,21 @@ internal object PlaylistDiff {
         )
     ).toString()
 
+    /** Inserts several tracks at [at] in one change, in the given order: (track id, album id). */
+    fun insertAll(at: Int, tracks: List<Pair<String, String>>): String = JsonArray(
+        listOf(
+            JsonObject(
+                mapOf(
+                    "op" to JsonPrimitive("insert"),
+                    "at" to JsonPrimitive(at),
+                    "tracks" to JsonArray(
+                        tracks.map { (id, album) -> JsonObject(mapOf("id" to JsonPrimitive(id), "albumId" to JsonPrimitive(album))) }
+                    )
+                )
+            )
+        )
+    ).toString()
+
     /** Removes the tracks at [positions]; the last ones go first so earlier positions stay valid. */
     fun delete(positions: Collection<Int>): String = JsonArray(
         positions.distinct().sortedDescending().map { at ->

@@ -76,18 +76,6 @@ class EqualizerAnnounceTest {
     }
 
     @Test
-    fun switchedOffSendsNeitherAndCanStillOpenLater() {
-        equalizer.announcing = false
-        equalizer.openOnce()
-        equalizer.close()
-        assertEquals(0, opened)
-        assertEquals(0, closed)
-        equalizer.announcing = true
-        equalizer.openOnce()
-        assertEquals(1, opened)
-    }
-
-    @Test
     fun withoutASessionNothingIsSent() {
         val none = SystemEqualizer(app, audioSessionId = 0)
         none.openOnce()

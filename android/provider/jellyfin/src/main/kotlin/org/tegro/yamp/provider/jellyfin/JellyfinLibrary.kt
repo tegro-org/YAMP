@@ -131,6 +131,38 @@ class JellyfinLibrary(
         Outcome.Err(errorOf(e))
     }
 
+    /**
+     * Appends [itemIds] to the playlist, skipping the ones already in it; how many were added. Playlist edits
+     * need the server: nothing is queued while it is away.
+     */
+    suspend fun addToPlaylist(playlistId: String, itemIds: List<String>): Outcome<Int> = edit {
+        val present = api.playlistItems(playlistId, userId, limit = PLAYLIST_CHECK_LIMIT).items.map { it.id }.toSet()
+        val wanted = itemIds.distinct().filter { it !in present }
+        if (wanted.isNotEmpty()) api.addToPlaylist(playlistId, wanted.joinToString(","), userId)
+        wanted.size
+    }
+
+    /** A new playlist with [itemIds]; the playlist as the library shows it. */
+    suspend fun createPlaylist(name: String, itemIds: List<String>): Outcome<Playlist> {
+        val created = edit { api.createPlaylist(CreatePlaylistDto(name.trim(), itemIds.distinct(), userId, AUDIO)).id }
+        return when (created) {
+            is Outcome.Ok -> playlist(created.value)
+            is Outcome.Err -> created
+        }
+    }
+
+    private suspend fun <T> edit(call: suspend () -> T): Outcome<T> = try {
+        val value = call()
+        reachableState.value = true
+        Outcome.Ok(value)
+    } catch (e: IOException) {
+        Outcome.Err(errorOf(e))
+    } catch (e: HttpException) {
+        Outcome.Err(errorOf(e))
+    } catch (e: SerializationException) {
+        Outcome.Err(errorOf(e))
+    }
+
     /** What a search found, in the neutral models. */
     data class SearchFound(val tracks: List<Track>, val artists: List<Artist>, val albums: List<Album>)
 
@@ -179,6 +211,7 @@ class JellyfinLibrary(
 
     companion object {
         const val PAGE_SIZE = 100
+        private const val PLAYLIST_CHECK_LIMIT = 5000
         private const val POPULAR_TRACKS = 10
         private const val SEARCH_TRACKS = 30
         private const val SEARCH_OTHERS = 10

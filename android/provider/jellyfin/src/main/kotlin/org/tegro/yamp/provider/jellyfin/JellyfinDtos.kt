@@ -105,3 +105,15 @@ data class PlaybackReportDto(
     @SerialName("EventName") val eventName: String?,
     @SerialName("PlaySessionId") val playSessionId: String?
 )
+
+/** `POST /Playlists`: no defaults — the client's Json drops default values. */
+@Serializable
+data class CreatePlaylistDto(
+    @SerialName("Name") val name: String,
+    @SerialName("Ids") val ids: List<String>,
+    @SerialName("UserId") val userId: String,
+    @SerialName("MediaType") val mediaType: String
+)
+
+@Serializable
+data class CreatePlaylistResultDto(@SerialName("Id") val id: String)

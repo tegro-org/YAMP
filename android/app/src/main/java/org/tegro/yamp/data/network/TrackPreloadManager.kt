@@ -31,8 +31,14 @@ class TrackPreloadManager @Inject constructor(
     /** The account a call is for: the one named, else the account context (docs/phase-2a-accounts.md §4). */
     private fun accountOf(account: AccountId?): AccountId? = account ?: accountContext.current()
 
-    /** Links are kept per account: one resolved for another account's subscription is never reused. */
-    private fun key(account: AccountId?, trackId: String) = "${accountOf(account)?.value ?: "none"}|$trackId"
+    /**
+     * Links are kept per account and quality: one resolved for another account's subscription is never reused,
+     * and neither is one of the other quality once the account's choice or the network's metered flag changes.
+     */
+    private fun key(account: AccountId?, trackId: String): String {
+        val forAccount = accountOf(account)
+        return "${forAccount?.value ?: "none"}|$trackId|${if (soundMode.compatibleFor(forAccount)) "c" else "b"}"
+    }
 
     private fun hasPlus(account: AccountId?): Boolean {
         val id = accountOf(account) ?: return false
@@ -92,7 +98,7 @@ class TrackPreloadManager @Inject constructor(
     suspend fun resolveForDownload(trackId: String, account: AccountId? = null): ResolvedStream? = withContext(Dispatchers.IO) {
         try {
             val forAccount = accountOf(account)
-            if (soundMode.isCompatible()) resolveCompatible(forAccount, trackId) else resolveBest(forAccount, trackId)
+            if (soundMode.isCompatible(forAccount)) resolveCompatible(forAccount, trackId) else resolveBest(forAccount, trackId)
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -395,7 +401,7 @@ class TrackPreloadManager @Inject constructor(
         val deferred = inFlightRequests.computeIfAbsent(key) {
             scope.async(Dispatchers.IO) {
                 try {
-                    val stream = (if (soundMode.isCompatible()) resolveCompatible(account, trackId) else resolveBest(account, trackId))
+                    val stream = (if (soundMode.isCompatible(accountOf(account))) resolveCompatible(account, trackId) else resolveBest(account, trackId))
                         ?: return@async null
                     resolvedUrls[key] = CachedTrackUrl(stream.url, System.currentTimeMillis())
                     qualities[trackId] = stream.quality

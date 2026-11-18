@@ -76,6 +76,28 @@ class NetworkMonitor @Inject constructor(
         }
     }.distinctUntilChanged()
 
+    /**
+     * Whether the network now in use is metered (mobile data, or a Wi-Fi the user marked as metered — the
+     * car's 4G router on a head unit): per-account quality picks its "metered" choice then.
+     */
+    fun isMetered(): Boolean = runCatching { connectivityManager.isActiveNetworkMetered }.getOrDefault(false)
+
+    /** [isMetered] as it changes: a move between Wi-Fi and mobile data, or the metered flag toggled. */
+    val meteredFlow: Flow<Boolean> = callbackFlow {
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
+                trySend(!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED))
+            }
+
+            override fun onLost(network: Network) {
+                trySend(isMetered())
+            }
+        }
+        trySend(isMetered())
+        val registered = runCatching { connectivityManager.registerDefaultNetworkCallback(callback) }.isSuccess
+        awaitClose { if (registered) runCatching { connectivityManager.unregisterNetworkCallback(callback) } }
+    }.distinctUntilChanged()
+
     suspend fun isYandexReachable(timeoutMs: Int = 1500): Boolean = withContext(Dispatchers.IO) {
         try {
             Socket().use { socket ->

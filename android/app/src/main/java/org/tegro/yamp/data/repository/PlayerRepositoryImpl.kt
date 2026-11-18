@@ -45,22 +45,9 @@ class PlayerRepositoryImpl(
     private val downloadManager: TrackDownloadManager,
     private val wakeLockHelper: org.tegro.yamp.data.player.PlaybackWakeLockHelper,
     private val journal: org.tegro.yamp.data.player.PlaybackJournal? = null,
-    /** "Keep audio streams open" (Settings → Playback) and the silent clip a parked player holds meanwhile. */
-    private val parking: ParkingPolicy? = null,
     /** Every byte of a cache key is on disk (D86): an unseekable stream seeks and recovers from that copy. */
     private val fullyCached: (String) -> Boolean = { false }
 ) : PlayerRepository, org.tegro.yamp.data.player.SessionPlayers {
-
-    /**
-     * Instead of being stopped, a player that finished (the outgoing side of a crossfade, a skipped track, a
-     * dropped standby) is paused on a one-second silent clip: ExoPlayer then keeps its AudioTrack for the next
-     * track of the same format, and a head unit that takes the sound whenever a new stream appears sees none.
-     */
-    class ParkingPolicy(val keep: Flow<Boolean>, val silenceUri: String, val bothRunning: Flow<Boolean> = flowOf(false))
-
-    private val idler = SilentIdler(parking?.silenceUri)
-
-    private fun isParked(player: ExoPlayer): Boolean = player.currentMediaItem?.mediaId == PARKED_ID
 
     private fun note(kind: org.tegro.yamp.data.player.PlaybackJournal.Kind, title: CharSequence? = null, detail: String? = null, valueMs: Long = 0L) {
         journal?.record(kind, title?.toString(), detail, valueMs)
@@ -251,24 +238,17 @@ class PlayerRepositoryImpl(
         setupPlayerListener(playerA, 0)
         setupPlayerListener(playerB, 1)
 
-        parking?.let { policy -> scope.launch { policy.keep.collect { idler.keepStreams = it } } }
-        // "Keep both players running" (see [SilentIdler]); switched off, an idling standby is stopped at its next use
-        parking?.let { policy -> scope.launch { policy.bothRunning.collect { on -> idler.enabled = on; if (on && activePlayer.isPlaying) idler.setRunning(standbyPlayer, true, outgoingPlayer) } } }
-
         scope.launch {
             while (isActive) {
                 val currentP = activePlayer
                 // The track that plays now, or the one a crossfade waits for: never the previous one, loaded to
                 // its end long ago — the cache would take the line from the new track at its start (upstream 1.14.3)
                 if (currentP.isPlaying || awaitingIncoming) bufferedAhead = aheadOf(currentP)
-                if (currentP.isPlaying && !isParked(currentP)) {
+                if (currentP.isPlaying) {
                     journal?.addPlayed(PROGRESS_INTERVAL_MS)
                     updateProgress(currentP)
                     watchForJump(currentP)
                     checkTransitionTriggers(currentP)
-                    // "Keep both players running": a standby stopped during a burst of skips starts idling once
-                    // things are calm again, not while every skip would rebuild it (F4)
-                    idleStandbyWhenCalm()
                     delay(PROGRESS_INTERVAL_MS)
                 } else {
                     delay(IDLE_INTERVAL_MS)
@@ -376,13 +356,6 @@ class PlayerRepositoryImpl(
                     }
                     return
                 }
-                if (player === idler.handover && mediaItem != null && mediaItem.mediaId != PARKED_ID) {
-                    // The queued track plays now: the silence before it goes; a crossfade's hold keeps it still
-                    idler.handedOver(player)
-                    if (awaitingIncoming && player === activePlayer) player.playWhenReady = false
-                    diagnostics.arrived(player)
-                    refreshPlaybackState()
-                }
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -475,10 +448,10 @@ class PlayerRepositoryImpl(
         // The other player sounding a real track (not the silent clip, not held at volume 0, not a crossfade's
         // tail) also counts as playing: the screen and the session never say "paused" over audible music (F2)
         val other = standbyPlayer
-        val otherAudible = other !== outgoingPlayer && other.isPlaying && !isParked(other) && other.volume > 0f
-        val wantsToPlay = otherAudible || awaitingSkipTarget || awaitingCopy || idler.handover === p || (p.playWhenReady || awaitingIncoming) &&
+        val otherAudible = other !== outgoingPlayer && other.isPlaying && other.volume > 0f
+        val wantsToPlay = otherAudible || awaitingSkipTarget || awaitingCopy || (p.playWhenReady || awaitingIncoming) &&
             p.playerError == null &&
-            p.mediaItemCount > 0 && !isParked(p) &&
+            p.mediaItemCount > 0 &&
             p.playbackState != Player.STATE_ENDED
         _isPlaying.value = wantsToPlay && !pausing
         // Only a real STATE_BUFFERING counts as loading: a paused-but-wants-to-play limbo (focus loss) is not a
@@ -486,10 +459,10 @@ class PlayerRepositoryImpl(
         // previous track still sounds, the next one loading is not a stall either (upstream 1.14.3).
         val outgoing = outgoingPlayer
         val tailSounds = awaitingIncoming && outgoing != null && outgoing.isPlaying
-        _isBuffering.value = awaitingSkipTarget || awaitingCopy || idler.handover === p && !tailSounds || wantsToPlay && !tailSounds && p.playbackState == Player.STATE_BUFFERING
+        _isBuffering.value = awaitingSkipTarget || awaitingCopy || wantsToPlay && !tailSounds && p.playbackState == Player.STATE_BUFFERING
         _soundingTrackId.value = when {
             outgoing != null && outgoing.isPlaying && (awaitingIncoming || !p.isPlaying) -> outgoing.currentMediaItem?.mediaId
-            p.isPlaying && !isParked(p) -> p.currentMediaItem?.mediaId
+            p.isPlaying -> p.currentMediaItem?.mediaId
             otherAudible -> other.currentMediaItem?.mediaId
             else -> null
         }
@@ -542,7 +515,6 @@ class PlayerRepositoryImpl(
             val standby = standbyPlayer
             setVolume(standby, 0f)
             preloadedTrackId = trackId
-            if (idler.preload(standby, item)) return@launch // behind its silence, held when it arrives
             releaseForReuse(standby)
             standby.playWhenReady = false
             standby.setMediaItem(item, 0L)
@@ -567,33 +539,62 @@ class PlayerRepositoryImpl(
      */
     private fun gaplessFits(): Boolean {
         val p = activePlayer
-        return (crossfadeDurationMs == 0L || fadeThenRise) && !idler.enabled && !idler.keepStreams && outgoingPlayer == null &&
-            !awaitingIncoming && p.playerError == null && !isParked(p) && p.mediaItemCount > 0 &&
+        return (crossfadeDurationMs == 0L || fadeThenRise) && outgoingPlayer == null &&
+            !awaitingIncoming && p.playerError == null && p.mediaItemCount > 0 &&
             p.currentMediaItem?.mediaId == _currentTrackId.value
     }
 
     /** A track queued behind the playing one is taken off again (the queue changed, a skip, crossfade switched on). */
     private fun dropQueuedOnActive() {
-        if (queuedOnActive == null) return
+        val queued = queuedOnActive ?: return
         queuedOnActive = null
         if (preloadedTrackId != null && standbyPlayer.currentMediaItem?.mediaId != preloadedTrackId) preloadedTrackId = null
         val p = activePlayer
+        // The player already moved on to it: nothing to take off (the current item is never touched)
+        if (p.currentMediaItem?.mediaId == queued) return
+        // Only the items after the current one go — no seek, the playing item plays on undisturbed
         val after = p.currentMediaItemIndex + 1
-        if (p.mediaItemCount > after) p.removeMediaItems(after, p.mediaItemCount)
+        if (p.mediaItemCount > after) {
+            droppedQueued = p.getMediaItemAt(after).takeIf { it.mediaId == queued }
+            p.removeMediaItems(after, p.mediaItemCount)
+        }
+    }
+
+    /** The track last taken off from behind the playing one: a skip to it starts it without a new link. */
+    private var droppedQueued: MediaItem? = null
+
+    /** [trackId] waits behind the playing item on the active player (gapless, F4): as ready as a warm standby. */
+    private fun isQueuedBehind(trackId: String): Boolean {
+        if (queuedOnActive != trackId) return false
+        val p = activePlayer
+        val next = p.currentMediaItemIndex + 1
+        return next < p.mediaItemCount && p.getMediaItemAt(next).mediaId == trackId
+    }
+
+    /**
+     * [old] goes fully silent before another player sounds: paused, at volume 0 (held there), stopped — which
+     * flushes what it still had buffered — and given a moment to drain. Its pause and the new player's start would
+     * otherwise reach the mixer in the same cycle, and under an effect that takes over the session's volume
+     * (Poweramp's DVC) the old track's last buffer is heard over the new one (the b109 ride: the pop on Next with
+     * "Fade then rise").
+     */
+    private suspend fun silenceForHandover(old: ExoPlayer) {
+        val wasSounding = old.playWhenReady && old.playbackState != Player.STATE_IDLE
+        old.pause()
+        setVolume(old, 0f)
+        volumeHeld[indexOf(old)] = true
+        old.stop()
+        if (!wasSounding) return
+        val since = SystemClock.elapsedRealtime()
+        while (old.playbackState != Player.STATE_IDLE && SystemClock.elapsedRealtime() - since < HANDOVER_STOP_MAX_MS) delay(WAIT_STEP_MS)
+        delay(HANDOVER_SETTLE_MS)
     }
 
     /** [player] moved on by itself to [arrivedId], the track queued behind the playing one (F4). */
     private fun isGaplessArrival(player: ExoPlayer, arrivedId: String?): Boolean =
         arrivedId != null && arrivedId == queuedOnActive && player === activePlayer && outgoingPlayer == null
 
-    /** "Keep both players running": an empty standby starts idling on the silence, once no track change runs (F4). */
-    private fun idleStandbyWhenCalm() {
-        if (!idler.enabled || inTransition || !calm()) return
-        val standby = standbyPlayer
-        if (standby.mediaItemCount == 0) idler.setRunning(standby, true, null)
-    }
-
-    /** No track change for [SETTLE_MS] and none running: idling or parking a player costs no rebuild in a burst. */
+    /** No track change for [SETTLE_MS] and none running: a burst of skips is over (no preload in a burst, F4). */
     private fun calm(): Boolean =
         SystemClock.elapsedRealtime() - lastStartAt >= SETTLE_MS && skipFading == null && !awaitingSkipTarget
 
@@ -618,7 +619,15 @@ class PlayerRepositoryImpl(
             }
             // A warm standby already holds this track: its link is in hand. The engine never resolves (D74): what
             // it plays is the warm standby or the stream the controller resolved
-            val warmUri = standbyPlayer.currentMediaItem?.localConfiguration?.uri?.toString()?.takeIf { isWarm(trackId) }
+            val warmUri = standbyPlayer.currentMediaItem?.localConfiguration?.uri?.toString()?.takeIf { isStandbyWarm(trackId) }
+            // Queued behind the playing track and taken off by the skip: its item still holds the link
+            val queuedItem = if (isQueuedBehind(trackId)) activePlayer.getMediaItemAt(activePlayer.currentMediaItemIndex + 1) else droppedQueued
+            val dropped = queuedItem?.takeIf { it.mediaId == trackId && warmUri == null && stream?.uri.isNullOrBlank() }
+            droppedQueued = null
+            if (dropped != null) {
+                startTransition(dropped, crossfade, startPositionMs, pickAtMs)
+                return@launch
+            }
             val playUri = warmUri ?: stream?.uri?.takeIf { it.isNotBlank() }
             if (playUri == null) {
                 Log.w(TAG, "playUri is blank for track $trackId")
@@ -641,7 +650,13 @@ class PlayerRepositoryImpl(
         _warmTrackId.value = preloadedTrackId?.takeIf { isWarm(it) }
     }
 
-    override fun isWarm(trackId: String): Boolean = gaplessArrived == trackId || standbyPlayer.let {
+    /**
+     * Ready to sound on a manual Next: the gapless arrival, a warm standby, or a track queued behind the playing one
+     * ("Fade then rise" always queues it there) — so Next takes the skip path, never a pick (the b109 pop).
+     */
+    override fun isWarm(trackId: String): Boolean = gaplessArrived == trackId || isStandbyWarm(trackId) || isQueuedBehind(trackId)
+
+    private fun isStandbyWarm(trackId: String): Boolean = standbyPlayer.let {
         preloadedTrackId == trackId && it.currentMediaItem?.mediaId == trackId && it.playbackState == Player.STATE_READY && it.playerError == null
     }
 
@@ -683,7 +698,7 @@ class PlayerRepositoryImpl(
         _bufferedProgress.value = startPositionMs
         stalledSince = null
         val current = activePlayer
-        val isCurrentAudible = current.isPlaying && current.playerError == null && !isParked(current)
+        val isCurrentAudible = current.isPlaying && current.playerError == null
         pickAt = if (isCurrentAudible) pickAtMs else 0L
         // A pick writes its START once it is ready, with the wait
         if (pickAt == 0L) note(org.tegro.yamp.data.player.PlaybackJournal.Kind.START, item.mediaMetadata.title, if (crossfade) "crossfade" else "cut", startPositionMs)
@@ -695,15 +710,10 @@ class PlayerRepositoryImpl(
             incoming.playbackState != Player.STATE_IDLE
         preloadedTrackId = null
 
-        // An idling standby (both players running) takes a track from the start behind its silence; a start
-        // mid-track would need a seek, which drops the AudioTrack anyway, so it is loaded as usual
-        val behindSilence = !reusePreloaded && startPositionMs == 0L && (idler.isIdling(incoming) || idler.isQueued(incoming, trackId))
         if (reusePreloaded) {
             // A kept player may still hold this track where it was left (played earlier, then skipped away):
             // a skip back to it starts from the asked position (0 unless a session restore), not from there
             if (kotlin.math.abs(incoming.currentPosition - startPositionMs) > REUSE_POSITION_SLACK_MS) incoming.seekTo(startPositionMs)
-        } else if (behindSilence) {
-            idler.queueBehind(incoming, item)
         } else {
             releaseForReuse(incoming)
             incoming.setMediaItem(item, startPositionMs)
@@ -721,7 +731,8 @@ class PlayerRepositoryImpl(
         if (skipTail != null) {
             cancelSkipFade()
             if (outgoingPlayer === skipTail) outgoingPlayer = null
-            skipTail.pause()
+            // A ready track would sound in the same mixer cycle as the pause: the tail drains first
+            if (incoming.playbackState == Player.STATE_READY) silenceForHandover(skipTail) else skipTail.pause()
             clearPlayer(skipTail)
             restoreVolumeLater(skipTail)
         }
@@ -736,13 +747,18 @@ class PlayerRepositoryImpl(
             // Nothing of the new track is in hand yet: the cache waits until it has its own buffer
             awaitingIncoming = true
             bufferedAhead = 0L
-            // Behind silence it keeps playing (at volume 0) until the track arrives, which then holds it
-            if (!behindSilence) incoming.playWhenReady = false
+            incoming.playWhenReady = false
             crossfadeJob = scope.launch { runCrossfade(current, incoming) }
         } else {
-            // A cut: the old track is silent before the new one sounds (no overlap, see above)
-            if (current.playWhenReady) current.pause()
-            setVolume(current, 1f)
+            // A cut: the old track is silent before the new one sounds (no overlap, see above). A ready new track
+            // would sound in the same mixer cycle as the pause, so the old one is stopped and drains first; its
+            // volume comes back only for its next item
+            if (isCurrentAudible && incoming.playbackState == Player.STATE_READY) {
+                silenceForHandover(current)
+            } else if (current.playWhenReady) {
+                current.pause()
+            }
+            restoreVolumeLater(current)
             val riseMs = crossfadeDurationMs / 2
             if (rise && !isCurrentAudible && riseMs > 0L) {
                 setVolume(incoming, 0f)
@@ -805,9 +821,6 @@ class PlayerRepositoryImpl(
         // A newer start took over (or the pick was given up): this transition no longer owns the players, and
         // touching them — clearing "the outgoing one", reverting — would stop the track that plays now (F2)
         fun stillMine() = outgoingPlayer === outgoing && activePlayer === incoming
-        // Queued behind silence: the silence plays out first (at most its length)
-        while (stillMine() && idler.handover === incoming && SystemClock.elapsedRealtime() - waitStart < SILENCE_HANDOVER_MAX_MS) delay(WAIT_STEP_MS)
-        if (stillMine() && idler.handover === incoming) loadPastSilence(incoming)
         // Slowness never gives a track up (D67): it keeps loading while bytes arrive. Only a load that brings no
         // data for NO_DATA_TIMEOUT_MS ends the wait — and then playback pauses, it does not go back or skip.
         val loading = org.tegro.yamp.data.player.LoadProgress(SystemClock.elapsedRealtime(), incoming.bufferedPosition)
@@ -846,7 +859,8 @@ class PlayerRepositoryImpl(
             pickAt = 0L
             fade(outgoing, from = logicalVolume[indexOf(outgoing)], to = 0f, durationMs = SKIP_FADE_MS)
             if (!stillMine()) return
-            outgoing.pause()
+            silenceForHandover(outgoing)
+            if (!stillMine()) return
             setVolume(incoming, 1f)
             incoming.playWhenReady = true
             refreshPlaybackState()
@@ -858,8 +872,9 @@ class PlayerRepositoryImpl(
             if (!late) {
                 fade(outgoing, from = logicalVolume[indexOf(outgoing)], to = 0f, durationMs = half)
                 if (!stillMine()) return
-                outgoing.pause()
             }
+            silenceForHandover(outgoing)
+            if (!stillMine()) return
             awaitingIncoming = false
             setVolume(incoming, 0f)
             incoming.playWhenReady = true
@@ -879,20 +894,6 @@ class PlayerRepositoryImpl(
         restoreVolumeLater(outgoing)
         setVolume(incoming, 1f)
         wakeLockHelper.releaseTransitionLock()
-    }
-
-    /**
-     * The silence on [incoming] did not hand over to the track queued behind it in time: the track is loaded the
-     * usual way instead. The silent clip must never count as the track — it would "start" with no title and nothing
-     * would play (b83: a pick after quick skips).
-     */
-    private fun loadPastSilence(incoming: ExoPlayer) {
-        val item = (incoming.mediaItemCount - 1 downTo 0).map { incoming.getMediaItemAt(it) }.firstOrNull { it.mediaId != PARKED_ID } ?: return
-        note(org.tegro.yamp.data.player.PlaybackJournal.Kind.ERROR, item.mediaMetadata.title, "handover from silence timed out, loading the track directly")
-        releaseForReuse(incoming)
-        incoming.setMediaItem(item, 0L)
-        incoming.prepare()
-        incoming.playWhenReady = false
     }
 
     private suspend fun crossfadeTail(outgoing: ExoPlayer, incoming: ExoPlayer, late: Boolean, waitStart: Long) {
@@ -1008,6 +1009,9 @@ class PlayerRepositoryImpl(
         endRamp()
         diagnostics.skipRequested()
         fadeJob?.cancel()
+        // "Fade then rise" near the end: its own fade-out gives way to the skip fade
+        gaplessFadeJob?.cancel()
+        gaplessFadeJob = null
         lastStartAt = SystemClock.elapsedRealtime()
         // The fading track must not play on into a track queued behind it (F4); the controller starts the target
         dropQueuedOnActive()
@@ -1122,9 +1126,7 @@ class PlayerRepositoryImpl(
         skipTargetArrived()
         cancelSkipFade()
         if (ramping) finishCrossfadeNow(restoreActiveVolume = false) else finishCrossfadeNow(restoreActiveVolume = true)
-        idler.handover = null
         activePlayer.pause()
-        idler.setRunning(standbyPlayer, false, outgoingPlayer)
         refreshPlaybackState()
     }
 
@@ -1146,7 +1148,6 @@ class PlayerRepositoryImpl(
                 delay(FADE_STEP_MS)
             }
             player.pause()
-            idler.setRunning(standbyPlayer, false, outgoingPlayer)
             setVolume(player, 1f)
             refreshPlaybackState()
         }
@@ -1154,7 +1155,7 @@ class PlayerRepositoryImpl(
 
     override fun resume(): Boolean {
         val player = activePlayer
-        if (player.mediaItemCount == 0 || isParked(player)) return false
+        if (player.mediaItemCount == 0) return false
         if (player.playerError != null || player.playbackState == Player.STATE_IDLE) {
             // The stream is dead (e.g. the signed URL expired during a long pause): let the controller re-resolve it.
             val trackId = _currentTrackId.value ?: return false
@@ -1167,7 +1168,6 @@ class PlayerRepositoryImpl(
         }
         setVolume(player, 1f)
         player.play()
-        idler.setRunning(standbyPlayer, true, outgoingPlayer)
         refreshPlaybackState()
         return true
     }
@@ -1182,7 +1182,7 @@ class PlayerRepositoryImpl(
         cancelSkipFade()
         finishCrossfadeNow(restoreActiveVolume = true)
         for (p in listOf(playerA, playerB)) {
-            clearPlayer(p, idle = false)
+            clearPlayer(p)
             restoreVolumeLater(p)
         }
         preloadedTrackId = null
@@ -1237,12 +1237,12 @@ class PlayerRepositoryImpl(
 
     /** The playing item can seek: anything but a progressive network stream sent with no length. */
     private fun seekable(p: ExoPlayer): Boolean =
-        p.isCurrentMediaItemSeekable || p.currentMediaItem?.cacheKey() == null || isParked(p) || p.playbackState == Player.STATE_IDLE
+        p.isCurrentMediaItemSeekable || p.currentMediaItem?.cacheKey() == null || p.playbackState == Player.STATE_IDLE
 
     /** Reports, once per item, a network stream that turned out unseekable: the controller writes it to disk. */
     private fun maybeReportUnseekable(p: ExoPlayer) {
         val item = p.currentMediaItem ?: return
-        val isNetworkStream = !isParked(p) && item.cacheKey() != null
+        val isNetworkStream = item.cacheKey() != null
         if (!isNetworkStream || p.isCurrentMediaItemSeekable || unseekableReported == item.mediaId) return
         unseekableReported = item.mediaId
         note(org.tegro.yamp.data.player.PlaybackJournal.Kind.CACHE, item.mediaMetadata.title, "stream not seekable (no length): writing the whole file to disk")
@@ -1256,7 +1256,7 @@ class PlayerRepositoryImpl(
     private fun watchForJump(p: ExoPlayer) {
         val id = p.currentMediaItem?.mediaId
         val position = p.currentPosition
-        if (awaitingCopy || id == null || isParked(p)) return
+        if (awaitingCopy || id == null) return
         val recentSeek = SystemClock.elapsedRealtime() - lastSeekTimestamp < JUMP_SEEK_GRACE_MS || rampKind == Ramp.SEEK_OUT || rampKind == Ramp.SEEK_IN
         val last = lastSoundedAt
         val fellToStart = last >= JUMP_FROM_MIN_MS && position <= JUMP_TO_MAX_MS && last - position >= JUMP_FROM_MIN_MS
@@ -1387,7 +1387,7 @@ class PlayerRepositoryImpl(
         val x = crossfadeDurationMs
         val p = activePlayer
         if (pausing) return
-        if (x <= 0L || !p.isPlaying || isParked(p)) {
+        if (x <= 0L || !p.isPlaying) {
             pause()
             return
         }
@@ -1412,9 +1412,7 @@ class PlayerRepositoryImpl(
             rampJob = null
             pausing = false
             if (p !== activePlayer) return@launch
-            idler.handover = null
             p.pause() // stays at 0: a resume rises from silence, a plain one sets full volume first
-            idler.setRunning(standbyPlayer, false, outgoingPlayer)
             refreshPlaybackState()
         }
     }
@@ -1432,7 +1430,7 @@ class PlayerRepositoryImpl(
             refreshPlaybackState()
             return true
         }
-        if (p.mediaItemCount == 0 || isParked(p)) return false
+        if (p.mediaItemCount == 0) return false
         if (p.playerError != null || p.playbackState == Player.STATE_IDLE || p.playbackState == Player.STATE_ENDED) {
             riseNextStart = true // the restart the controller makes rises too
             return resume()
@@ -1440,7 +1438,6 @@ class PlayerRepositoryImpl(
         endRamp()
         setVolume(p, 0f)
         p.play()
-        idler.setRunning(standbyPlayer, true, outgoingPlayer)
         refreshPlaybackState()
         riseTo(p, from = 0f, durationMs = x / 2, what = "play")
         return true
@@ -1533,30 +1530,16 @@ class PlayerRepositoryImpl(
 
     private fun indexOf(player: ExoPlayer) = if (player === playerA) 0 else 1
 
-    /**
-     * Stops and empties [player]; a pending audio-session change is applied while it holds nothing.
-     * With both players running and the other one playing, it idles on silence instead ([SilentIdler]) — that
-     * setting wins over "keep audio streams", which only parks a player paused; [idle] false (a full stop)
-     * never idles.
-     */
-    private fun clearPlayer(player: ExoPlayer, idle: Boolean = true) {
-        if (idler.handover === player) idler.handover = null
-        // In a burst of skips a silent clip would be one more AudioTrack per skip (Media3 opens a new one for every
-        // item set): the player just stops, and an idling standby comes back once things are calm (F4)
-        val calm = calm()
-        val idleNow = calm && idle && idler.enabled && (if (player === playerA) playerB else playerA).let { it.playWhenReady && it.mediaItemCount > 0 }
-        // Looping the silence until a track is queued behind it, or parked on it, or stopped
-        val keptOnSilence = idleNow && idler.idle(player) || calm && idler.park(player)
-        if (!keptOnSilence) {
-            player.stop()
-            player.clearMediaItems()
-        }
+    /** Stops and empties [player]. */
+    private fun clearPlayer(player: ExoPlayer) {
+        player.stop()
+        player.clearMediaItems()
     }
 
-    /** Before a player gets a new item: a stopped player is stopped again (harmless); a parked one is left as is. */
+    /** Before a player gets a new item: a stopped player is stopped again (harmless). */
     private fun releaseForReuse(player: ExoPlayer) {
-        idler.forget(player)
-        if (!(idler.keepStreams && isParked(player))) player.stop()
+        player.repeatMode = Player.REPEAT_MODE_OFF
+        player.stop()
     }
 
     private fun setVolume(player: ExoPlayer, volume: Float) {
@@ -1588,12 +1571,14 @@ class PlayerRepositoryImpl(
         private const val WAIT_STEP_MS = 20L
         /** A cleared player stays at its faded volume this long, while its AudioTrack drains (no pop). */
         private const val VOLUME_HOLD_MS = 500L
+        /** How long a handover waits for the old player to report it stopped. */
+        private const val HANDOVER_STOP_MAX_MS = 300L
+        /** And then this long for its AudioTrack to drain before the next player sounds (the b109 pop). */
+        const val HANDOVER_SETTLE_MS = 40L
         /** A preloaded player this close to the asked start position is used as is (no seek, no AudioTrack drop). */
         private const val REUSE_POSITION_SLACK_MS = 1_000L
         /** A track that brings no data for this long stops waiting: playback pauses (D67). */
         const val NO_DATA_TIMEOUT_MS = 20_000L
-        /** The silent clip ahead of a queued track plays out in at most this long. */
-        const val SILENCE_HANDOVER_MAX_MS = 8_000L
         /** How long a ready track waits for [CROSSFADE_HEADROOM_MS] while the previous one still sounds. */
         private const val HEADROOM_MAX_WAIT_MS = 8_000L
         const val DUCK_VOLUME = 0.2f
@@ -1605,9 +1590,7 @@ class PlayerRepositoryImpl(
         const val SKIP_FADE_MS = 150L
         /** How long after a skip the engine reports "playing, loading" with nothing started. */
         const val SKIP_WAIT_MAX_MS = 30_000L
-        /** The media id of the silent clip a parked player holds (never a track id). */
-        const val PARKED_ID = "~parked"
-        /** No track change for this long counts as calm: a player set aside may idle or park on the silent clip (F4). */
+        /** No track change for this long counts as calm: the next track may be preloaded again (F4). */
         const val SETTLE_MS = 3_000L
         private const val FADE_STEP_MS = 50L
         /** A play / seek rise waits this long at most for the player to sound (it may still be loading). */

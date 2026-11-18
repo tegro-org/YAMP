@@ -19,6 +19,8 @@ internal open class FakeJellyfinApi : JellyfinApi {
     override suspend fun playlistItems(playlistId: String, userId: String, startIndex: Int?, limit: Int?, fields: String?): ItemsResultDto =
         ItemsResultDto()
 
+    override suspend fun createPlaylist(body: CreatePlaylistDto): CreatePlaylistResultDto = unused()
+    override suspend fun addToPlaylist(playlistId: String, ids: String, userId: String): Unit = unused()
     override suspend fun reportPlaying(body: PlaybackReportDto): Unit = unused()
     override suspend fun reportProgress(body: PlaybackReportDto): Unit = unused()
     override suspend fun reportStopped(body: PlaybackReportDto): Unit = unused()

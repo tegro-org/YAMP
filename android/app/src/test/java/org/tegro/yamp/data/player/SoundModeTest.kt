@@ -100,7 +100,7 @@ class SoundModeTest {
     @Test
     fun aDeviceChecksItsDecodersOnce() = runBlocking {
         var checks = 0
-        val mode = SoundMode(flowOf(null), {}) { checks++; true }
+        val mode = SoundMode(flowOf(null), {}, hasFlacDecoder = { checks++; true })
         repeat(3) { mode.isCompatible() }
         assertEquals(1, checks)
     }

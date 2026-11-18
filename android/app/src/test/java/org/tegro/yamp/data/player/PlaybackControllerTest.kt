@@ -987,6 +987,37 @@ class PlaybackControllerTest {
     }
 
     @Test
+    fun undoingADislikeOfAQueuedTrackPutsItBackInItsPlace() {
+        val controller = controller()
+        controller.playing("1", playlist("1", "2", "3", "4"))
+
+        val undo = controller.onTrackDisliked("3")
+        controller.settle()
+        assertEquals(listOf("1", "2", "4"), controller.currentPlaylist.value.ids)
+
+        controller.undoDislike(undo)
+        controller.settle()
+        assertEquals(listOf("1", "2", "3", "4"), controller.currentPlaylist.value.ids)
+        assertEquals("the playing track is not touched", "1", controller.currentTrack.value?.idString)
+    }
+
+    @Test
+    fun undoingADislikeOfThePlayingTrackBringsItBackAndPlaysItAgain() {
+        val controller = controller()
+        controller.playing("2", playlist("1", "2", "3", "4"))
+
+        val undo = controller.onTrackDisliked("2")
+        controller.settle()
+        assertEquals("the next one plays", "3", controller.currentTrack.value?.idString)
+        assertEquals(listOf("1", "3", "4"), controller.currentPlaylist.value.ids)
+
+        controller.undoDislike(undo)
+        controller.settle()
+        assertEquals("back in its place", listOf("1", "2", "3", "4"), controller.currentPlaylist.value.ids)
+        assertEquals("and current again", "2", controller.currentTrack.value?.idString)
+    }
+
+    @Test
     fun enqueueNextPutsTheTrackRightAfterTheCurrentOne() {
         val controller = controller()
         controller.playing("1", playlist("1", "2", "3"))

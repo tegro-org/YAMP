@@ -172,6 +172,31 @@ class UserPlaylistsRepository @Inject constructor(
         AddTrackResult.ADDED
     }
 
+    /**
+     * Adds [tracks] (an album, an artist's selection) to the top of [playlist] in one change, in their order; the
+     * ones already there are skipped. Returns how many were added.
+     */
+    suspend fun addTracks(playlist: UserPlaylistDto, tracks: List<org.tegro.yamp.domain.media.Track>): Int = mutex.withLock {
+        val folder = activeFolder
+        val api = apiOf(folder)
+        val uid = libraryRepository.resolveUid(folder)
+        val kind = playlist.kindString
+        val fresh = api.getUserPlaylist(uid, kind).result ?: error("Empty playlist response")
+        val present = fresh.tracks.map { it.trackId }.toSet()
+        val wanted = tracks.map { it.toYandexTrack() }.distinctBy { it.idString }.filter { it.idString !in present }
+        if (wanted.isEmpty()) return@withLock 0
+        val missingAlbums = wanted.filter { it.albumId == null }.map { it.idString }
+        val fetched = if (missingAlbums.isEmpty()) emptyMap()
+        else libraryRepository.fetchMetadata(missingAlbums, api).associate { it.idString to it.albumId }
+        val pairs = wanted.mapNotNull { t -> (t.albumId ?: fetched[t.idString])?.let { t.idString to it } }
+        if (pairs.isEmpty()) return@withLock 0
+        val before = resolveTracks(folder, fresh)
+        val added = wanted.filter { t -> pairs.any { it.first == t.idString } }
+        val changed = api.changePlaylist(uid, kind, PlaylistDiff.insertAll(0, pairs), fresh.revision).result
+        applyTrackChange(folder, fresh, changed, added + before)
+        pairs.size
+    }
+
     /** Removes every occurrence of [trackId] from [playlist]. */
     suspend fun removeTrack(playlist: UserPlaylistDto, trackId: String): Unit = mutex.withLock {
         val folder = activeFolder

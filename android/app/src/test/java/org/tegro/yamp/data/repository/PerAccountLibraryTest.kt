@@ -58,6 +58,9 @@ class PerAccountLibraryTest {
             path == "/users/101/likes/tracks" -> respond(chain, 200, likes("1", "First liked"))
             path == "/users/202/likes/tracks" -> respond(chain, 200, likes("2", "Second liked"))
             path.endsWith("/likes/tracks/add-multiple") -> respond(chain, 200, """{"result":{"revision":2}}""")
+            path.endsWith("/likes/tracks/remove") -> respond(chain, 200, """{"result":{"revision":3}}""")
+            path.endsWith("/dislikes/tracks/add-multiple") -> respond(chain, 200, """{"result":{"revision":4}}""")
+            path.endsWith("/dislikes/tracks/remove") -> respond(chain, 200, """{"result":{"revision":5}}""")
             path == "/users/101/playlists/list" -> respond(chain, 200, playlists("11", "First's playlist"))
             path == "/users/202/playlists/list" -> respond(chain, 200, playlists("22", "Second's playlist"))
             else -> respond(chain, 404, """{"error":{"name":"not-found"}}""")
@@ -149,6 +152,27 @@ class PerAccountLibraryTest {
         assertEquals(setOf("1"), library.likedIds.value)
         showAccount(second)
         assertEquals(setOf("9", "2"), library.likedIds.value)
+    }
+
+    @Test
+    fun undoingADislikeOfALikedTrackTakesItOffTheDislikesAndLikesItAgain() = runBlocking {
+        showAccount(first)
+        library.syncLikes()
+        val track = TrackDetailsDto(id = kotlinx.serialization.json.JsonPrimitive("1"))
+
+        val wasLiked = library.dislike(track)
+        assertTrue(wasLiked)
+        assertEquals(emptySet<String>(), library.likedIds.value)
+
+        library.undoDislike(track, wasLiked)
+        assertEquals("liked again at once", setOf("1"), library.likedIds.value)
+        // The server calls go out in order: the dislike first, its removal after
+        val deadline = System.currentTimeMillis() + 5_000
+        while (requests.none { it.startsWith("POST /users/101/dislikes/tracks/remove") } && System.currentTimeMillis() < deadline) Thread.sleep(20)
+        val dislike = requests.indexOfFirst { it.startsWith("POST /users/101/dislikes/tracks/add-multiple") }
+        val removal = requests.indexOfFirst { it.startsWith("POST /users/101/dislikes/tracks/remove") }
+        assertTrue("the dislike went out", dislike >= 0)
+        assertTrue("and was taken back after it: $requests", removal > dislike)
     }
 
     @Test

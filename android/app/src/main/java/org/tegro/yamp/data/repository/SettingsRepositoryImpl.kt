@@ -115,6 +115,17 @@ class SettingsRepositoryImpl @Inject constructor(
         context.dataStore.edit { prefs -> prefs[COMPATIBLE_SOUND_KEY] = enabled }
     }
 
+    override val accountQualities: Flow<Map<String, Boolean>> = context.dataStore.data.map { prefs ->
+        prefs.asMap().entries
+            .filter { (key, value) -> key.name.startsWith("quality|") && value is Boolean }
+            .associate { (key, value) -> key.name to (value as Boolean) }
+    }
+
+    override suspend fun setAccountQuality(account: String, metered: Boolean, compatible: Boolean) {
+        val key = booleanPreferencesKey(SettingsRepository.accountQualityKey(account, metered))
+        context.dataStore.edit { prefs -> prefs[key] = compatible }
+    }
+
     override val streamCacheMb: Flow<Int> = context.dataStore.data.map { prefs ->
         prefs[STREAM_CACHE_MB_KEY] ?: SettingsRepository.DEFAULT_STREAM_CACHE_MB
     }
@@ -196,35 +207,33 @@ class SettingsRepositoryImpl @Inject constructor(
     override val downloadsOnSdCard = sdCardPref.first
     override suspend fun setDownloadsOnSdCard(enabled: Boolean) = sdCardPref.second(enabled)
 
-    // "separate_audio_sessions" (D45) is retired by D70: a stored value is simply never read again
+    // Retired switches, stored values simply never read again: "separate_audio_sessions" (D45, by D70);
+    // "announce_equalizer", "keep_audio_streams", "keep_both_players_running", "fixed_output_format" (2026-11-18:
+    // always announce, never park or idle on silence, always the mixer rate)
 
-    private val announcePref = bool("announce_equalizer", true)
-    override val announceEqualizer = announcePref.first
-    override suspend fun setAnnounceEqualizer(enabled: Boolean) = announcePref.second(enabled)
-
-    private val keepStreamsPref = bool("keep_audio_streams", false)
-    override val keepAudioStreams = keepStreamsPref.first
-    override suspend fun setKeepAudioStreams(enabled: Boolean) = keepStreamsPref.second(enabled)
-
-    private val duckAnnouncementsPref = bool("duck_for_announcements", true)
+    private val duckAnnouncementsPref = bool("duck_for_announcements", false)
     override val duckForAnnouncements = duckAnnouncementsPref.first
     override suspend fun setDuckForAnnouncements(enabled: Boolean) = duckAnnouncementsPref.second(enabled)
 
-    private val resumeWhenQuietPref = bool("resume_when_quiet", true)
+    private val resumeWhenQuietPref = bool("resume_when_quiet", false)
     override val resumeWhenQuiet = resumeWhenQuietPref.first
     override suspend fun setResumeWhenQuiet(enabled: Boolean) = resumeWhenQuietPref.second(enabled)
-
-    private val bothPlayersPref = bool("keep_both_players_running", false)
-    override val keepBothPlayersRunning = bothPlayersPref.first
-    override suspend fun setKeepBothPlayersRunning(enabled: Boolean) = bothPlayersPref.second(enabled)
-
-    private val fixedOutputPref = bool("fixed_output_format", false)
-    override val fixedOutputFormat = fixedOutputPref.first
-    override suspend fun setFixedOutputFormat(enabled: Boolean) = fixedOutputPref.second(enabled)
 
     private val fadeThenRisePref = bool("transition_fade_then_rise", false)
     override val transitionFadeThenRise = fadeThenRisePref.first
     override suspend fun setTransitionFadeThenRise(enabled: Boolean) = fadeThenRisePref.second(enabled)
+
+    private val playerCarLayoutPref = bool("player_car_layout", false)
+    override val playerCarLayout = playerCarLayoutPref.first
+    override suspend fun setPlayerCarLayout(enabled: Boolean) = playerCarLayoutPref.second(enabled)
+
+    private val playerNextThreePref = bool("player_next_three", false)
+    override val playerNextThree = playerNextThreePref.first
+    override suspend fun setPlayerNextThree(enabled: Boolean) = playerNextThreePref.second(enabled)
+
+    private val likeGesturesPref = bool("like_gestures", false)
+    override val likeGestures = likeGesturesPref.first
+    override suspend fun setLikeGestures(enabled: Boolean) = likeGesturesPref.second(enabled)
 
     private val groupQueuesPref = bool("group_queues_by_account", true)
     override val groupQueuesByAccount = groupQueuesPref.first

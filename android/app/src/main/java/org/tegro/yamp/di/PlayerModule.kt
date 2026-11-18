@@ -133,7 +133,6 @@ object PlayerModule {
         wakeLockHelper: org.tegro.yamp.data.player.PlaybackWakeLockHelper,
         equalizer: org.tegro.yamp.data.player.SystemEqualizer,
         card: org.tegro.yamp.data.download.CardStorage,
-        settings: org.tegro.yamp.domain.repository.SettingsRepository,
         journal: org.tegro.yamp.data.player.PlaybackJournal,
         streamCache: StreamCache
     ): org.tegro.yamp.data.repository.PlayerRepositoryImpl {
@@ -141,13 +140,8 @@ object PlayerModule {
         // or swap keeps it, so an equalizer app never sees the session close. The service announces it once.
         val playerA = createConfiguredExoPlayer(context, equalizer.audioSessionId, card, fixedOutput, streamCache)
         val playerB = createConfiguredExoPlayer(context, equalizer.audioSessionId, card, fixedOutput, streamCache)
-        val parking = org.tegro.yamp.data.repository.PlayerRepositoryImpl.ParkingPolicy(
-            keep = settings.keepAudioStreams,
-            silenceUri = "android.resource://${context.packageName}/${org.tegro.yamp.R.raw.silence}",
-            bothRunning = settings.keepBothPlayersRunning
-        )
         return org.tegro.yamp.data.repository.PlayerRepositoryImpl(
-            playerA, playerB, downloadManager, wakeLockHelper, journal, parking,
+            playerA, playerB, downloadManager, wakeLockHelper, journal,
             fullyCached = { key -> streamCache.enabled && streamCache.isComplete(key) }
         )
     }

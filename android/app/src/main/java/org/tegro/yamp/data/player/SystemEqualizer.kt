@@ -35,10 +35,6 @@ class SystemEqualizer(
     constructor(@ApplicationContext context: Context, log: org.tegro.yamp.data.diagnostics.DiagnosticLog) :
         this(context, newSessionId(context), log = log)
 
-    /** False: no broadcast at all (Settings → Playback, see [org.tegro.yamp.domain.repository.SettingsRepository.announceEqualizer]). */
-    @Volatile
-    var announcing: Boolean = true
-
     /** The OPEN went out and no CLOSE yet: this playback-service lifetime has announced its session. */
     private var opened = false
 
@@ -56,15 +52,10 @@ class SystemEqualizer(
 
     /**
      * Tells equalizer apps the session exists — once per service lifetime; later calls do nothing until [close].
-     * With announcing switched off nothing is sent (and a later call, switched on again, still can open it).
      */
     @Synchronized
     fun openOnce() {
         if (audioSessionId <= 0 || opened) return
-        if (!announcing) {
-            log?.event("EQ", "session $audioSessionId not opened (announcing switched off)")
-            return
-        }
         opened = true
         log?.event("EQ", "session $audioSessionId opened")
         runCatching {

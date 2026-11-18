@@ -13,6 +13,7 @@ import org.tegro.yamp.domain.provider.BrowseCounts
 import org.tegro.yamp.domain.provider.Catalog
 import org.tegro.yamp.domain.provider.Library
 import org.tegro.yamp.domain.provider.MusicProvider
+import org.tegro.yamp.domain.provider.PlaylistEdit
 import org.tegro.yamp.domain.provider.Outcome
 import org.tegro.yamp.domain.provider.Page
 import org.tegro.yamp.domain.provider.ProviderError
@@ -62,6 +63,15 @@ class JellyfinProvider(
                 is Outcome.Ok -> Outcome.Ok(page.value.tracks)
                 is Outcome.Err -> page
             }
+    }
+
+    /** Adding to the account's playlists on the server (the track's own account only, D84). */
+    override val playlistEdit: PlaylistEdit = object : PlaylistEdit {
+        override suspend fun add(playlist: MediaRef, tracks: List<Track>): Outcome<Int> =
+            lib.addToPlaylist(playlist.id, tracks.map { it.ref.id })
+
+        override suspend fun create(title: String, tracks: List<Track>): Outcome<Playlist> =
+            lib.createPlaylist(title, tracks.map { it.ref.id })
     }
 
     /** Merged Search (step 24): the account's tracks, albums and album artists matching the text. */

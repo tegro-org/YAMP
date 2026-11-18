@@ -95,8 +95,8 @@ class ProviderRegistry @Inject constructor(
                     accountKey = account.value,
                     info = jellyfinClients.info,
                     token = { jellyfinAccounts.token(account) },
-                    // "Compatible" sound is MP3 from the server too; never more than the device mixer plays (D79)
-                    profile = { JellyfinStreamProfile(lossless = !soundMode.isCompatible(), maxSampleRateHz = fixedOutput.mixerRateHz) }
+                    // The account's quality for the network in use (Original / Converted MP3 320); never more than the mixer plays (D79)
+                    profile = { JellyfinStreamProfile(lossless = !soundMode.isCompatible(account), maxSampleRateHz = fixedOutput.mixerRateHz) }
                 )
             )
         }

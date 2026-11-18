@@ -31,10 +31,7 @@ class FakeSettingsRepository : SettingsRepository {
     override val skipExplicit = MutableStateFlow(false)
     override val downloadsOnSdCard = MutableStateFlow(false)
     override val diagnosticLog = MutableStateFlow(false)
-    override val announceEqualizer = MutableStateFlow(true)
-    override val keepAudioStreams = MutableStateFlow(false)
     override val duckForAnnouncements = MutableStateFlow(true)
-    override val keepBothPlayersRunning = MutableStateFlow(false)
     override val groupQueuesByAccount = MutableStateFlow(true)
     override val listeningHistory = MutableStateFlow(true)
 
@@ -60,16 +57,17 @@ class FakeSettingsRepository : SettingsRepository {
     override suspend fun setSkipExplicit(enabled: Boolean) { skipExplicit.value = enabled }
     override suspend fun setDownloadsOnSdCard(enabled: Boolean) { downloadsOnSdCard.value = enabled }
     override suspend fun setDiagnosticLog(enabled: Boolean) { diagnosticLog.value = enabled }
-    override suspend fun setAnnounceEqualizer(enabled: Boolean) { announceEqualizer.value = enabled }
-    override suspend fun setKeepAudioStreams(enabled: Boolean) { keepAudioStreams.value = enabled }
     override suspend fun setDuckForAnnouncements(enabled: Boolean) { duckForAnnouncements.value = enabled }
     override val resumeWhenQuiet = MutableStateFlow(true)
     override suspend fun setResumeWhenQuiet(enabled: Boolean) { resumeWhenQuiet.value = enabled }
-    override suspend fun setKeepBothPlayersRunning(enabled: Boolean) { keepBothPlayersRunning.value = enabled }
-    override val fixedOutputFormat = MutableStateFlow(false)
-    override suspend fun setFixedOutputFormat(enabled: Boolean) { fixedOutputFormat.value = enabled }
     override val transitionFadeThenRise = MutableStateFlow(false)
     override suspend fun setTransitionFadeThenRise(enabled: Boolean) { transitionFadeThenRise.value = enabled }
+    override val playerCarLayout = MutableStateFlow(false)
+    override suspend fun setPlayerCarLayout(enabled: Boolean) { playerCarLayout.value = enabled }
+    override val playerNextThree = MutableStateFlow(false)
+    override suspend fun setPlayerNextThree(enabled: Boolean) { playerNextThree.value = enabled }
+    override val likeGestures = MutableStateFlow(false)
+    override suspend fun setLikeGestures(enabled: Boolean) { likeGestures.value = enabled }
     override suspend fun setGroupQueuesByAccount(enabled: Boolean) { groupQueuesByAccount.value = enabled }
     override suspend fun setListeningHistory(enabled: Boolean) { listeningHistory.value = enabled }
 }

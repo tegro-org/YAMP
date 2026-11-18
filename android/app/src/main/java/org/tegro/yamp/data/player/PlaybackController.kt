@@ -32,6 +32,7 @@ import org.tegro.yamp.data.provider.yandex.network.YandexMusicApi
 import org.tegro.yamp.data.queue.ActiveQueue
 import org.tegro.yamp.data.provider.yandex.queue.LegacySessionImport
 import org.tegro.yamp.data.queue.QueueManager
+import org.tegro.yamp.data.queue.RemovedEntry
 import org.tegro.yamp.data.provider.yandex.queue.RotorStationSource
 import org.tegro.yamp.data.provider.yandex.queue.RotorStations
 import org.tegro.yamp.data.provider.radio.FmRadio
@@ -945,14 +946,41 @@ class PlaybackController @Inject internal constructor(
     }
 
     /** Dislike behaves like Yandex Music: the current track is skipped right away and leaves the queue. */
-    fun onTrackDisliked(trackId: String) {
+    fun onTrackDisliked(trackId: String): DislikeUndo {
+        val undo = DislikeUndo(trackId)
         wave.remove(trackId)
         queueOp {
-            if (currentTrackNow()?.idString == trackId) playNextNow(isAuto = false)
-            keepingStandby {
-                active?.entries?.filter { it.ref.id == trackId }?.forEach { queueManager.remove(it.entryId) }
+            val before = active
+            undo.queueId = before?.queue?.id
+            undo.removed = before?.entries.orEmpty().withIndex()
+                .filter { it.value.ref.id == trackId }
+                .map { RemovedEntry(it.index, it.value) }
+            if (currentTrackNow()?.idString == trackId) {
+                undo.cursorEntryId = before?.cursorEntry?.entryId
+                undo.positionMs = playerRepository.progress.value
+                playNextNow(isAuto = false)
             }
+            keepingStandby { undo.removed.forEach { queueManager.remove(it.entry.entryId) } }
         }
+        return undo
+    }
+
+    /**
+     * Undo of a dislike: the entries come back where they were in their queue; if the disliked track was playing,
+     * it plays again from where it was (the cursor goes back to it). The server side is the caller's.
+     */
+    fun undoDislike(undo: DislikeUndo) = queueOp {
+        val queueId = undo.queueId
+        val sorted = undo.removed.sortedBy { it.index }
+        journal.record(PlaybackJournal.Kind.TAP, sorted.firstOrNull()?.entry?.title, "undo dislike: ${sorted.size} back")
+        if (queueId == null || sorted.isEmpty()) return@queueOp
+        var restored: List<org.tegro.yamp.domain.queue.QueueEntry> = emptyList()
+        keepingStandby { restored = queueManager.restore(queueId, sorted) }
+        val cursorAt = sorted.indexOfFirst { it.entry.entryId == undo.cursorEntryId }
+        val back = restored.getOrNull(cursorAt) ?: return@queueOp
+        if (active?.queue?.id != queueId) return@queueOp
+        val position = undo.positionMs
+        pickOp(back.title) { startEntry(back.entryId, crossfade = true, startPositionMs = position) }
     }
 
     /** Stops the engine; the queue stays, its position goes back to the start (nothing is deleted, D35). */
@@ -2495,3 +2523,15 @@ class PlaybackController @Inject internal constructor(
 
 /** The provider key of Jellyfin refs (`jellyfin@<server>`); `org.tegro.yamp.provider.jellyfin.JellyfinRefs.PROVIDER`. */
 private const val JELLYFIN_PROVIDER = org.tegro.yamp.provider.jellyfin.JellyfinRefs.PROVIDER
+
+/**
+ * What a dislike took away, so Undo can put it back: the entries with their places in [queueId], and — when the
+ * disliked track was playing — its entry ([cursorEntryId]) and where it was ([positionMs]). Filled by the queue
+ * operation [PlaybackController.onTrackDisliked] runs; [PlaybackController.undoDislike] runs after it.
+ */
+class DislikeUndo internal constructor(val trackId: String) {
+    internal var queueId: Long? = null
+    internal var removed: List<RemovedEntry> = emptyList()
+    internal var cursorEntryId: Long? = null
+    internal var positionMs: Long = 0L
+}

@@ -58,6 +58,8 @@ class PlaybackJournal(
         CACHE,
         /** A play report a provider's server didn't take (Jellyfin `/Sessions/Playing*`, step 26). */
         REPORT,
+        /** The quality in effect for an account changed: its own choice for the network in use, or the global one. */
+        QUALITY,
         /** A smooth pause / play / seek from the crossfade length; [Event.detail] is "pause|play|seek N ms". */
         FADE,
         /** The playing track's position jumped to its start with nobody asking (a stream that broke off); [Event.detail]. */

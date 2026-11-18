@@ -269,7 +269,7 @@ class LibraryRepository @Inject constructor(
         val tracks = if (liked) listOf(track) + previousTracks.filter { it.idString != id } else previousTracks.filter { it.idString != id }
         if (held != null) putLikes(folder, tracks, if (liked) previousIds + id else previousIds - id)
         val api = apiOf(folder)
-        scope.launch {
+        launchReaction setLiked@{
             // Likes not loaded yet for that account: the next sync brings this one with the rest
             if (held != null) cacheManager.saveLikedTracks(folder, tracks)
             val outcome = runCatching {
@@ -280,7 +280,7 @@ class LibraryRepository @Inject constructor(
             if (outcome.exceptionOrNull() is java.io.IOException) {
                 addPendingReaction(folder, PendingReaction(id, if (liked) PendingReaction.Kind.LIKE else PendingReaction.Kind.UNLIKE))
                 onDone(true)
-                return@launch
+                return@setLiked
             }
             val ok = outcome.isSuccess
             if (!ok && held != null) {
@@ -291,7 +291,37 @@ class LibraryRepository @Inject constructor(
         }
     }
 
-    fun dislike(track: TrackDetailsDto, account: AccountId? = null) {
+    /**
+     * Likes, unlikes, dislikes and their Undo go out one at a time in the order they were made, so an Undo
+     * sent right after a dislike reaches the server after it.
+     */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    private val reactionCalls = Dispatchers.IO.limitedParallelism(1)
+
+    /** Taken first thing on [reactionCalls], so it is taken in the order the calls were made, and held throughout. */
+    private val reactionLock = Mutex()
+
+    private fun launchReaction(block: suspend () -> Unit) {
+        scope.launch(reactionCalls) { reactionLock.withLock { block() } }
+    }
+
+    /**
+     * Undo of [dislike]: the track leaves the account's dislikes and, if [wasLiked], becomes liked again (locally
+     * at once, on the server in the background). Without a connection the like is queued like any other.
+     */
+    fun undoDislike(track: TrackDetailsDto, wasLiked: Boolean, account: AccountId? = null) {
+        val id = track.idString
+        val folder = folderOf(account)
+        val api = apiOf(folder)
+        launchReaction {
+            runCatching { api.removeDislikeTrack(resolveUid(folder), id) }
+                .onFailure { Log.e(TAG, "Undo of a dislike failed for $id", it) }
+        }
+        if (wasLiked) setLiked(track, true, account)
+    }
+
+    /** Dislikes [track] (an existing like goes first); returns whether it was liked, for [undoDislike]. */
+    fun dislike(track: TrackDetailsDto, account: AccountId? = null): Boolean {
         val id = track.idString
         val folder = folderOf(account)
         val held = likesByAccount[folder] ?: Likes(_likedTracks.value, _likedIds.value).takeIf { folder == loadedFolder }
@@ -299,7 +329,7 @@ class LibraryRepository @Inject constructor(
         val tracks = held?.tracks.orEmpty().filter { it.idString != id }
         if (held != null) putLikes(folder, tracks, held.ids - id)
         val api = apiOf(folder)
-        scope.launch {
+        launchReaction {
             if (held != null) cacheManager.saveLikedTracks(folder, tracks)
             runCatching {
                 val uid = resolveUid(folder)
@@ -310,6 +340,7 @@ class LibraryRepository @Inject constructor(
                 if (it is java.io.IOException) addPendingReaction(folder, PendingReaction(id, PendingReaction.Kind.DISLIKE))
             }
         }
+        return wasLiked
     }
 
     private suspend fun addPendingReaction(folder: String, reaction: PendingReaction) {

@@ -298,6 +298,62 @@ class UnseekableStreamTest {
         assertEquals("no new AudioTrack", opened, b.tracksOpened)
     }
 
+    /**
+     * The b109 ride: with "Fade then rise" the next track always waits behind the playing one, so it never counted as
+     * warm and every manual Next became a pick — the old player paused, the new one started in the same mixer cycle,
+     * and under Poweramp's DVC the old track's last buffer popped up over the new one.
+     */
+    @Test
+    fun aManualNextToTheTrackQueuedBehindTakesTheSkipPathAndNeverOverlaps() {
+        engine.setTransitionFadeThenRise(true)
+        looper.idle()
+        firstTrackSounds()
+        engine.prepareNextTrack("t2", stream("t2"), "T2", "Artist", null)
+        settle { b.playlist.contains("t2") }
+        assertTrue("the queued-behind track is ready for Next", engine.isWarm("t2"))
+
+        val stopsBefore = b.stops
+        engine.fadeOutForSkip()
+        advance(PlayerRepositoryImpl.SKIP_FADE_MS + 100)
+        assertFalse("t1 faded and stopped", b.isPlaying)
+        assertTrue("t1's player was stopped (its buffer flushed)", b.stops > stopsBefore)
+        assertTrue("its volume stays down until it has a new item", b.volume < 0.01f)
+
+        val overlaps = mutableListOf<Boolean>()
+        a.addListener(object : androidx.media3.common.Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (isPlaying) overlaps += b.isPlaying || b.playbackState != androidx.media3.common.Player.STATE_IDLE
+            }
+        })
+        play("t2")
+        settle { a.itemId == "t2" }
+        a.becomeReady()
+        advance(500)
+        assertTrue("t2 sounds", a.isPlaying)
+        assertEquals("t1 had fully stopped before t2 sounded", listOf(false), overlaps)
+    }
+
+    @Test
+    fun fadeThenRiseStopsTheOldPlayerBeforeTheNewOneSounds() {
+        engine.setTransitionFadeThenRise(true)
+        looper.idle()
+        firstTrackSounds()
+        b.playedTo(ScriptedExoPlayer.TRACK_MS - 1_400)
+        advance(200)
+        val stoppedWhenStarted = mutableListOf<Boolean>()
+        a.addListener(object : androidx.media3.common.Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (isPlaying) stoppedWhenStarted += b.playbackState == androidx.media3.common.Player.STATE_IDLE
+            }
+        })
+        play("t2")
+        settle { a.itemId == "t2" }
+        a.becomeReady()
+        advance(2_500)
+        assertTrue("t2 sounds", a.isPlaying)
+        assertEquals("t1 was stopped, not only paused, when t2 started", listOf(true), stoppedWhenStarted)
+    }
+
     // endregion
 
     private companion object {
