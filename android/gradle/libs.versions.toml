@@ -19,7 +19,7 @@ roborazzi = "1.77.0"
 # Debug tool only (android/diag, built with -Pyamp.diag): ADB client talking to the device's own adbd
 dadb = "2.0.0"
 glance = "1.2.0"
-robolectric = "4.17"
+robolectric = "4.18"
 datastore = "1.3.0"
 palette = "1.1.0"
 baselineprofile = "1.5.0"
