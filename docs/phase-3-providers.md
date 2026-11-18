@@ -705,3 +705,29 @@ Canvas `wl-welcome`, `wl-welcome-head`, `wl-jf-home`, `wl-jf-library`, `wl-jf-ca
   second AudioTrack.
 - The full player hides like/dislike for Jellyfin tracks; Search with Jellyfin only shows a hint instead of an endless
   skeleton (the starter charts are Yandex's).
+
+### After stage 2 — quality per account, playlists for both providers (as built, 2026-11-18)
+
+- **Quality per account** (canvas `qa-*`): each account has a "compatible" choice for unmetered and for metered
+  networks (Android's metered flag; the car's router Wi-Fi can be marked metered). `SoundMode.compatibleFor(account)`
+  answers from memory: the account's own choice, else the old global one — so existing accounts keep their quality
+  without a migration step. The link cache key carries the quality, so a network change applies from the next track.
+  The journal writes `QUALITY <account> <network> → best|compatible (account|global)` when it changes. The Playback
+  quality row is replaced by a note; Settings → Accounts → an account opens its sheet (bigger switches on the head
+  unit).
+- **Playlists for both providers** (D84): `PlaylistEdit` capability; Jellyfin adds/creates through its playlist API
+  (already-present tracks skipped); Yandex adds an album or an artist's selection in one change. The track menu and
+  the album/artist menu ("Add to playlist…", canvas `am-add-to-playlist`) list only the music's own account's
+  playlists.
+
+### After stage 2 — the wide player's ⋮ menu (as built, 2026-11-18, b109)
+
+The wide layouts (Car and phone landscape) have no buttons bar, so the extras of the portrait player sit behind a ⋮ at
+the end of the top row (queue dropdown · «Настроить волну» · search · ⋮), mirrored with the wheel side: the sleep
+timer (its choices open as a second level of the same menu), «Добавить в плейлист…», «Качество · <format>» — a tap
+opens the playing queue's account quality sheet (FM radio and a missing account fall back to the quality details) —
+and, only with likes by gestures, Like / Dislike as a fallback (Dislike goes through the same Undo as the cover's hold;
+not for a service without likes). `wideMenuItems()` decides the rows (test in `CarLayoutTest`); car rows are 64 dp
+tall and wrap to two lines inside Material's 280 dp menu width. A head unit standing in portrait keeps the phone
+portrait player (approved).
+

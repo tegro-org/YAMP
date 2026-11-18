@@ -18,6 +18,18 @@ Ideas were also taken from [YML](https://github.com/Ozo-bro/YML) by Ozo-bro.
 Licensed under the GNU General Public License v3.0 — see `LICENSE`. All trademarks and audio content
 belong to their respective owners.
 
+## Head units with Poweramp Equalizer
+
+If Poweramp Equalizer runs on the head unit, change two of its per-app options for YAMP (Poweramp Equalizer →
+Known Players → YAMP); the other options can stay as they are:
+
+- **«Затухание» (Fade): off.** With it on, the equalizer briefly takes the sound focus whenever a stream changes,
+  which pauses YAMP on some head units.
+- **«Без DVC»: on.** With it off, the equalizer takes over the volume of YAMP's audio session, so YAMP's own
+  fades, crossfades and skips are not applied and the previous track can be heard over the next one.
+
+YAMP shows the same hint in Settings → Playback when Poweramp Equalizer is installed.
+
 ## Build
 
 ```sh

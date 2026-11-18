@@ -330,3 +330,16 @@ The ride showed a 90 ms "pop" of the previous song near the start of the next on
 - Emulator (crossfade 3 s, keep-both on, fixed output on): 10 fast Next, then two picks — AudioService shows the old
   player `paused` before the new one `started` at each switch (same millisecond, old first); no START without a title;
   no crash.
+
+### Settings cleanup (2026-11-18, D88)
+
+- Removed: "Keep both players running", "Keep audio streams" (with `SilentIdler`, the parking policy and the silent
+  clip `res/raw/silence.mp3`), the "Announce to equalizer" switch (always announced) and the "Fixed output format"
+  switch (always at the mixer rate). Stored values of the removed keys are never read again.
+- "Resume when nothing plays" and "Keep playing under announcements" stay as settings, off by default for new
+  installs; a stored choice is kept.
+- The Poweramp Equalizer hint names the two settings that matter (Fade off, Без DVC on); the same in `README.md`.
+- Wide player (same build): the wheel-side shade covers the whole screen (no band under the status bar), the
+  portrait vignette is drawn in portrait only, an empty artist reads "Unknown artist", and the Car layout's cover
+  and next block follow the phone-landscape proportions (cover ~64 % of the height, placed under the clock when
+  that gives a larger cover; three cards span the cover's width).

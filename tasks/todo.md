@@ -383,6 +383,19 @@ the next-track cards can't both fit well), so: **two screens**.
 - [ ] The separate "In car" screen is dropped (its ideas live in the player's Car layout); its tab button becomes
       "Player" / «Плеер» and opens the player.
 
+- [x] Built 2026-11-18 (uncommitted, branch `feature/album-artist-menu`): Settings → Player page (Layout Phone/Car,
+      Next tracks 1/3, Like by gestures); main screen queue dropdown + tune right-aligned, title tap opens the player,
+      "Player" link gone; tab «В авто» → «Плеер» (opens the player, starts the active queue if nothing plays; start page
+      "Car" = open the player); `CarScreen`/`CarTimeline` retired, its parts moved to `player/WidePlayer.kt`
+      (phone-landscape and Car layouts share it); portrait 3-card strip, likes by gestures (double tap = like + burst,
+      hold = dislike with Undo snackbar, buttons hidden), swipe up from the bottom edge / next track(s) opens the queue.
+      Deviations: Car layout standing = the phone portrait player (approved 2026-11-18). Fixed since: the queue
+      follows the finger, a swipe down at the top of the list closes it, Undo of a dislike restores the track.
+- [x] ⋮ at the end of the wide layouts' top row (queue · tune · search · ⋮; approved 2026-11-18, b109): sleep timer
+      (second level), Add to playlist…, Quality (opens the playing account's quality sheet), and with likes by gestures
+      Like / Dislike (with Undo) as a fallback; car-sized rows. `wideMenuItems` + test; goldens `player_land_more_menu`,
+      `player_car_more_menu`.
+
 ## Home-screen shortcut per queue (idea, 2026-11-16)
 
 - [ ] "Add to home screen" on a queue (switcher ⋮): a pinned launcher shortcut (`ShortcutManager.requestPinShortcut`,
@@ -632,9 +645,36 @@ the next-track cards can't both fit well), so: **two screens**.
 
 ## Quality per account, unmetered vs metered (user, 2026-11-17)
 
-- [ ] Settings → Accounts → account: two choices — quality on unmetered networks / on metered networks (Android's
+- [x] Settings → Accounts → account: two choices — quality on unmetered networks / on metered networks (Android's
       metered flag: mobile data, or a Wi-Fi the user marks as metered — e.g. the car's 4G travel router on the head
       unit). Yandex: Lossless (FLAC) / Compatible (MP3). Jellyfin: Original (seekable, no server transcoding) /
       Converted MP3 320. New accounts start from the current global setting; the global Playback row goes (or
       becomes the default for new accounts). A network change applies from the next track.
+      Done 2026-11-18: `AccountQualityStore` (settings keys `quality|<account>|metered|unmetered`) + `NetworkMonitor.meteredFlow`;
+      `SoundMode.compatibleFor/isCompatible(account)` (own choice, else the global one — the migration); link cache key
+      carries the quality; journal `QUALITY` line on each change; the account sheet `AccountQualitySheet` (bigger
+      switches on a ≥ 900 dp screen); the Playback quality row replaced by a note.
 - [ ] Fallback if the unit's Android hides "metered" for Wi-Fi: a per-network override in YAMP (later, only if needed).
+
+## Add to playlist for both providers (user, 2026-11-18)
+
+- [x] Jellyfin playlists: `POST /Playlists`, `POST /Playlists/{id}/Items` (`JellyfinLibrary.addToPlaylist/createPlaylist`,
+      `PlaylistEdit` capability); the track menu's picker lists the track's own account's playlists (D84), shown for
+      Jellyfin too. Album/artist menu: "Add to playlist…" (artist via the add dialog), one change for Yandex
+      (`PlaylistDiff.insertAll`). Verified on the dev server (album → new playlist, track → existing one).
+
+## Playback settings cleanup (user, 2026-11-18)
+
+- [x] Remove "Keep both players running" and "Keep audio streams" (switches, prefs, code paths: SilentIdler park/loop).
+- [x] Remove the switches "Announce to equalizer" (always announce: one OPEN/CLOSE per session, D70) and "Fixed output
+      format" (always on, mixer rate).
+- [x] Keep "Resume when nothing plays" and "Keep playing under announcements" as settings, both **off by default**
+      (existing users: keep their stored value).
+- [x] Poweramp hint text: Fade off, Без DVC on (Keep Equalizer Session / Multisession on are fine).
+- [x] Document the Poweramp Equalizer setup (only two changes from its defaults): Known Players → YAMP → Затухание
+      (Fade) **off** (stops the focus grab that paused YAMP on head units), Без DVC **on** (YAMP's own volume works:
+      clean crossfades, fades and skips); Keep Equalizer Session / Multisession: leave as they are. In the in-app hint
+      (Settings → Playback, shown when Poweramp Equalizer is installed, with "Open") and a short README section
+      "Head units with Poweramp Equalizer".
+- [x] Same build: wide/Car player backdrop full-screen (no band under the status bar), artist fallback in landscape,
+      Car cover and next block in phone-landscape proportions (D88, playback-stability "As built").
