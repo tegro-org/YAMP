@@ -215,7 +215,7 @@ function CarNextState({ state, start }) {
   return (
     <Frame kind="head" tint="#8A5A22" glowY="40%">
       <CarHome nextState={state} played={start ? 0 : 0.3} buffered={start ? 0.05 : state === 'ready' ? 0.6 : 0.46} />
-      {!start && <NbCaption state={state} style={{ position: 'absolute', left: 1360, top: 420, transform: 'scale(1.25)', transformOrigin: 'left top' }} />}
+      {!start && <NbCaption state={state} style={{ position: 'absolute', left: 48, bottom: 26, transform: 'scale(1.25)', transformOrigin: 'left bottom' }} />}
     </Frame>
   );
 }
@@ -223,7 +223,7 @@ function SplitWideNextState({ state }) {
   return (
     <Frame kind="splitW" tint="#8A5A22" glowY="40%">
       <CarHome w={1280} nextState={state} buffered={0.46} />
-      <NbCaption state={state} style={{ position: 'absolute', left: 860, top: 640, transform: 'scale(1.15)', transformOrigin: 'left top' }} />
+      <NbCaption state={state} style={{ position: 'absolute', left: 48, bottom: 22, transform: 'scale(1.15)', transformOrigin: 'left bottom' }} />
     </Frame>
   );
 }

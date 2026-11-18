@@ -22,7 +22,7 @@ function HmUseTabs(sit) {
     { id: 'search', icon: 'search', label: t('Search', 'Поиск') },
     { id: 'library', icon: 'library_music', label: t('Library', 'Музыка') },
     sit.radio && { id: 'radio', icon: 'radio', label: t('Radio', 'Радио') },
-    { id: 'car', icon: 'directions_car', label: t('Car', 'В авто') },
+    { id: 'car', icon: 'play_circle', label: t('Player', 'Плеер') },
   ].filter(Boolean);
 }
 // Car tiles (D33): the shared priority list from queues.jsx — Folders, My Wave, Liked, Mixes, Radio — minus

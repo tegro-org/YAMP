@@ -20,9 +20,10 @@ function AmUseWords() {
     playNow: t('Play now', 'Слушать сейчас'), playNowSub: t('Replaces the current queue', 'Заменит текущую очередь'),
     playNext: t('Play next', 'Играть следующим'), addEnd: t('Add to end of queue', 'Добавить в конец очереди'),
     addTo: t('Add to queue…', 'Добавить в очередь…'), radio: t('Start radio', 'Запустить радио'),
+    addPlaylist: t('Add to playlist…', 'Добавить в плейлист…'),
     album: t('Album', 'Альбом'), artist: t('Artist', 'Исполнитель'),
     asksFirst: t('Adding an artist asks first: all albums or the popular tracks.', 'Перед добавлением исполнителя спросим: все альбомы или популярное.'),
-    noRadio: t('Radio for Jellyfin comes with Phase 6.', 'Радио для Jellyfin появится позже (этап 6).'),
+    noRadio: t('Playlists and radio for Jellyfin come later (Phases 5–6).', 'Плейлисты и радио для Jellyfin появятся позже (этапы 5–6).'),
   };
 }
 
@@ -56,6 +57,7 @@ function AmMenu({ kind = 'album', provider = 'yandex', title, sub, hue, big, bad
       <Row icon="skip_next" label={w.playNext} />
       <Row icon="playlist_play" label={w.addEnd} />
       <Row icon="stacks" label={w.addTo} />
+      {provider === 'yandex' && <Row icon="playlist_add" label={w.addPlaylist} />}
       {provider === 'yandex' && <Row icon="sensors" label={w.radio} />}
       {(kind === 'artist' || provider === 'jellyfin') && (
         <div style={{ fontSize: big ? 17 : 13, lineHeight: big ? '22px' : '17px', color: HF.text3, marginTop: big ? 10 : 6 }}>
@@ -286,6 +288,46 @@ function AmAlbumAddToQueue() {
   );
 }
 
+// ── Add to playlist… (Yandex): after the artist dialog (or straight from an album), pick a playlist ─────────
+function AmAddToPlaylist() {
+  const t = useT(); const a = useAcAccounts();
+  const lists = [
+    [t('Road trip', 'В дорогу'), t('48 tracks', '48 треков'), 'amber'],
+    [t('Evening', 'Вечер'), t('23 tracks', '23 трека'), 'violet'],
+    [t('Russian rock', 'Русский рок'), t('112 tracks', '112 треков'), 'rose'],
+    [t('Chill', 'Спокойное'), t('37 tracks', '37 треков'), 'teal'],
+  ];
+  return (
+    <Frame kind="phone">
+      <Scrim opacity={0.2} />
+      <Sheet height={600}>
+        <QueueSheetHeader title={t('Add to playlist', 'Добавить в плейлист')} subtitle={t('Мельница · all albums · 147 tracks', 'Мельница · все альбомы · 147 треков')} />
+        <div style={{ padding: '0 8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, height: 64, borderRadius: 18, padding: '0 14px 0 12px', margin: '0 0 6px',
+            background: HF.glassFill, border: `1px solid ${HF.glassBorder}` }}>
+            <div style={{ width: 52, height: 52, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px dashed ${HF.glassBorder}` }}>
+              <Icon name="add" size={26} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <Txt t="rowTitle">{t('New playlist', 'Новый плейлист')}</Txt>
+              <Txt t="caption" color={HF.text2}>{t(`On ${a.anna.name} · named after the artist`, `В аккаунте ${a.anna.name} · по имени исполнителя`)}</Txt>
+            </div>
+          </div>
+          {lists.map(([n, c, hue]) => (
+            <div key={n} style={{ display: 'flex', alignItems: 'center', gap: 12, height: 64, padding: '0 14px 0 12px' }}>
+              <Cover size={52} hue={hue} radius={12} glyph="queue_music" />
+              <div style={{ flex: 1, minWidth: 0 }}><Txt t="rowTitle" ellipsis>{n}</Txt><Txt t="caption" color={HF.text2}>{c}</Txt></div>
+            </div>
+          ))}
+        </div>
+        <Txt t="caption" color={HF.text3} style={{ margin: '12px 20px 0' }}>
+          {t(`${a.anna.name}’s playlists (the account of the music). Yandex only for now.`, `Плейлисты аккаунта ${a.anna.name} (аккаунта этой музыки). Пока только Яндекс.`)}
+        </Txt>
+      </Sheet>
+    </Frame>
+  );
+}
+
 // ── Section 5 · car: hold an album tile → the same menu, car sizes ──────────
 function AmCarFar() {
   const t = useT();
@@ -322,9 +364,9 @@ function albumMenuBoards() {
   return {
     search: [
       { after: 'sr-results-more', boards: [
-        { id: 'am-search-album', label: 'Album / artist actions · hold an album in results · Play now · Play next · Add to end · Add to queue… · Start radio', w: P.w, h: P.h, el: <AmSearchMenu kind="album" /> },
+        { id: 'am-search-album', label: 'Album / artist actions · hold an album in results · Play now · Play next · Add to end · Add to queue… · Add to playlist… · Start radio', w: P.w, h: P.h, el: <AmSearchMenu kind="album" /> },
         { id: 'am-search-artist', label: 'Hold an artist · same menu; adding asks first (all albums / popular)', w: P.w, h: P.h, el: <AmSearchMenu kind="artist" /> },
-        { id: 'am-search-album-jf', label: 'Hold a Jellyfin album · no Start radio until Phase 6', w: P.w, h: P.h, el: <AmSearchMenu kind="album" provider="jellyfin" /> },
+        { id: 'am-search-album-jf', label: 'Hold a Jellyfin album · no Add to playlist / Start radio yet (Phases 5–6)', w: P.w, h: P.h, el: <AmSearchMenu kind="album" provider="jellyfin" /> },
       ] },
     ],
     'home-library': [
@@ -337,6 +379,7 @@ function albumMenuBoards() {
         { id: 'am-artist-confirm-singles', label: 'Add an artist · singles and compilations included · counts update', w: P.w, h: P.h, el: <AmArtistConfirm singles /> },
         { id: 'am-artist-confirm-popular', label: 'Add an artist · popular tracks chosen', w: P.w, h: P.h, el: <AmArtistConfirm choice="popular" /> },
         { id: 'am-artist-confirm-play', label: 'Play an artist now · same choice, replaces the queue', w: P.w, h: P.h, el: <AmArtistConfirm action="play" /> },
+        { id: 'am-add-to-playlist', label: 'Add to playlist… (Yandex) · after the artist dialog (or from an album): the account’s playlists, "New playlist" on top; hidden for Jellyfin', w: P.w, h: P.h, el: <AmAddToPlaylist /> },
       ] },
     ],
     'queues-phone': [
@@ -352,4 +395,4 @@ function albumMenuBoards() {
   };
 }
 
-Object.assign(window, { AmMenu, AmSearchMenu, AmAlbumPage, AmArtistPage, AmArtistConfirm, AmAlbumAddToQueue, AmCarMenu, albumMenuBoards });
+Object.assign(window, { AmAddToPlaylist, AmMenu, AmSearchMenu, AmAlbumPage, AmArtistPage, AmArtistConfirm, AmAlbumAddToQueue, AmCarMenu, albumMenuBoards });
