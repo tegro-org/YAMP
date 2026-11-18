@@ -46,7 +46,9 @@ class PlayerRepositoryImpl(
     private val wakeLockHelper: org.tegro.yamp.data.player.PlaybackWakeLockHelper,
     private val journal: org.tegro.yamp.data.player.PlaybackJournal? = null,
     /** "Keep audio streams open" (Settings → Playback) and the silent clip a parked player holds meanwhile. */
-    private val parking: ParkingPolicy? = null
+    private val parking: ParkingPolicy? = null,
+    /** Every byte of a cache key is on disk (D86): an unseekable stream seeks and recovers from that copy. */
+    private val fullyCached: (String) -> Boolean = { false }
 ) : PlayerRepository, org.tegro.yamp.data.player.SessionPlayers {
 
     /**
@@ -224,6 +226,27 @@ class PlayerRepositoryImpl(
     private var hasEmittedPrepareForCurrent = false
     private var hasEmittedTrackEndedForCurrent = false
 
+    /** "Fade then rise" at a track's natural end instead of a crossfade (Settings → Playback → Transition). */
+    private var fadeThenRise = false
+
+    private val _unseekableStreamEvent = MutableSharedFlow<String>(extraBufferCapacity = EVENT_BUFFER)
+    override val unseekableStreamEvent: Flow<String> = _unseekableStreamEvent.asSharedFlow()
+
+    /** The item already reported unseekable (once per item). */
+    private var unseekableReported: String? = null
+
+    /** Where the playing track last sounded: a jump to its start that nobody asked for is a broken stream. */
+    private var lastSoundedId: String? = null
+    private var lastSoundedAt = -1L
+
+    /** A seek or a recovery on an unseekable stream waits for the track's whole file on disk, at [heldPosition]. */
+    private var awaitingCopy = false
+    private var heldPosition = -1L
+    private var copyWaitJob: Job? = null
+
+    /** "Fade then rise" with the next track queued behind (gapless): the current one fading out before its end. */
+    private var gaplessFadeJob: Job? = null
+
     init {
         setupPlayerListener(playerA, 0)
         setupPlayerListener(playerB, 1)
@@ -241,6 +264,7 @@ class PlayerRepositoryImpl(
                 if (currentP.isPlaying && !isParked(currentP)) {
                     journal?.addPlayed(PROGRESS_INTERVAL_MS)
                     updateProgress(currentP)
+                    watchForJump(currentP)
                     checkTransitionTriggers(currentP)
                     // "Keep both players running": a standby stopped during a burst of skips starts idling once
                     // things are calm again, not while every skip would rebuild it (F4)
@@ -255,11 +279,28 @@ class PlayerRepositoryImpl(
 
     /** All of a track loaded counts as plenty: its end is no reason to hold back. */
     private fun aheadOf(player: ExoPlayer): Long {
-        val loadedToTheEnd = player.duration > 0 && player.bufferedPosition >= player.duration - 500
+        val duration = durationOf(player)
+        val loadedToTheEnd = duration > 0 && player.bufferedPosition >= duration - 500
         return if (loadedToTheEnd) Long.MAX_VALUE else player.totalBufferedDuration
     }
 
+    /**
+     * The track's length: the player's, or — a progressive stream sent with no length (a server transcode) —
+     * the catalog's ([ResolvedStream.durationMs]), so the end-of-track transition still fires on time.
+     */
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    private fun durationOf(player: ExoPlayer): Long {
+        val own = player.duration
+        if (own != androidx.media3.common.C.TIME_UNSET && own > 0L) return own
+        return player.currentMediaItem?.mediaMetadata?.durationMs?.takeIf { it > 0L } ?: androidx.media3.common.C.TIME_UNSET
+    }
+
     private fun updateProgress(player: ExoPlayer) {
+        if (awaitingCopy) {
+            // A seek or a recovery waits for the disk copy: the bar stays where the music will go on from
+            _progress.value = heldPosition
+            return
+        }
         val position = player.currentPosition
         _bufferedProgress.value = player.bufferedPosition
         if (rampKind == Ramp.SEEK_OUT && seekTarget >= 0L) {
@@ -281,7 +322,7 @@ class PlayerRepositoryImpl(
     }
 
     private fun checkTransitionTriggers(player: ExoPlayer) {
-        val duration = player.duration
+        val duration = durationOf(player)
         val position = player.currentPosition
         if (duration <= 8_000L || position <= 0L || outgoingPlayer != null) return
         val remaining = duration - position
@@ -295,8 +336,19 @@ class PlayerRepositoryImpl(
             _prepareNextTrackEvent.tryEmit(Unit)
         }
 
-        // 2. Early trigger so the crossfade overlaps the last seconds of the track
-        if (crossfadeDurationMs > 0L && remaining in 1L..crossfadeDurationMs && !hasEmittedTrackEndedForCurrent) {
+        // 2. Early trigger so the crossfade overlaps the last seconds of the track. "Fade then rise" starts at half
+        //    the length: the current track fades out over X/2 and ends as the next one starts rising
+        val window = if (fadeThenRise) crossfadeDurationMs / 2 else crossfadeDurationMs
+        if (fadeThenRise && queuedOnActive != null) {
+            // Gapless: the next track waits behind on this player; it fades out here, the arrival rises
+            val inWindow = window > 0L && remaining in 1L..window
+            if (inWindow && gaplessFadeJob == null && !hasEmittedTrackEndedForCurrent) {
+                val from = level(player)
+                gaplessFadeJob = scope.launch { fade(player, from, 0f, remaining.coerceAtMost(window)) }
+            }
+            return
+        }
+        if (crossfadeDurationMs > 0L && remaining in 1L..window && !hasEmittedTrackEndedForCurrent) {
             hasEmittedTrackEndedForCurrent = true
             wakeLockHelper.acquireTransitionLock(30_000L)
             _trackEndedEvent.tryEmit(Unit)
@@ -356,6 +408,7 @@ class PlayerRepositoryImpl(
                         stalledSince = null
                     }
                 }
+                if (playbackState == Player.STATE_READY && playerIdx == activePlayerIndex) maybeReportUnseekable(player)
                 if (playbackState == Player.STATE_ENDED && playerIdx == activePlayerIndex && outgoingPlayer == null) {
                     Log.d(TAG, "Player[$playerIdx] reached STATE_ENDED, crossfadeRequested=$hasEmittedTrackEndedForCurrent")
                     // When the early crossfade trigger already fired, the controller is advancing — don't skip twice.
@@ -423,7 +476,7 @@ class PlayerRepositoryImpl(
         // tail) also counts as playing: the screen and the session never say "paused" over audible music (F2)
         val other = standbyPlayer
         val otherAudible = other !== outgoingPlayer && other.isPlaying && !isParked(other) && other.volume > 0f
-        val wantsToPlay = otherAudible || awaitingSkipTarget || idler.handover === p || (p.playWhenReady || awaitingIncoming) &&
+        val wantsToPlay = otherAudible || awaitingSkipTarget || awaitingCopy || idler.handover === p || (p.playWhenReady || awaitingIncoming) &&
             p.playerError == null &&
             p.mediaItemCount > 0 && !isParked(p) &&
             p.playbackState != Player.STATE_ENDED
@@ -433,7 +486,7 @@ class PlayerRepositoryImpl(
         // previous track still sounds, the next one loading is not a stall either (upstream 1.14.3).
         val outgoing = outgoingPlayer
         val tailSounds = awaitingIncoming && outgoing != null && outgoing.isPlaying
-        _isBuffering.value = awaitingSkipTarget || idler.handover === p && !tailSounds || wantsToPlay && !tailSounds && p.playbackState == Player.STATE_BUFFERING
+        _isBuffering.value = awaitingSkipTarget || awaitingCopy || idler.handover === p && !tailSounds || wantsToPlay && !tailSounds && p.playbackState == Player.STATE_BUFFERING
         _soundingTrackId.value = when {
             outgoing != null && outgoing.isPlaying && (awaitingIncoming || !p.isPlaying) -> outgoing.currentMediaItem?.mediaId
             p.isPlaying && !isParked(p) -> p.currentMediaItem?.mediaId
@@ -449,8 +502,10 @@ class PlayerRepositoryImpl(
     private fun MediaItem.cacheKey(): String? = localConfiguration?.customCacheKey
 
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-    private fun buildMediaItem(trackId: String, uri: String, title: String?, artist: String?, coverUrl: String?, cacheKey: String? = null): MediaItem {
+    private fun buildMediaItem(trackId: String, uri: String, title: String?, artist: String?, coverUrl: String?, cacheKey: String? = null, durationMs: Long? = null): MediaItem {
         val mediaMetadata = MediaMetadata.Builder()
+            // The catalog's length: a stream sent without one still has a known end (see [durationOf])
+            .setDurationMs(durationMs?.takeIf { it > 0L })
             .setTitle(title ?: "Unknown Track")
             .setDisplayTitle(title ?: "Unknown Track")
             .setArtist(artist ?: "Unknown Artist")
@@ -474,7 +529,7 @@ class PlayerRepositoryImpl(
             // State may have changed since the controller asked.
             if (outgoingPlayer != null || _currentTrackId.value == trackId) return@launch
 
-            val item = buildMediaItem(trackId, playUri, title, artist, coverUrl, stream.cacheKey)
+            val item = buildMediaItem(trackId, playUri, title, artist, coverUrl, stream.cacheKey, stream.durationMs)
             if (gaplessFits()) {
                 // Crossfade off: behind the playing track on its own player, no second AudioTrack (F4)
                 dropQueuedOnActive()
@@ -512,7 +567,7 @@ class PlayerRepositoryImpl(
      */
     private fun gaplessFits(): Boolean {
         val p = activePlayer
-        return crossfadeDurationMs == 0L && !idler.enabled && !idler.keepStreams && outgoingPlayer == null &&
+        return (crossfadeDurationMs == 0L || fadeThenRise) && !idler.enabled && !idler.keepStreams && outgoingPlayer == null &&
             !awaitingIncoming && p.playerError == null && !isParked(p) && p.mediaItemCount > 0 &&
             p.currentMediaItem?.mediaId == _currentTrackId.value
     }
@@ -572,7 +627,8 @@ class PlayerRepositoryImpl(
                 return@launch
             }
             val cacheKey = if (warmUri != null) standbyPlayer.currentMediaItem?.cacheKey() else stream?.cacheKey
-            startTransition(buildMediaItem(trackId, playUri, title, artist, coverUrl, cacheKey), crossfade, startPositionMs, pickAtMs)
+            val duration = stream?.durationMs ?: standbyPlayer.currentMediaItem?.mediaMetadata?.durationMs?.takeIf { warmUri != null }
+            startTransition(buildMediaItem(trackId, playUri, title, artist, coverUrl, cacheKey, duration), crossfade, startPositionMs, pickAtMs)
         }
     }
 
@@ -603,6 +659,11 @@ class PlayerRepositoryImpl(
         val rise = riseNextStart
         riseNextStart = false
         endRamp()
+        cancelCopyWait()
+        gaplessFadeJob?.cancel()
+        gaplessFadeJob = null
+        unseekableReported = null
+        lastSoundedId = null
         // Any other start: a track queued behind the current one must not play on after it
         dropQueuedOnActive()
         lastStartAt = SystemClock.elapsedRealtime()
@@ -716,7 +777,19 @@ class PlayerRepositoryImpl(
         note(org.tegro.yamp.data.player.PlaybackJournal.Kind.START, item.mediaMetadata.title, "gapless")
         if (p.currentMediaItemIndex > 0) p.removeMediaItems(0, p.currentMediaItemIndex)
         diagnostics.started(p, item.mediaMetadata.title, ready = true)
-        setVolume(p, 1f)
+        gaplessFadeJob?.cancel()
+        gaplessFadeJob = null
+        cancelCopyWait()
+        unseekableReported = null
+        lastSoundedId = null
+        val half = crossfadeDurationMs / 2
+        if (fadeThenRise && half > 0L) {
+            // "Fade then rise": the previous track faded out before its end; this one rises over the other half
+            setVolume(p, 0f)
+            riseTo(p, from = 0f, durationMs = half, what = "rise")
+        } else {
+            setVolume(p, 1f)
+        }
         wakeLockHelper.releaseTransitionLock()
         refreshPlaybackState()
     }
@@ -763,7 +836,9 @@ class PlayerRepositoryImpl(
         if (!stillMine()) return
 
         val late = !outgoing.isPlaying
-        awaitingIncoming = false
+        // "Fade then rise": nothing of the next track sounds until the current one has faded out — still "playing"
+        val fadeRise = fadeThenRise && pickAt == 0L && crossfadeDurationMs > 0L
+        awaitingIncoming = fadeRise && !late
         if (pickAt > 0L) {
             // The pick is ready: the current track fades out quickly, as for Next, and stops — only then does the
             // pick sound. Never both at once: under Poweramp's DVC the fade is not heard and the old track would leak
@@ -775,6 +850,21 @@ class PlayerRepositoryImpl(
             setVolume(incoming, 1f)
             incoming.playWhenReady = true
             refreshPlaybackState()
+        } else if (fadeRise) {
+            // One after the other, never both at once: works under an effect that takes over the session's volume
+            // (Poweramp's DVC), and only one track is decoded at a time
+            note(if (late) org.tegro.yamp.data.player.PlaybackJournal.Kind.CROSSFADE_LATE else org.tegro.yamp.data.player.PlaybackJournal.Kind.CROSSFADE, incoming.mediaMetadata.title, "fade then rise", SystemClock.elapsedRealtime() - waitStart)
+            val half = (crossfadeDurationMs / 2).coerceAtLeast(1L)
+            if (!late) {
+                fade(outgoing, from = logicalVolume[indexOf(outgoing)], to = 0f, durationMs = half)
+                if (!stillMine()) return
+                outgoing.pause()
+            }
+            awaitingIncoming = false
+            setVolume(incoming, 0f)
+            incoming.playWhenReady = true
+            refreshPlaybackState()
+            fade(incoming, from = 0f, to = 1f, durationMs = half)
         } else {
             // A crossfade at a track's natural end overlaps the two on purpose. It needs each player's own volume:
             // with an effect that takes over the session's volume (Poweramp's DVC; set "Без DVC" for YAMP) the
@@ -1084,6 +1174,9 @@ class PlayerRepositoryImpl(
 
     override fun stop() {
         endRamp()
+        cancelCopyWait()
+        gaplessFadeJob?.cancel()
+        gaplessFadeJob = null
         playJob?.cancel()
         skipTargetArrived()
         cancelSkipFade()
@@ -1130,11 +1223,128 @@ class PlayerRepositoryImpl(
         lastSeekTimestamp = SystemClock.elapsedRealtime()
         pendingSeekPosition = position
         _progress.value = position
+        if (!seekable(p)) {
+            // A stream with no length can't seek: Media3 turns the seek into 0. It goes on from the disk copy
+            reopenFromCopy(p, position, "seek")
+            return
+        }
         p.seekTo(position)
         // Seeking back out of the crossfade window must allow the triggers to fire again.
         val duration = p.duration
         if (duration > 0L && duration - position > crossfadeDurationMs) hasEmittedTrackEndedForCurrent = false
         if (duration > 0L && duration - position > PREPARE_STANDBY_THRESHOLD_MS) hasEmittedPrepareForCurrent = false
+    }
+
+    /** The playing item can seek: anything but a progressive network stream sent with no length. */
+    private fun seekable(p: ExoPlayer): Boolean =
+        p.isCurrentMediaItemSeekable || p.currentMediaItem?.cacheKey() == null || isParked(p) || p.playbackState == Player.STATE_IDLE
+
+    /** Reports, once per item, a network stream that turned out unseekable: the controller writes it to disk. */
+    private fun maybeReportUnseekable(p: ExoPlayer) {
+        val item = p.currentMediaItem ?: return
+        val isNetworkStream = !isParked(p) && item.cacheKey() != null
+        if (!isNetworkStream || p.isCurrentMediaItemSeekable || unseekableReported == item.mediaId) return
+        unseekableReported = item.mediaId
+        note(org.tegro.yamp.data.player.PlaybackJournal.Kind.CACHE, item.mediaMetadata.title, "stream not seekable (no length): writing the whole file to disk")
+        _unseekableStreamEvent.tryEmit(item.mediaId)
+    }
+
+    /**
+     * The playing track's position fell back to its start with no seek asked: a progressive stream that broke off
+     * mid-way and was restarted from 0 by Media3 (a transcode can't resume mid-way). It goes on where it was.
+     */
+    private fun watchForJump(p: ExoPlayer) {
+        val id = p.currentMediaItem?.mediaId
+        val position = p.currentPosition
+        if (awaitingCopy || id == null || isParked(p)) return
+        val recentSeek = SystemClock.elapsedRealtime() - lastSeekTimestamp < JUMP_SEEK_GRACE_MS || rampKind == Ramp.SEEK_OUT || rampKind == Ramp.SEEK_IN
+        val last = lastSoundedAt
+        val fellToStart = last >= JUMP_FROM_MIN_MS && position <= JUMP_TO_MAX_MS && last - position >= JUMP_FROM_MIN_MS
+        if (id == lastSoundedId && !recentSeek && fellToStart) {
+            note(org.tegro.yamp.data.player.PlaybackJournal.Kind.JUMP, p.mediaMetadata.title, "0 unexpected, from ${last / 1000} s (${if (p.isCurrentMediaItemSeekable) "seekable" else "not seekable"})")
+            lastSoundedAt = last
+            if (p.isCurrentMediaItemSeekable) {
+                p.seekTo(last)
+                lastSeekTimestamp = SystemClock.elapsedRealtime()
+            } else {
+                reopenFromCopy(p, last, "recovery")
+            }
+            return
+        }
+        lastSoundedId = id
+        lastSoundedAt = position
+    }
+
+    /**
+     * Goes on with [p]'s track at [position] from its whole file on disk (seekable, with a known length): at once if
+     * the copy is complete, else after waiting for it (bounded) — loading meanwhile, the bar held at [position].
+     */
+    private fun reopenFromCopy(p: ExoPlayer, position: Long, why: String) {
+        val item = p.currentMediaItem ?: return
+        val key = item.cacheKey() ?: return
+        cancelCopyWait()
+        heldPosition = position
+        _progress.value = position
+        if (fullyCached(key)) {
+            reopenAt(p, item, position, why)
+            return
+        }
+        _unseekableStreamEvent.tryEmit(item.mediaId) // the write may not have started (or failed): ask again
+        note(org.tegro.yamp.data.player.PlaybackJournal.Kind.CACHE, item.mediaMetadata.title, "$why at ${position / 1000} s waits for the whole file on disk")
+        awaitingCopy = true
+        p.playWhenReady = false
+        refreshPlaybackState()
+        copyWaitJob = scope.launch {
+            val since = SystemClock.elapsedRealtime()
+            while (!fullyCached(key)) {
+                if (p !== activePlayer || p.currentMediaItem?.mediaId != item.mediaId) {
+                    awaitingCopy = false
+                    return@launch
+                }
+                if (SystemClock.elapsedRealtime() - since >= COPY_WAIT_MAX_MS) {
+                    awaitingCopy = false
+                    note(org.tegro.yamp.data.player.PlaybackJournal.Kind.ERROR, item.mediaMetadata.title, "$why: the file never reached the disk, giving up")
+                    _playbackErrorEvent.tryEmit(PlaybackFailure(item.mediaId, position, PlaybackFailure.NO_DATA))
+                    refreshPlaybackState()
+                    return@launch
+                }
+                delay(COPY_POLL_MS)
+            }
+            awaitingCopy = false
+            reopenAt(p, item, position, why)
+        }
+    }
+
+    private fun reopenAt(p: ExoPlayer, item: MediaItem, position: Long, why: String) {
+        note(org.tegro.yamp.data.player.PlaybackJournal.Kind.CACHE, item.mediaMetadata.title, "$why: reopened from disk at ${position / 1000} s")
+        lastSeekTimestamp = SystemClock.elapsedRealtime()
+        pendingSeekPosition = position
+        lastSoundedId = item.mediaId
+        lastSoundedAt = position
+        // A next track queued behind (gapless) would be dropped by the new item set: take it off cleanly and let
+        // the controller queue it again (the prepare event fires anew)
+        if (queuedOnActive != null) {
+            dropQueuedOnActive()
+            hasEmittedPrepareForCurrent = false
+        }
+        gaplessFadeJob?.cancel()
+        gaplessFadeJob = null
+        p.setMediaItem(item, position)
+        p.prepare()
+        p.playWhenReady = true
+        // A seek's fade-out left it silent: it rises again once it sounds
+        val x = crossfadeDurationMs
+        if (level(p) < 1f) riseTo(p, from = level(p), durationMs = (x * 2 / 3).coerceAtLeast(QUICK_FADE_MS), what = why)
+        refreshPlaybackState()
+    }
+
+    private fun cancelCopyWait() {
+        copyWaitJob?.cancel()
+        copyWaitJob = null
+        if (awaitingCopy) {
+            awaitingCopy = false
+            refreshPlaybackState()
+        }
     }
 
     /** Running smooth pause / play / seek ramp (tied to the crossfade length) and what it does. */
@@ -1278,6 +1488,11 @@ class PlayerRepositoryImpl(
             fade(p, from, 0f, (x / 3 * from).toLong().coerceAtLeast(1L))
             if (p !== activePlayer) return@launch
             seekNow(seekTarget)
+            if (awaitingCopy || rampJob !== coroutineContext[Job]) {
+                // The jump goes on from the disk copy, which rises by itself once it sounds
+                if (rampJob === coroutineContext[Job]) rampKind = null
+                return@launch
+            }
             rampKind = Ramp.SEEK_IN
             var waited = 0L
             while (!p.isPlaying && waited < RISE_WAIT_MAX_MS) {
@@ -1302,7 +1517,18 @@ class PlayerRepositoryImpl(
     override fun setCrossfadeDuration(durationMs: Long) {
         crossfadeDurationMs = durationMs.coerceAtLeast(0L)
         // Crossfade on: the next track needs its own player for the overlap, not a place behind the current one
-        if (crossfadeDurationMs > 0L) scope.launch { if (queuedOnActive != null) { dropQueuedOnActive(); hasEmittedPrepareForCurrent = false } }
+        if (crossfadeDurationMs > 0L && !fadeThenRise) scope.launch { if (queuedOnActive != null) { dropQueuedOnActive(); hasEmittedPrepareForCurrent = false } }
+    }
+
+    override fun setTransitionFadeThenRise(enabled: Boolean) {
+        scope.launch {
+            fadeThenRise = enabled
+            // A crossfade needs the next track on its own player, not queued behind the current one
+            if (!enabled && crossfadeDurationMs > 0L && queuedOnActive != null) {
+                dropQueuedOnActive()
+                hasEmittedPrepareForCurrent = false
+            }
+        }
     }
 
     private fun indexOf(player: ExoPlayer) = if (player === playerA) 0 else 1
@@ -1387,6 +1613,13 @@ class PlayerRepositoryImpl(
         /** A play / seek rise waits this long at most for the player to sound (it may still be loading). */
         const val RISE_WAIT_MAX_MS = 10_000L
         private const val PROGRESS_INTERVAL_MS = 100L
+        /** A jump to the start counts only from at least this far in, landing this close to 0, with no seek this recent. */
+        private const val JUMP_FROM_MIN_MS = 5_000L
+        private const val JUMP_TO_MAX_MS = 1_500L
+        private const val JUMP_SEEK_GRACE_MS = 2_000L
+        /** How long a seek or recovery on an unseekable stream waits for its whole file on disk. */
+        const val COPY_WAIT_MAX_MS = 60_000L
+        private const val COPY_POLL_MS = 500L
         private const val IDLE_INTERVAL_MS = 500L
         private const val EVENT_BUFFER = 16
     }

@@ -22,13 +22,20 @@ import org.tegro.yamp.domain.provider.ResolvedStream
 interface NextTrackFetch {
     enum class Outcome { ALREADY_ON_DISK, WRITTEN, FAILED, CANCELLED }
 
-    data class Result(val trackId: String, val outcome: Outcome)
+    /** [playing]: the write of the playing track ([fetchPlaying]), not the next one's. */
+    data class Result(val trackId: String, val outcome: Outcome, val playing: Boolean = false)
 
     /** Starts writing [stream] of [trackId] (another track's write is cancelled first). */
     fun prefetch(trackId: String, stream: ResolvedStream)
 
     /** Stops the running write: the next track changed. What was written so far stays. */
     fun cancel()
+
+    /**
+     * Writes the playing track's whole file too — a stream sent with no length (a server transcode) seeks and
+     * recovers only from that copy. Independent of the next track's write; another playing track's is replaced.
+     */
+    fun fetchPlaying(trackId: String, stream: ResolvedStream) = Unit
 
     /** Every byte of [stream] is on disk. */
     fun isOnDisk(stream: ResolvedStream): Boolean
@@ -67,69 +74,87 @@ class NextTrackCacher(
     private val _results = MutableSharedFlow<NextTrackFetch.Result>(extraBufferCapacity = 16)
     override val results: Flow<NextTrackFetch.Result> = _results.asSharedFlow()
 
-    private var job: Job? = null
+    /** One running write and what it writes: the next track's, and the playing track's ([fetchPlaying]). */
+    private inner class Slot(private val playing: Boolean) {
+        private var job: Job? = null
 
-    @Volatile
-    private var writer: CacheWriter? = null
+        @Volatile
+        private var writer: CacheWriter? = null
 
-    /** The track being written now (its id), or null. */
-    @Volatile
-    override var writingTrackId: String? = null
-        private set
+        @Volatile
+        var trackId: String? = null
+            private set
+
+        fun start(trackId: String, stream: ResolvedStream) {
+            val key = stream.cacheKey ?: return
+            if (!streamCache.enabled || stream.localFile) return
+            if (this.trackId == trackId && job?.isActive == true) return
+            cancel()
+            streamCache.remember(stream)
+            StreamHeaders.register(stream.uri, stream.headers)
+            if (streamCache.isComplete(key)) {
+                _results.tryEmit(NextTrackFetch.Result(trackId, NextTrackFetch.Outcome.ALREADY_ON_DISK, playing))
+                return
+            }
+            this.trackId = trackId
+            job = scope.launch(io) {
+                val spec = DataSpec.Builder()
+                    .setUri(EncrawDataSourceFactory.networkUri(stream.uri.toUri()))
+                    .setKey(key)
+                    .build()
+                val w = CacheWriter(streamCache.writingSource(upstream.createDataSource()), spec, null, null)
+                writer = w
+                // A cancelled job ends here without a result: the track changed, nobody waits for this one
+                val outcome = try {
+                    w.cache()
+                    currentCoroutineContext().ensureActive()
+                    NextTrackFetch.Outcome.WRITTEN
+                } catch (e: java.io.InterruptedIOException) {
+                    // CacheWriter.cancel() surfaces as an interrupted read
+                    android.util.Log.d(TAG, "Write of $trackId cancelled: ${e.message}")
+                    NextTrackFetch.Outcome.CANCELLED
+                } catch (e: java.io.IOException) {
+                    val cancelled = !currentCoroutineContext().isActive
+                    android.util.Log.d(TAG, "Write of $trackId ${if (cancelled) "cancelled" else "failed"}: ${e.message}")
+                    if (cancelled) NextTrackFetch.Outcome.CANCELLED else NextTrackFetch.Outcome.FAILED
+                } finally {
+                    if (writer === w) writer = null
+                }
+                if (this@Slot.trackId == trackId) this@Slot.trackId = null
+                _results.tryEmit(NextTrackFetch.Result(trackId, outcome, playing))
+            }
+        }
+
+        fun cancel() {
+            writer?.cancel()
+            job?.cancel()
+            job = null
+            trackId = null
+        }
+    }
+
+    private val next = Slot(playing = false)
+    private val current = Slot(playing = true)
+
+    /** The track being written now as the next one (its id), or null. */
+    override val writingTrackId: String? get() = next.trackId
 
     override fun isOnDisk(stream: ResolvedStream): Boolean = stream.cacheKey?.let { streamCache.isComplete(it) } == true
 
     override fun cachedState(account: String?, trackId: String): StreamCache.CachedState =
         streamCache.cachedState(StreamCache.keyPrefix(account, trackId))
 
-    override fun prefetch(trackId: String, stream: ResolvedStream) {
-        val key = stream.cacheKey ?: return
-        if (!streamCache.enabled || stream.localFile) return
-        if (writingTrackId == trackId && job?.isActive == true) return
-        cancel()
-        streamCache.remember(stream)
-        StreamHeaders.register(stream.uri, stream.headers)
-        if (streamCache.isComplete(key)) {
-            _results.tryEmit(NextTrackFetch.Result(trackId, NextTrackFetch.Outcome.ALREADY_ON_DISK))
-            return
-        }
-        writingTrackId = trackId
-        job = scope.launch(io) {
-            val spec = DataSpec.Builder()
-                .setUri(EncrawDataSourceFactory.networkUri(stream.uri.toUri()))
-                .setKey(key)
-                .build()
-            val w = CacheWriter(streamCache.writingSource(upstream.createDataSource()), spec, null, null)
-            writer = w
-            // A cancelled job ends here without a result: the next track changed, nobody waits for this one
-            val outcome = try {
-                w.cache()
-                currentCoroutineContext().ensureActive()
-                NextTrackFetch.Outcome.WRITTEN
-            } catch (e: java.io.InterruptedIOException) {
-                // CacheWriter.cancel() surfaces as an interrupted read
-                android.util.Log.d(TAG, "Write of $trackId cancelled: ${e.message}")
-                NextTrackFetch.Outcome.CANCELLED
-            } catch (e: java.io.IOException) {
-                val cancelled = !currentCoroutineContext().isActive
-                android.util.Log.d(TAG, "Write of $trackId ${if (cancelled) "cancelled" else "failed"}: ${e.message}")
-                if (cancelled) NextTrackFetch.Outcome.CANCELLED else NextTrackFetch.Outcome.FAILED
-            } finally {
-                if (writer === w) writer = null
-            }
-            if (writingTrackId == trackId) writingTrackId = null
-            _results.tryEmit(NextTrackFetch.Result(trackId, outcome))
-        }
+    override fun prefetch(trackId: String, stream: ResolvedStream) = next.start(trackId, stream)
+
+    override fun fetchPlaying(trackId: String, stream: ResolvedStream) {
+        // Still being written as "the next track" when it started: that write goes on and is enough
+        if (next.trackId == trackId) return
+        current.start(trackId, stream)
     }
 
     private companion object {
         const val TAG = "NextTrackCacher"
     }
 
-    override fun cancel() {
-        writer?.cancel()
-        job?.cancel()
-        job = null
-        writingTrackId = null
-    }
+    override fun cancel() = next.cancel()
 }

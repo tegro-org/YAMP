@@ -138,6 +138,14 @@ interface SettingsRepository {
     suspend fun setFixedOutputFormat(enabled: Boolean)
 
     /**
+     * How one track hands over to the next at its natural end, over the crossfade length X: false — "Crossfade",
+     * both at once (equal-power); true — "Fade then rise": the old one fades out over X/2, then the new one rises
+     * over X/2, never both at once (works under Poweramp's DVC, one track decoded at a time).
+     */
+    val transitionFadeThenRise: Flow<Boolean>
+    suspend fun setTransitionFadeThenRise(enabled: Boolean)
+
+    /**
      * "Group" in Settings → Accounts (D64): with more than one account the queue lists show a section per account
      * (on) or one flat list with an account marker on every row (off). Default on; meaningless with one account.
      */

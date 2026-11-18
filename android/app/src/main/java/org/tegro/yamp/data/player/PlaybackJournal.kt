@@ -59,7 +59,9 @@ class PlaybackJournal(
         /** A play report a provider's server didn't take (Jellyfin `/Sessions/Playing*`, step 26). */
         REPORT,
         /** A smooth pause / play / seek from the crossfade length; [Event.detail] is "pause|play|seek N ms". */
-        FADE
+        FADE,
+        /** The playing track's position jumped to its start with nobody asking (a stream that broke off); [Event.detail]. */
+        JUMP
     }
 
     data class Event(val atMs: Long, val kind: Kind, val title: String? = null, val detail: String? = null, val valueMs: Long = 0L)

@@ -17,6 +17,13 @@ class FakeNextTrackFetch : NextTrackFetch {
         writingTrackId = trackId
     }
 
+    /** Tracks whose whole file was asked for while playing (an unseekable stream). */
+    val fetchedPlaying = mutableListOf<String>()
+
+    override fun fetchPlaying(trackId: String, stream: ResolvedStream) {
+        fetchedPlaying += trackId
+    }
+
     override fun cancel() {
         cancels++
         writingTrackId = null

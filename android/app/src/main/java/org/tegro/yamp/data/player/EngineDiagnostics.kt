@@ -130,7 +130,10 @@ class EngineDiagnostics(
             f.sampleMimeType ?: f.codecs,
             f.sampleRate.takeIf { it != unset }?.let { "$it Hz" },
             f.channelCount.takeIf { it != unset }?.let { "$it ch" },
-            f.bitrate.takeIf { it != unset }?.let { "${it / 1000} kbps" }
+            f.bitrate.takeIf { it != unset }?.let { "${it / 1000} kbps" },
+            // A progressive stream sent with no length (a server transcode) can't seek and can't resume mid-way
+            if (player.isCurrentMediaItemSeekable) "seekable" else "not seekable",
+            player.duration.takeIf { it != androidx.media3.common.C.TIME_UNSET && it > 0 }?.let { "duration ${it / 1000} s" } ?: "length unknown"
         )
         journal?.record(PlaybackJournal.Kind.FORMAT, title?.toString(), parts.joinToString(" "))
     }

@@ -222,6 +222,10 @@ class SettingsRepositoryImpl @Inject constructor(
     override val fixedOutputFormat = fixedOutputPref.first
     override suspend fun setFixedOutputFormat(enabled: Boolean) = fixedOutputPref.second(enabled)
 
+    private val fadeThenRisePref = bool("transition_fade_then_rise", false)
+    override val transitionFadeThenRise = fadeThenRisePref.first
+    override suspend fun setTransitionFadeThenRise(enabled: Boolean) = fadeThenRisePref.second(enabled)
+
     private val groupQueuesPref = bool("group_queues_by_account", true)
     override val groupQueuesByAccount = groupQueuesPref.first
     override suspend fun setGroupQueuesByAccount(enabled: Boolean) = groupQueuesPref.second(enabled)

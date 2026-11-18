@@ -412,6 +412,9 @@ class PlaybackController @Inject internal constructor(
         settingsRepository.crossfadeSeconds
             .onEach { playerRepository.setCrossfadeDuration(it * 1000L) }
             .launchIn(scope)
+        settingsRepository.transitionFadeThenRise
+            .onEach { playerRepository.setTransitionFadeThenRise(it) }
+            .launchIn(scope)
 
         // The track that actually renders audio: it resets error recovery, and it is what History records (D46) —
         // a track skipped before it sounded is not listed, and the time it sounded is what is counted
@@ -1820,7 +1823,7 @@ class PlaybackController @Inject internal constructor(
         }
         streamingTrackId = trackId
         playingCopyId = null
-        playerRepository.playTrack(trackId, stream, track.title, track.artists.firstOrNull()?.name, coverUrlFor(track), crossfade, startPositionMs, pickAt)
+        playerRepository.playTrack(trackId, stream.copy(durationMs = track.durationMs), track.title, track.artists.firstOrNull()?.name, coverUrlFor(track), crossfade, startPositionMs, pickAt)
     }
 
     private fun playCopy(track: Track, crossfade: Boolean, startPositionMs: Long, pickAt: Long = 0L) {
@@ -2135,7 +2138,7 @@ class PlaybackController @Inject internal constructor(
                 // The whole file goes to disk ahead of time; the warm player below needs only its first seconds (D86)
                 else -> nextFetch.prefetch(nextId, stream)
             }
-            playerRepository.prepareNextTrack(nextId, stream, track.title, track.artists.firstOrNull()?.name, coverUrlFor(track))
+            playerRepository.prepareNextTrack(nextId, stream.copy(durationMs = track.durationMs), track.title, track.artists.firstOrNull()?.name, coverUrlFor(track))
         }
     }
 
@@ -2189,7 +2192,22 @@ class PlaybackController @Inject internal constructor(
             val onDisk = (next as? NextTrack.Ready)?.onDisk == true
             if (warm != null && warm == next.trackId && !onDisk) setNext(NextTrack.Ready(warm, onDisk = false))
         }.launchIn(scope)
+        // A stream with no length (a server transcode) can't seek or resume mid-way: its whole file goes to disk,
+        // from which the engine seeks and recovers
+        playerRepository.unseekableStreamEvent.onEach { trackId ->
+            val resolver = streams.forAccount(playbackAccount)
+            val stream = resolver.cached(refOf(trackId)) ?: resolver.resolve(refOf(trackId)).getOrNull() ?: return@onEach
+            nextFetch.fetchPlaying(trackId, stream)
+        }.launchIn(scope)
         nextFetch.results.onEach { result ->
+            if (result.playing) {
+                val isCurrent = playerRepository.currentTrackId.value == result.trackId
+                journal.record(PlaybackJournal.Kind.CACHE, currentTrack.value?.title?.takeIf { isCurrent }, "playing track " + result.outcome.name.lowercase().replace('_', ' '))
+                // All of it on disk now: the bar shows it loaded to the end
+                val written = result.outcome == NextTrackFetch.Outcome.WRITTEN || result.outcome == NextTrackFetch.Outcome.ALREADY_ON_DISK
+                if (isCurrent && written) onDiskTrackId.value = result.trackId
+                return@onEach
+            }
             journal.record(PlaybackJournal.Kind.CACHE, nextTitle.takeIf { _nextTrack.value.trackId == result.trackId }, result.outcome.name.lowercase().replace('_', ' '))
             if (_nextTrack.value.trackId != result.trackId) return@onEach
             when (result.outcome) {

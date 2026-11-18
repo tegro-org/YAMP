@@ -45,6 +45,13 @@ class ScriptedExoPlayer(sessionId: Int) : NoErrorExoPlayer() {
 
     val itemId: String? get() = items.getOrNull(index)?.mediaId
 
+    /**
+     * A progressive stream sent with no length (a server transcode): not seekable — Media3 turns a seek into 0 — and
+     * with no duration of its own.
+     */
+    var seekable = true
+    var lengthKnown = true
+
     /** The ids in the playlist, in order. */
     val playlist: List<String> get() = items.map { it.mediaId }
 
@@ -148,16 +155,16 @@ class ScriptedExoPlayer(sessionId: Int) : NoErrorExoPlayer() {
     }
     override fun release() = Unit
 
-    override fun getCurrentTimeline(): Timeline = ItemsTimeline(items)
+    override fun getCurrentTimeline(): Timeline = ItemsTimeline(items, seekable, if (lengthKnown) TRACK_MS * 1_000L else C.TIME_UNSET)
     override fun getCurrentMediaItemIndex(): Int = index
     override fun getCurrentPeriodIndex(): Int = index
     override fun seekTo(mediaItemIndex: Int, positionMs: Long, seekCommand: Int, isRepeatingCurrentItem: Boolean) {
         flush()
-        position = positionMs
+        position = if (seekable) positionMs else 0L
         seeks += positionMs
     }
 
-    override fun getDuration(): Long = if (items.isEmpty()) C.TIME_UNSET else TRACK_MS
+    override fun getDuration(): Long = if (items.isEmpty() || !lengthKnown) C.TIME_UNSET else TRACK_MS
     override fun getCurrentPosition(): Long = position
     /** How far the item is loaded; a test raises it to show a slow load that still brings data. */
     var loaded = 0L
@@ -187,16 +194,16 @@ class ScriptedExoPlayer(sessionId: Int) : NoErrorExoPlayer() {
     override fun getMediaMetadata(): MediaMetadata = items.getOrNull(index)?.mediaMetadata ?: MediaMetadata.EMPTY
 
     /** One window and one period per media item; just enough for currentMediaItem and mediaItemCount. */
-    private class ItemsTimeline(private val items: List<MediaItem>) : Timeline() {
+    private class ItemsTimeline(private val items: List<MediaItem>, private val seekable: Boolean, private val durationUs: Long) : Timeline() {
         override fun getWindowCount() = items.size
         override fun getWindow(windowIndex: Int, window: Window, defaultPositionProjectionUs: Long): Window =
             window.set(
                 windowIndex, items[windowIndex], null, C.TIME_UNSET, C.TIME_UNSET, C.TIME_UNSET,
-                true, false, null, 0L, TRACK_MS * 1_000L, windowIndex, windowIndex, 0L
+                seekable, false, null, 0L, durationUs, windowIndex, windowIndex, 0L
             )
         override fun getPeriodCount() = items.size
         override fun getPeriod(periodIndex: Int, period: Period, setIds: Boolean): Period =
-            period.set(periodIndex, periodIndex, periodIndex, TRACK_MS * 1_000L, 0L)
+            period.set(periodIndex, periodIndex, periodIndex, durationUs, 0L)
         override fun getIndexOfPeriod(uid: Any): Int = (uid as? Int)?.takeIf { it in items.indices } ?: C.INDEX_UNSET
         override fun getUidOfPeriod(periodIndex: Int): Any = periodIndex
     }

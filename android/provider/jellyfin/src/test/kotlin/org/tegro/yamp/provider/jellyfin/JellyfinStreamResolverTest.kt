@@ -47,6 +47,17 @@ class JellyfinStreamResolverTest {
         assertFalse(stream.uri.contains("api_key", ignoreCase = true))
     }
 
+    /**
+     * 2026-11-17 ride: a file the device plays as it is comes back with its length and byte ranges (seekable); a
+     * transcode comes chunked with no length — asked at a constant bitrate, so its disk copy and any re-read agree
+     * byte for byte and seek by position once the length is known.
+     */
+    @Test
+    fun aTranscodeIsAskedForAtAConstantBitrate() = runTest {
+        val stream = resolve()
+        assertTrue(stream.uri.contains("EnableAudioVbrEncoding=false"))
+    }
+
     @Test
     fun theTokenGoesInTheAuthorizationHeader() = runTest {
         val stream = resolve()

@@ -33,7 +33,12 @@ data class ResolvedStream(
      * A stable key for the on-disk stream cache (D86): the same account, track and quality always give the same
      * key, whatever the (signed, short-lived) [uri] is. Null: never cached (a copy on the device, radio).
      */
-    val cacheKey: String? = null
+    val cacheKey: String? = null,
+    /**
+     * The track's own length from the catalog, for when the stream does not tell it (a server-side transcode sent
+     * without a length): the engine times the end-of-track transition by it.
+     */
+    val durationMs: Long? = null
 )
 
 /**

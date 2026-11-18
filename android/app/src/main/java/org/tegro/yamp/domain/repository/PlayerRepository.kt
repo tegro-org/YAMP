@@ -118,6 +118,15 @@ interface PlayerRepository {
     fun setDucked(ducked: Boolean)
     /** 0 disables crossfading: tracks switch immediately and play to their natural end. */
     fun setCrossfadeDuration(durationMs: Long)
+
+    /** The transition at a track's natural end: false = crossfade, true = fade then rise (see the setting). */
+    fun setTransitionFadeThenRise(enabled: Boolean) {}
+
+    /**
+     * The playing track turned out to be unseekable (a progressive stream with no length — a server transcode):
+     * the controller writes its whole file to disk, from which the engine seeks and recovers.
+     */
+    val unseekableStreamEvent: Flow<String> get() = emptyFlow()
     fun triggerSkipNext()
     fun triggerSkipPrev()
     fun stop()

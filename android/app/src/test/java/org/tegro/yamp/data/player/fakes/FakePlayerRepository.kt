@@ -40,6 +40,7 @@ class FakePlayerRepository(private val context: Context) : PlayerRepository, org
     override val skipPrevEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
     override val playbackErrorEvent = MutableSharedFlow<PlaybackFailure>(extraBufferCapacity = 8)
     override val staleStreamEvent = MutableSharedFlow<String>(extraBufferCapacity = 8)
+    override val unseekableStreamEvent = MutableSharedFlow<String>(extraBufferCapacity = 8)
     override val warmTrackId = MutableStateFlow<String?>(null)
     override val standbyFailedEvent = MutableSharedFlow<Pair<String, String>>(extraBufferCapacity = 8)
 

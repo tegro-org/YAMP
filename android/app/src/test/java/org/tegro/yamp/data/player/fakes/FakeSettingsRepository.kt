@@ -68,6 +68,8 @@ class FakeSettingsRepository : SettingsRepository {
     override suspend fun setKeepBothPlayersRunning(enabled: Boolean) { keepBothPlayersRunning.value = enabled }
     override val fixedOutputFormat = MutableStateFlow(false)
     override suspend fun setFixedOutputFormat(enabled: Boolean) { fixedOutputFormat.value = enabled }
+    override val transitionFadeThenRise = MutableStateFlow(false)
+    override suspend fun setTransitionFadeThenRise(enabled: Boolean) { transitionFadeThenRise.value = enabled }
     override suspend fun setGroupQueuesByAccount(enabled: Boolean) { groupQueuesByAccount.value = enabled }
     override suspend fun setListeningHistory(enabled: Boolean) { listeningHistory.value = enabled }
 }

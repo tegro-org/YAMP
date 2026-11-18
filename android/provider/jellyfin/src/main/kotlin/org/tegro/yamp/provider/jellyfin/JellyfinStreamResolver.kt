@@ -78,6 +78,9 @@ class JellyfinStreamResolver(
         append("&TranscodingContainer=").append(TRANSCODE_CODEC)
         append("&TranscodingProtocol=http")
         append("&AudioCodec=").append(TRANSCODE_CODEC)
+        // A transcode is constant bitrate: the same bytes every time (the disk copy and a resumed read agree) and
+        // seekable by position once its length is known
+        append("&EnableAudioVbrEncoding=false")
         append("&EnableRedirection=false")
     }
 

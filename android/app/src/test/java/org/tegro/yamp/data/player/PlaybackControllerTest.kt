@@ -405,6 +405,24 @@ class PlaybackControllerTest {
     }
 
     /**
+     * 2026-11-17 ride: the playing track turned out unseekable (a transcode with no length): its whole file goes to
+     * disk too, without touching the next track's write; the stream it is written from carries the catalog length.
+     */
+    @Test
+    fun anUnseekablePlayingTrackHasItsWholeFileWrittenToDisk() {
+        val controller = controller()
+        controller.playTrack("1", playlist("1", "2", "3"), PlaylistSource.LIBRARY)
+        controller.settle()
+        val nextWrites = nextFetch.prefetched.toList()
+
+        engine.unseekableStreamEvent.tryEmit("1")
+        controller.settle()
+
+        assertEquals(listOf("1"), nextFetch.fetchedPlaying)
+        assertEquals("the next track's write is left alone", nextWrites, nextFetch.prefetched)
+    }
+
+    /**
      * b85 checkpoint: a next track already on disk (the one just left by a skip back) is ready at once — even while the
      * engine is still settling, when the preload itself waits; its start on disk is ready too, the rest fills in.
      */

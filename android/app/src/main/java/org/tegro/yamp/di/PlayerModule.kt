@@ -147,7 +147,8 @@ object PlayerModule {
             bothRunning = settings.keepBothPlayersRunning
         )
         return org.tegro.yamp.data.repository.PlayerRepositoryImpl(
-            playerA, playerB, downloadManager, wakeLockHelper, journal, parking
+            playerA, playerB, downloadManager, wakeLockHelper, journal, parking,
+            fullyCached = { key -> streamCache.enabled && streamCache.isComplete(key) }
         )
     }
 
