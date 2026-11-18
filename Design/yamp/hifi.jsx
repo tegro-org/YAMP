@@ -77,7 +77,8 @@ function Backdrop({ tint = '#2C4FA8', glowY = '28%', children, style }) {
 
 // Mock cover: flat tinted gradient (real covers come from the provider).
 const COVER_HUES = { blue: ['#5B86DD', '#1E2C7A'], rose: ['#D96C8A', '#5A1E3C'], amber: ['#E0A050', '#6A3A12'],
-  green: ['#58B889', '#12452F'], violet: ['#9A7BE0', '#35206E'], teal: ['#4FB3C2', '#12414C'], gray: ['#3A3F4C', '#1C1F28'] };
+  green: ['#58B889', '#12452F'], violet: ['#9A7BE0', '#35206E'], teal: ['#4FB3C2', '#12414C'], gray: ['#3A3F4C', '#1C1F28'],
+  sand: ['#F7EEDC', '#D8BF8C'], ink: ['#24262C', '#0B0C0F'] };
 function Cover({ size = 48, hue = 'gray', radius = HFShape.cover, glyph, style }) {
   const [a, b] = COVER_HUES[hue] || COVER_HUES.gray;
   return (
