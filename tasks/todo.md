@@ -696,3 +696,29 @@ the next-track cards can't both fit well), so: **two screens**.
       signing in to the same account key. Nothing plays before that.
 - [ ] Export dialog note: "The file contains your server addresses — don't share it publicly." Never tokens or
       passwords; no downloads or stream cache. Design doc first when it's picked up.
+
+## Next: gaps after v0.5.0 (ordered)
+
+- [ ] (a) **Yandex seek restarts the track** (journal `START cut … <pos>` on a seek): check whether the
+      unseekable-reopen path misfires for Yandex, or whether the encrypted `encraw` source reports itself as
+      unseekable. Fix it and add a test. *Done when* a seek in a Yandex stream is a plain seek: no START line, no gap.
+- [ ] (b) **Jellyfin downloads and offline playback** of a fully cached Jellyfin track. *Done when* a downloaded or
+      fully cached Jellyfin track plays in airplane mode.
+- [ ] (c) **Wide-layout "taller" threshold:** taller when the controls would get **less than 1/3 of the width** after the full-height cover block (≈ **width/height < 1.66**; geometric form preferred — it includes the next block and paddings). 16:10 = 1.6 is taller, with the
+      block at the right padding; 16:9 = 1.78 is wide, with the block centred. Apply it in `wideGeometryOf`.
+      *Done when* tests pass at 1280×800 and 1920×1200 (taller) and at 1760×720 and 2340×1080 (wide), and the
+      clock never crosses the cover edge on the taller ones.
+- [ ] (d) **Android Auto browse tree with Jellyfin accounts:** verify on the unit or the emulator, and fix what's
+      missing. *Done when* the Jellyfin queues are browsable and playable from Android Auto.
+- [ ] (e) **Home Jellyfin sections and merged Library rows** with service badges. Canvas first. *Done when* the
+      boards are approved and built, and Yandex-only Home stays pixel-identical.
+- [ ] (f) **Car long press on album tiles.** This needs a car album view; canvas first. *Done when* a car album
+      tile opens the album menu with car-sized rows.
+- [ ] (g) **Foldable shape classes in the tests:**
+      - the Fold 5 cover and inner screens;
+      - Galaxy Z Fold 8 (specs from the user, 2026-11-18): **cover** 5.5", 1248×1972 px, 428 ppi (≈ 466×737 dp
+        portrait, w/h 0.63 — passport-like); **inner** 7.6", 2448×1848 px, 4:3, 404 ppi (≈ 969×731 dp landscape,
+        w/h 1.32 → the "taller" branch; also portrait 731×969 dp).
+
+      Add the Fold 8 numbers once confirmed. *Done when* geometry tests and goldens cover them.
+- [ ] (h) **Phase 7 export/import:** design doc first. *Done when* the doc is approved.
