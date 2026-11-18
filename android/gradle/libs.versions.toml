@@ -15,7 +15,7 @@ media3 = "1.11.1"
 coroutines = "1.11.0"
 serialization = "1.12.0"
 room = "2.8.5"
-roborazzi = "1.77.0"
+roborazzi = "1.79.0"
 # Debug tool only (android/diag, built with -Pyamp.diag): ADB client talking to the device's own adbd
 dadb = "2.0.0"
 glance = "1.2.0"
