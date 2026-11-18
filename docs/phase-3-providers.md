@@ -731,3 +731,24 @@ not for a service without likes). `wideMenuItems()` decides the rows (test in `C
 tall and wrap to two lines inside Material's 280 dp menu width. A head unit standing in portrait keeps the phone
 portrait player (approved).
 
+
+### After stage 2 — one player structure for every layout (as built, 2026-11-18)
+
+- Settings → Player: «Крупные кнопки» / "Large controls" replaces "Layout Phone / Car" (same stored key
+  `player_car_layout`, so a car layout chosen before stays on).
+- Every player layout (portrait, phone landscape, large controls) has the same top row: **⋮ · queue dropdown**, ⋮ at
+  the outer edge (portrait always top-left; the wide layouts mirror with the wheel side). The ⋮ menu
+  (`playerMenuItems`, `PlayerMoreButton`) holds, in order: «Настроить волну» on My Wave (+ «Назад к моей волне» on a
+  wave by a track) / «Запустить радио» on another Yandex queue (none on Jellyfin) · Поиск · Таймер сна · Добавить в
+  плейлист… · Качество · Нравится / Не нравится (only with like gestures). The minimise, queue, sleep, add-to-playlist,
+  search buttons, the format chip and the wave/radio pills are gone from the player.
+- Portrait: the labels centred between dislike and like (as the wide layouts); "Next tracks 3" uses the landscape
+  cards (square covers, title and artist within the card's width); «Настроить волну» opens as a panel over the player.
+- Wide geometry: one pure function, `wideGeometryOf` (mirrors the canvas `plWideLayout()`): the cover + next block
+  spans the full height between the top row's padding; the far side keeps at least the progress bar's padding; a
+  taller screen gives the controls the rest and ends the block at that padding; a wider one caps the controls at
+  their share and centres the block beside them; a near-square screen (a foldable's inner screen on its side) lets
+  the width stop the cover — the block is then centred in the height. The clock has one fixed place on every screen
+  (20 dp inside the far padding and the top padding), white with a soft shadow and a faint scrim.
+- Deviation: the layout scales with the screen's width, so 1280×800 still has a little spare width and centres the
+  block; the "taller" branch starts around 4:3 (tested at 1024×768).

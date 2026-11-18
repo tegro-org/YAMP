@@ -678,3 +678,21 @@ the next-track cards can't both fit well), so: **two screens**.
       "Head units with Poweramp Equalizer".
 - [x] Same build: wide/Car player backdrop full-screen (no band under the status bar), artist fallback in landscape,
       Car cover and next block in phone-landscape proportions (D88, playback-stability "As built").
+
+## One player structure (2026-11-18, as built)
+
+- [x] «Крупные кнопки» switch; ⋮ · queue top row everywhere with the shared ⋮ menu; portrait title block and
+      landscape-type 3 cards; `wideGeometryOf` (full-height block, centred on wide screens, far padding on taller ones,
+      vertical centring on near-square ones); the clock's fixed place with shadow + scrim; Fold cover / inner goldens.
+
+## Phase 7 — Export / import settings (user, 2026-11-18; roadmap: `docs/multi-source-player.md`)
+
+- [ ] One versioned JSON file (Android file picker / share sheet — LocalSend works): settings (playback, player,
+      interface, cache size, quality per account), FM radio favourites, queues (name, account binding, order, entry
+      refs, positions, radio seeds, Keep), accounts **without secrets** (service, Yandex uid + display name; Jellyfin
+      server address + user name). History optional (a checkbox in the export dialog).
+- [ ] Import: **merge by default** (same account + name → updated), "replace all" as the alternative. Imported
+      accounts need sign-in; their queues wait hidden (like removed accounts, D62) and appear with positions after
+      signing in to the same account key. Nothing plays before that.
+- [ ] Export dialog note: "The file contains your server addresses — don't share it publicly." Never tokens or
+      passwords; no downloads or stream cache. Design doc first when it's picked up.

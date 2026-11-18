@@ -440,3 +440,11 @@ Paths are today's; after Phase 0 the package root is `org/tegro/yamp/`.
   replace this, so Phase 4c is expected to be dropped.
 - **No duplicate merging.** With Jellyfin primary, the same files via Airsonic are not de-duplicated; if
   both are ever connected, each provider is browsed separately.
+
+### Phase 7 — Export / import settings
+
+Planned (user, 2026-11-18; plan in `tasks/todo.md`; design doc first). One versioned JSON file through the Android
+file picker / share sheet: settings, FM radio favourites, queues (account binding, entries, positions, radio seeds),
+accounts without secrets (no tokens or passwords); History optional. Import merges by default ("replace all" as an
+alternative); imported accounts need sign-in, and their queues appear after signing in to the same account key
+(the D62 mechanism). The export dialog warns that the file contains server addresses.
