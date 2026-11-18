@@ -74,7 +74,7 @@
           subtitle: 'The app today (upstream 1.12.2), real test screenshots. This look is the reference for every new screen (D23). Russian only until the localization pass.',
           boards: shots(REF_PHONE) },
         { id: 'ref-wide', title: '3 · As built — landscape, head unit, car mode',
-          subtitle: "Real test screenshots. There is no 1920×720 capture yet — the user's head unit size is added as a screenshot qualifier in Phase 1 (ARCHITECTURE I2).",
+          subtitle: "Real test screenshots. There is no 1760×720 capture yet — the user's head unit size is added as a screenshot qualifier in Phase 1 (ARCHITECTURE I2).",
           boards: shots(REF_WIDE) },
         { id: 'queues-phone', title: '4 · Queues — phone (Phase 1)',
           subtitle: 'Several persistent queues; one is active. Queue button → sheet → tap a queue = switch (2 taps, D26). Hold a queue for rename / duplicate / clear / delete. No full-screen queue manager (D8). Bounded by kind (D35′): your own queues, My Wave, as many radios as you start (section 5c), one per saved mix, one "Last mix". Phase 2a: with more than one account each queue belongs to one (D57, D61) — the 2-account variants sit next to their one-account boards; "Group" (Settings → Accounts, default on, D64) = headers, no row markers; off = a marker on every row.',
@@ -102,7 +102,7 @@
             { id: 'ac-add-grouped', label: 'Add to queue… · 2 accounts, grouped like the switcher', ...sz(P), el: <AcPhoneAddToQueue grouped /> },
             { id: 'ac-add-flat', label: 'Add to queue… · 2 accounts, flat with markers', ...sz(P), el: <AcPhoneAddToQueue /> },
           ] },
-        { id: 'queues-car', title: '5 · Queues — head unit 1920×720 (Phase 1)',
+        { id: 'queues-car', title: '5 · Queues — head unit 1760×720 (Phase 1)',
           subtitle: "Car mode names the active queue in a pill; tapping it opens the panel on the driver's side. Rows are 100 dp. No text input while driving: “+” creates “Queue N”, renaming is a parked / phone action. Phase 2a: with more than one account the pill carries the marker and the panel follows \"Group\"; removed accounts' queues are never shown in the car or in Android Auto (there: one sub-folder per account when grouped, the account name in the subtitle when flat).",
           boards: [
             { id: 'qc-home', label: 'Car mode · active queue pill', ...sz(H), el: <Frame kind="head" tint="#8A5A22" glowY="40%"><CarHome /></Frame> },
@@ -127,7 +127,7 @@
             { id: 'pf-album', label: 'Album folder · tracks', ...sz(P), el: <PhoneFolderAlbum /> },
             { id: 'pf-menu', label: 'Folder · hold / ⋯ menu', ...sz(P), el: <PhoneFolderMenu /> },
           ] },
-        { id: 'folders-car', title: '7 · Folder browser — head unit 1920×720 (Phase 4b)',
+        { id: 'folders-car', title: '7 · Folder browser — head unit 1760×720 (Phase 4b)',
           subtitle: 'Tap budget (D12): a pinned or recent folder plays in 1 tap from car home (its play button); any folder in ≤ 3 taps (Folders → folder → play). Big tiles, tile tap = open. The A–Z rail lists only the letters present, Latin and Cyrillic.',
           boards: [
             { id: 'cf-home', label: 'Car home · pinned and recent folders (1 tap to play)', ...sz(H), el: <CarHomeFolders /> },
@@ -135,14 +135,14 @@
             { id: 'cf-level', label: 'Inside a folder · big actions + album tiles', ...sz(H), el: <CarFolderLevel /> },
           ] },
         { id: 'split', title: '8 · Head unit in split screen (1 : 2)',
-          subtitle: 'With the navigator beside it the unit gives YAMP either the wide pane (about 1280×720 — the car grid the app is already designed on) or the slim pane (about 640×720, one column). Exact pane sizes still to be measured on the unit.',
+          subtitle: 'With the navigator beside it the unit gives YAMP either the wide pane (about 1173×720) or the slim pane (about 587×720, one column). Exact pane sizes still to be measured on the unit.',
           boards: [
-            { id: 'sw-car', label: 'Wide pane 1280×720 · car mode', ...sz(SW), el: <SplitWideCar /> },
+            { id: 'sw-car', label: 'Wide pane 1173×720 · car mode', ...sz(SW), el: <SplitWideCar /> },
             { id: 'nbs-wide-loading', label: 'Wide pane · Next loading (Phase 3b)', ...sz(SW), el: <SplitWideNextState state="loading" /> },
             { id: 'sw-queues', label: 'Wide pane · queues panel', ...sz(SW), el: <SplitWideQueues /> },
-            { id: 'acc-sw-grouped', label: 'Wide pane · 2 accounts: queues grouped', ...sz(SW), el: <AcCarPanel grouped kind="splitW" w={1280} /> },
-            { id: 'acc-sw-flat', label: 'Wide pane · 2 accounts: queues flat', ...sz(SW), el: <AcCarPanel kind="splitW" w={1280} /> },
-            { id: 'sn-car', label: 'Slim pane 640×720 · car mode', ...sz(SN), el: <SplitNarrowCar /> },
+            { id: 'acc-sw-grouped', label: 'Wide pane · 2 accounts: queues grouped', ...sz(SW), el: <AcCarPanel grouped kind="splitW" w={FRAMES.splitW.w} /> },
+            { id: 'acc-sw-flat', label: 'Wide pane · 2 accounts: queues flat', ...sz(SW), el: <AcCarPanel kind="splitW" w={FRAMES.splitW.w} /> },
+            { id: 'sn-car', label: 'Slim pane 587×720 · car mode', ...sz(SN), el: <SplitNarrowCar /> },
             { id: 'nbs-slim-failed', label: 'Slim pane · Next failed (Phase 3b)', ...sz(SN), el: <SplitNarrowNextState state="failed" /> },
             { id: 'sn-queues', label: 'Slim pane · queues panel', ...sz(SN), el: <SplitNarrowQueues /> },
             { id: 'acc-sn-grouped', label: 'Slim pane · 2 accounts: queues grouped', ...sz(SN), el: <AcCarPanel grouped kind="splitN" /> },
@@ -231,6 +231,7 @@
               .pr-section { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 20px 16px; break-before: page; }
               .pr-section.first { break-before: auto; }
               .pr-head { flex: 0 0 100%; break-after: avoid; margin-bottom: -6px; }
+              .pr-row { flex: 0 0 100%; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 20px 16px; }
               .pr-board { flex: 0 0 auto; break-inside: avoid; }
             `}</style>
             {sections.map((s, i) => (
@@ -239,10 +240,13 @@
                   <h2 style={{ font: '700 26px Roboto', margin: '0 0 4px' }}>{s.title}</h2>
                   <p style={{ font: '400 15px Roboto', color: '#5a5048', margin: 0, maxWidth: 1500 }}>{s.subtitle}</p>
                 </div>
-                {s.boards.map((b) => (
-                  <div key={b.id} className="pr-board" data-board={b.id}>
-                    <div style={{ font: '600 13px Roboto', color: '#5a5048', marginBottom: 6, maxWidth: b.w, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.label}</div>
-                    <div style={{ width: b.w, height: b.h }}><Board id={b.id}>{b.el}</Board></div>
+                {dcRows(s.boards.map((b) => b.id), (id) => s.boards.find((b) => b.id === id)).map((row, ri) => (
+                  <div key={ri} className="pr-row">
+                    {row.map((id) => { const b = s.boards.find((x) => x.id === id); return (
+                      <div key={b.id} className="pr-board" data-board={b.id}>
+                        <div style={{ font: '600 13px Roboto', color: '#5a5048', marginBottom: 6, maxWidth: b.w, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.label}</div>
+                        <div style={{ width: b.w, height: b.h }}><Board id={b.id}>{b.el}</Board></div>
+                      </div>); })}
                   </div>
                 ))}
               </div>

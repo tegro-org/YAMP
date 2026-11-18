@@ -129,7 +129,7 @@ function radioSections() {
         { id: 'ac-radio-flat', label: 'Start radio · 2 accounts, flat · re-seeding keeps the radio’s account', w: P.w, h: P.h, el: <AcPhoneRadioPicker /> },
         { id: 'rd-switcher', label: 'Queues · radios show ∞, Keep marker on inactive rows', w: P.w, h: P.h, el: <PhoneRadioSwitcher /> },
       ] },
-    { id: 'radio-car', title: '5d · Radio — head unit 1920×720 (Phase 2)',
+    { id: 'radio-car', title: '5d · Radio — head unit 1760×720 (Phase 2)',
       subtitle: 'The same picker in the side panel: big rows, the Keep switch a big row too, "+" in the header = New radio. The car header pill reads "Start radio" on every queue but My Wave (D54).',
       boards: [
         { id: 'rdc-picker', label: 'Car mode · Start radio panel', w: H.w, h: H.h, el: <CarRadioPicker /> },

@@ -461,6 +461,24 @@ function DCViewport({ children, minScale = 0.1, maxScale = 8, style = {} }) {
 // ─────────────────────────────────────────────────────────────
 // DCSection — editable title + h-row of artboards in persisted order
 // ─────────────────────────────────────────────────────────────
+// Rows of a section: a new row starts when the orientation changes, or when a row holds 8 portrait boards
+// (width ≤ height) or 3 landscape ones. Board order is kept. Shared with the print mode (window.dcRows).
+const DC_ROW_MAX = { portrait: 8, landscape: 3 };
+function dcRows(ids, propsOf) {
+  const rows = [];
+  let cur = [], kind = null;
+  for (const k of ids) {
+    const p = propsOf(k) || {};
+    const w = p.width ?? p.w ?? 260, h = p.height ?? p.h ?? 480;
+    const k2 = w > h ? 'landscape' : 'portrait';
+    if (cur.length && (k2 !== kind || cur.length >= DC_ROW_MAX[k2])) { rows.push(cur); cur = []; }
+    cur.push(k); kind = k2;
+  }
+  if (cur.length) rows.push(cur);
+  return rows;
+}
+window.dcRows = dcRows;
+
 function DCSection({ id, title, subtitle, children, gap = 48 }) {
   const ctx = React.useContext(DCCtx);
   const sid = id ?? title;
@@ -499,17 +517,21 @@ function DCSection({ id, title, subtitle, children, gap = 48 }) {
           {subtitle && <div style={{ fontSize: 16, color: DC.subtitle }}>{subtitle}</div>}
         </div>
       </div>
-      <div style={{ display: 'flex', gap, padding: '0 60px', alignItems: 'flex-start', width: 'max-content' }}>
-        {order.map((k) => (
-          <DCArtboardFrame key={k} sectionId={sid} artboard={byId[k]} order={order}
-            label={(sec.labels || {})[k] ?? byId[k].props.label}
-            onRename={(v) => ctx && ctx.patchSection(sid, (x) => ({ labels: { ...x.labels, [k]: v } }))}
-            onReorder={(next) => ctx && ctx.patchSection(sid, { order: next })}
-            onDelete={() => ctx && ctx.patchSection(sid, (x) => ({
-              hidden: [...(x.srcKey === srcKey ? (x.hidden || []) : []), k],
-              srcKey,
-            }))}
-            onFocus={() => ctx && ctx.setFocus(`${sid}/${k}`)} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: gap + 24, padding: '0 60px', width: 'max-content' }}>
+        {dcRows(order, (k) => byId[k].props).map((row, ri) => (
+          <div key={ri} style={{ display: 'flex', gap, alignItems: 'flex-start' }}>
+            {row.map((k) => (
+              <DCArtboardFrame key={k} sectionId={sid} artboard={byId[k]} order={order}
+                label={(sec.labels || {})[k] ?? byId[k].props.label}
+                onRename={(v) => ctx && ctx.patchSection(sid, (x) => ({ labels: { ...x.labels, [k]: v } }))}
+                onReorder={(next) => ctx && ctx.patchSection(sid, { order: next })}
+                onDelete={() => ctx && ctx.patchSection(sid, (x) => ({
+                  hidden: [...(x.srcKey === srcKey ? (x.hidden || []) : []), k],
+                  srcKey,
+                }))}
+                onFocus={() => ctx && ctx.setFocus(`${sid}/${k}`)} />
+            ))}
+          </div>
         ))}
       </div>
       {rest}
@@ -676,10 +698,10 @@ function DCArtboardFrame({ sectionId, artboard, label, order, onRename, onReorde
     // current scale so the dragged card tracks the cursor at any zoom level.
     const scale = me.getBoundingClientRect().width / me.offsetWidth || 1;
     const peers = Array.from(document.querySelectorAll(`[data-dc-section="${sectionId}"] [data-dc-slot]`));
-    const homes = peers.map((el) => ({ el, id: el.dataset.dcSlot, x: el.getBoundingClientRect().left }));
-    const slotXs = homes.map((h) => h.x);
+    const homes = peers.map((el) => { const r = el.getBoundingClientRect(); return { el, id: el.dataset.dcSlot, x: r.left, y: r.top }; });
+    const slotXs = homes.map((h) => h.x), slotYs = homes.map((h) => h.y);
     const startIdx = order.indexOf(id);
-    const startX = e.clientX;
+    const startX = e.clientX, startY = e.clientY;
     let liveOrder = order.slice();
     me.classList.add('dc-dragging');
 
@@ -687,17 +709,17 @@ function DCArtboardFrame({ sectionId, artboard, label, order, onRename, onReorde
       for (const h of homes) {
         if (h.id === id) continue;
         const slot = liveOrder.indexOf(h.id);
-        h.el.style.transform = `translateX(${(slotXs[slot] - h.x) / scale}px)`;
+        h.el.style.transform = `translate(${(slotXs[slot] - h.x) / scale}px, ${(slotYs[slot] - h.y) / scale}px)`;
       }
     };
 
     const move = (ev) => {
-      const dx = ev.clientX - startX;
-      me.style.transform = `translateX(${dx / scale}px)`;
-      const cur = homes[startIdx].x + dx;
+      const dx = ev.clientX - startX, dy = ev.clientY - startY;
+      me.style.transform = `translate(${dx / scale}px, ${dy / scale}px)`;
+      const cx = homes[startIdx].x + dx, cy = homes[startIdx].y + dy;
       let nearest = 0, best = Infinity;
       for (let i = 0; i < slotXs.length; i++) {
-        const d = Math.abs(slotXs[i] - cur);
+        const d = Math.hypot(slotXs[i] - cx, slotYs[i] - cy);
         if (d < best) { best = d; nearest = i; }
       }
       if (liveOrder.indexOf(id) !== nearest) {
@@ -712,7 +734,7 @@ function DCArtboardFrame({ sectionId, artboard, label, order, onRename, onReorde
       document.removeEventListener('pointerup', up);
       const finalSlot = liveOrder.indexOf(id);
       me.classList.remove('dc-dragging');
-      me.style.transform = `translateX(${(slotXs[finalSlot] - homes[startIdx].x) / scale}px)`;
+      me.style.transform = `translate(${(slotXs[finalSlot] - homes[startIdx].x) / scale}px, ${(slotYs[finalSlot] - homes[startIdx].y) / scale}px)`;
       // After the settle transition, kill transitions + clear transforms +
       // commit the reorder in the same frame so there's no visual snap-back.
       setTimeout(() => {

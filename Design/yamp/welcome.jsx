@@ -188,7 +188,7 @@ function welcomeBoards() {
     'si-signin': [
       { after: 'jf-add', boards: [
         { id: 'wl-welcome', label: 'First start · choose the source: Yandex Music or Jellyfin (no forced Yandex sign-in)', w: P.w, h: P.h, el: <WlWelcomePhone /> },
-        { id: 'wl-welcome-head', label: 'First start · head unit 1920×720 · the two choices side by side', w: H.w, h: H.h, el: <WlWelcomeHead /> },
+        { id: 'wl-welcome-head', label: 'First start · head unit 1760×720 · the two choices side by side', w: H.w, h: H.h, el: <WlWelcomeHead /> },
         { id: 'wl-jf-home', label: 'Jellyfin only · Home: no My Wave, the default queue (D83) active and empty — "Add music from Library or Search"', w: P.w, h: P.h, el: <WlJfHome /> },
         { id: 'wl-jf-library', label: 'Jellyfin only · Library: the account’s section, no badges', w: P.w, h: P.h, el: <WlJfLibrary /> },
         { id: 'wl-jf-car', label: 'Jellyfin only · car home: queue pill with the Jellyfin mark, empty-queue card in car sizes', w: H.w, h: H.h, el: <WlJfCarHome /> },

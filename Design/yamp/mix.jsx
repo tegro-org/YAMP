@@ -642,7 +642,7 @@ function mixSections() {
         { id: 'mx-detail', label: 'A saved mix · Play / Re-run / Edit / Delete', ...sz(P), el: <MxDetail /> },
         { id: 'mx-rerun-confirm', label: 'Re-run · asked only when this mix’s queue is the one playing', ...sz(P), el: <MxRerunConfirm /> },
       ] },
-    { id: 'mix-car', title: '12b · Mix builder — head unit 1920×720 (Phase 6)',
+    { id: 'mix-car', title: '12b · Mix builder — head unit 1760×720 (Phase 6)',
       subtitle: 'Car mode shows saved mixes only and never needs typing: car home → Mixes → tile = 2 taps. A tile plays the mix in 1 tap (continues its queue, or builds it the first time); ↻ rebuilds the mix and replaces that queue (D29). The builder lives in the normal landscape interface (Library → Mixes): a centred two-column panel with 56 dp controls (D32). “Mixes” is one of the shared car tiles (D33).',
       boards: [
         { id: 'mx-car-home', label: 'Car home · “Mixes” in the shared tile row (highlighted)', ...sz(H), el: <MxCarHome /> },

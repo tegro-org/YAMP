@@ -15,7 +15,7 @@
 
 const PL_NEXT = [['Shine On You Crazy Diamond', 'Pink Floyd', 'amber'], ['Дороги', 'Мельница', 'green'], ['Comfortably Numb', 'Pink Floyd', 'violet']];
 
-// Phone landscape frame (915×412) — the canvas has no frame of this size yet.
+// Frame of any size (phone landscape 960×540 dp drawn at 2×, car 1760×720).
 function PlFrame({ w, h, tint = '#8A5A22', glowY = '30%', children }) {
   return (
     <div className="hf" style={{ position: 'relative', width: w, height: h, overflow: 'hidden', background: HF.ground }}>
@@ -349,47 +349,62 @@ function PlPhoneQueueOpen() {
 
 // ── 3. Player — Phone layout, landscape ──────────────────────────────────────
 function PlPhoneLandscape({ next = 1 }) {
-  // The approved car arrangement adapted to phone landscape (915×412): top row queue · tune · search; the labels
-  // centred between dislike / like; progress with times; Prev · Play · Next. The far side: the cover centred, the next
-  // track(s) under it (1 = one card, 3 = three small square cards).
-  const t = useT();
-  const leftW = 520, farX = 24 + leftW + 30, farW = 915 - farX - 24;
-  const cover = next === 3 ? 230 : 262;
+  // The approved car arrangement adapted to phone landscape: top row queue · tune · search; the labels centred
+  // between dislike / like; progress with times; Prev · Play · Next. The far side: the cover centred, the next
+  // track(s) under it (1 = one card, 3 = three small square cards). Laid out at 960×540 dp and drawn at 2× on a
+  // 1920×1080 board (FRAMES.land) — a 1080p phone in landscape.
+  const W = 960, H = 540, S = FRAMES.land.w / W;
   return (
-    <PlFrame w={915} h={412} tint="#2C4FA8" glowY="30%">
-      <div style={{ position: 'absolute', left: 24, top: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+    <div style={{ width: FRAMES.land.w, height: FRAMES.land.h, overflow: 'hidden' }}>
+      <div style={{ width: W, height: H, transform: `scale(${S})`, transformOrigin: '0 0' }}>
+        <PlPhoneLandscapeBody next={next} W={W} H={H} />
+      </div>
+    </div>
+  );
+}
+
+function PlPhoneLandscapeBody({ next, W, H }) {
+  const t = useT();
+  const leftW = 540, farX = 24 + leftW + 30, farW = W - farX - 24;
+  const cover = next === 3 ? 300 : 330;
+  const card = Math.floor((cover - 2 * 10) / 3);
+  const farH = next === 3 ? cover + 12 + card + 20 : cover + 14 + 63;
+  const farTop = Math.max(16, (H - farH) / 2);
+  return (
+    <PlFrame w={W} h={H} tint="#2C4FA8" glowY="30%">
+      <div style={{ position: 'absolute', left: 24, top: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
         <PlDropdown />
         <GlassPill icon="tune" height={44}>{t('Tune the wave', 'Настроить волну')}</GlassPill>
         <GlassCircle icon="search" size={44} />
       </div>
-      <div style={{ position: 'absolute', left: 24, top: 100, width: leftW }}>
+      <div style={{ position: 'absolute', left: 24, top: 150, width: leftW }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <GlassCircle icon="heart_broken" size={44} />
+          <GlassCircle icon="heart_broken" size={48} />
           <div style={{ flex: 1, minWidth: 0, textAlign: 'center' }}>
-            <div style={{ ...HFType.sectionCaps, fontSize: 11, color: HF.text2 }}>{t('Queue · 12 of 48', 'Очередь · 12 из 48')}</div>
-            <div className="hf-ellipsis" style={{ fontSize: 24, lineHeight: '30px', fontWeight: 800 }}>{t('First song', 'Первая песня')}</div>
-            <div className="hf-ellipsis" style={{ fontSize: 15, color: HF.text2 }}>{t('The Band', 'Группа')}</div>
+            <div style={{ ...HFType.sectionCaps, fontSize: 12, color: HF.text2 }}>{t('Queue · 12 of 48', 'Очередь · 12 из 48')}</div>
+            <div className="hf-ellipsis" style={{ fontSize: 28, lineHeight: '34px', fontWeight: 800 }}>{t('First song', 'Первая песня')}</div>
+            <div className="hf-ellipsis" style={{ fontSize: 17, color: HF.text2 }}>{t('The Band', 'Группа')}</div>
           </div>
-          <GlassCircle icon="favorite" size={44} color={HF.love} />
+          <GlassCircle icon="favorite" size={48} color={HF.love} />
         </div>
-        <div style={{ marginTop: 16 }}><PlProgress width={leftW} /></div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 40, marginTop: 18 }}>
-          <Knob icon="skip_previous" size={68} />
-          <Knob icon="pause" size={98} />
-          <NextKnob state="ready" size={68} />
+        <div style={{ marginTop: 22 }}><PlProgress width={leftW} /></div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 44, marginTop: 24 }}>
+          <Knob icon="skip_previous" size={74} />
+          <Knob icon="pause" size={108} />
+          <NextKnob state="ready" size={74} />
         </div>
       </div>
-      <div style={{ position: 'absolute', left: farX + (farW - cover) / 2, top: 12 }}><Cover size={cover} hue="blue" radius={22} /></div>
+      <div style={{ position: 'absolute', left: farX + (farW - cover) / 2, top: farTop }}><Cover size={cover} hue="blue" radius={24} /></div>
       {next === 3
-        ? <div style={{ position: 'absolute', left: farX, top: 12 + cover + 12, width: farW, display: 'flex', justifyContent: 'center', gap: 10 }}>
+        ? <div style={{ position: 'absolute', left: farX + (farW - cover) / 2, top: farTop + cover + 12, width: cover, display: 'flex', gap: 10 }}>
             {PL_NEXT.map(([a, , hue]) => (
-              <div key={a} style={{ width: 92 }}>
-                <Cover size={92} hue={hue} radius={14} />
-                <div className="hf-ellipsis" style={{ fontSize: 11, fontWeight: 700, marginTop: 3 }}>{a}</div>
+              <div key={a} style={{ width: card }}>
+                <Cover size={card} hue={hue} radius={14} />
+                <div className="hf-ellipsis" style={{ fontSize: 12, fontWeight: 700, marginTop: 4 }}>{a}</div>
               </div>
             ))}
           </div>
-        : <div style={{ position: 'absolute', left: farX, top: 12 + cover + 14, width: farW, height: 63, borderRadius: 18, background: HF.glassFill, border: `1px solid ${HF.glassBorder}`,
+        : <div style={{ position: 'absolute', left: farX + (farW - cover) / 2, top: farTop + cover + 14, width: cover, height: 63, borderRadius: 18, background: HF.glassFill, border: `1px solid ${HF.glassBorder}`,
             display: 'flex', alignItems: 'center', gap: 10, padding: '0 12px 0 10px', boxSizing: 'border-box' }}>
             <Cover size={43} hue={PL_NEXT[0][2]} radius={10} />
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -403,7 +418,7 @@ function PlPhoneLandscape({ next = 1 }) {
 }
 
 // ── 4. Player — Car layout ───────────────────────────────────────────────────
-// `side` = the wheel's side ('left' = left-hand drive). `w` = screen width (1920 the canvas unit, 1760 the user's unit).
+// `side` = the wheel's side ('left' = left-hand drive). `w` = screen width (1760 the user's unit, 1173 the wide split pane).
 // `likes` 'buttons' | 'gestures'. The player never has a buttons bar. Per the user's drawing (2026-11-17):
 //   top, wheel side   — one row: the queue dropdown → "Tune the wave" → search;
 //   bottom, wheel side — title + progress with times + transport and the ring (moved down into the freed space);
@@ -413,31 +428,25 @@ function PlPhoneLandscape({ next = 1 }) {
 // Frameless body (the approved car player, plc-unit-1760). Also stands in for the old `CarHome` (see below), so
 // every board that drew the old car screen now shows the new player: `queueName`/`queueLead` (the dropdown),
 // `track` [title, artist, hue], `nextState`, `played`/`buffered`, `weak`, `dim`.
-function PlCarBody({ side = 'left', w = 1920, likes = 'buttons', burst, toast, drag, queueName, queueLead, track, nextState,
-  played = 0.34, buffered = 0.6, weak, dim }) {
+function PlCarBody({ side = 'left', w = FRAMES.head.w, likes = 'buttons', burst, toast, drag, queueName, queueLead, track, nextState,
+  played = 0.34, buffered = 0.6, weak, dim, next = 3 }) {
   const [nowTitle, nowArtist, nowHue] = track || ['Wish You Were Here', 'Pink Floyd', 'amber'];
   const t = useT();
   const H = 720;
   const at = (left, width) => (side === 'left' ? { left } : { left: w - left - width });
-  const narrow = w < 1700;                                     // the wide split pane (1280)
+  const narrow = w < 1500;                                     // the wide split pane
   const driverW = narrow ? 600 : 820, ring = narrow ? 230 : 290, knob = narrow ? 168 : 212;
   const farX = 48 + driverW + 50, farW = w - farX - 48;
-  // Right side = today's car screen right side (cover centred, "Next" caps, three square cards with title/artist
-  // under each, clock in the corner) — only the cover larger and the cards smaller, filling the 720 px height.
-  // The cover may not run under the clock in the far corner (on the 1760 unit it would): cap it, give the cards
-  // what is left of the height (up to 150).
-  const cardGap = 20, cardText = 50;
-  const centre = farX + farW / 2, clockLeft = w - 48 - 210;
-  let coverCap = Math.floor(2 * (side === 'left' ? clockLeft - centre : centre - (48 + 210)));
-  // Too narrow beside the clock (the 1280 split pane): the cover starts under the clock instead.
-  const top0 = coverCap < 280 ? 110 : 26;
-  if (coverCap < 280) coverCap = farW;
-  const fixed = top0 + 22 + 24 + 10 + cardText + 22;
-  let card = 130, coverSize = H - fixed - card;
-  if (coverSize > coverCap) { coverSize = coverCap; card = Math.min(150, H - fixed - coverSize); }
-  if (3 * card + 2 * cardGap > farW) card = Math.floor((farW - 2 * cardGap) / 3);
-  const coverTop = top0 + Math.max(0, H - fixed - coverSize - card) / 2, coverLeft = centre - coverSize / 2;
-  const rowW = 3 * card + 2 * cardGap, rowLeft = farX + (farW - rowW) / 2, nextTop = coverTop + coverSize + 22;
+  // Far side = the phone-landscape player's block scaled to 720 px (pl-land-*): the cover takes most of the height,
+  // the next block sits under it at the cover's width — "1": one next card, "3": three small square cards spanning
+  // the cover's width, title under each. The block starts below the clock in the far corner.
+  const cardGap = 14, cardText = 50, oneH = 84;
+  const coverSize = Math.min(next === 3 ? 380 : 440, farW);
+  const card = Math.floor((coverSize - 2 * cardGap) / 3);
+  const blockH = next === 3 ? coverSize + 16 + card + cardText : coverSize + 18 + oneH;
+  const coverTop = Math.max(108, (H - blockH) / 2);
+  const coverLeft = farX + (farW - coverSize) / 2;
+  const rowW = coverSize, rowLeft = coverLeft, nextTop = coverTop + coverSize + (next === 3 ? 16 : 18);
   return (
     <React.Fragment>
       {/* wheel side, top: the queue dropdown and "Tune the wave" */}
@@ -476,23 +485,30 @@ function PlCarBody({ side = 'left', w = 1920, likes = 'buttons', burst, toast, d
         <Cover size={coverSize} hue={nowHue} radius={36} style={{ boxShadow: '0 0 90px rgba(224,160,80,0.35)' }} />
         {burst && <PlHeartBurst size={coverSize} />}
       </div>
-      {/* far side, bottom: "Next" + three square cards, title/artist under each (today's car screen) */}
-      <div style={{ position: 'absolute', top: nextTop, width: rowW, ...at(rowLeft, rowW) }}>
-        <div style={{ ...HFType.sectionCaps, fontSize: 15, color: HF.text2, height: 24 }}>{t('Next', 'Далее')}</div>
-        <div style={{ display: 'flex', gap: cardGap, marginTop: 10, flexDirection: side === 'left' ? 'row' : 'row-reverse' }}>
-          {PL_NEXT.map(([a, b, hue], i) => (
-            <div key={a} style={{ width: card }}>
-              {i === 0 && nextState ? <NextCover state={nextState} size={card} hue={hue} radius={20} /> : <Cover size={card} hue={hue} radius={20} />}
-              <div className="hf-ellipsis" style={{ fontSize: 18, fontWeight: 700, marginTop: 6 }}>{a}</div>
-              <div className="hf-ellipsis" style={{ fontSize: 15, color: HF.text2 }}>{b}</div>
+      {/* far side, under the cover at its width: one next card, or three small square cards */}
+      {next === 3
+        ? <div style={{ position: 'absolute', top: nextTop, width: rowW, display: 'flex', gap: cardGap, flexDirection: side === 'left' ? 'row' : 'row-reverse', ...at(rowLeft, rowW) }}>
+            {PL_NEXT.map(([a, b, hue], i) => (
+              <div key={a} style={{ width: card }}>
+                {i === 0 && nextState ? <NextCover state={nextState} size={card} hue={hue} radius={18} /> : <Cover size={card} hue={hue} radius={18} />}
+                <div className="hf-ellipsis" style={{ fontSize: 18, fontWeight: 700, marginTop: 6 }}>{a}</div>
+                <div className="hf-ellipsis" style={{ fontSize: 15, color: HF.text2 }}>{b}</div>
+              </div>
+            ))}
+          </div>
+        : <div style={{ position: 'absolute', top: nextTop, width: rowW, height: oneH, borderRadius: 24, background: HF.glassFill, border: `1px solid ${HF.glassBorder}`,
+            display: 'flex', alignItems: 'center', gap: 14, padding: '0 18px 0 12px', boxSizing: 'border-box', flexDirection: side === 'left' ? 'row' : 'row-reverse', ...at(rowLeft, rowW) }}>
+            {nextState ? <NextCover state={nextState} size={60} hue={PL_NEXT[0][2]} radius={14} /> : <Cover size={60} hue={PL_NEXT[0][2]} radius={14} />}
+            <div style={{ flex: 1, minWidth: 0, textAlign: side === 'left' ? 'left' : 'right' }}>
+              <div style={{ ...HFType.sectionCaps, fontSize: 14, color: HF.text2 }}>{t('Next', 'Далее')}</div>
+              <div className="hf-ellipsis" style={{ fontSize: 20, fontWeight: 700 }}>{PL_NEXT[0][0]}</div>
             </div>
-          ))}
-        </div>
-      </div>
+            <Icon name={side === 'left' ? 'chevron_right' : 'chevron_left'} size={28} color={HF.text2} />
+          </div>}
       {toast && <div style={{ position: 'absolute', top: coverTop + coverSize - 90, width: coverSize, display: 'flex', justifyContent: 'center', ...at(coverLeft, coverSize) }}>{toast}</div>}
       {drag && (
         <React.Fragment>
-          <div style={{ position: 'absolute', top: nextTop - 10, width: rowW + 28, height: 24 + 10 + card + cardText + 20, borderRadius: 26, border: `3px dashed ${HF.accent}`, background: 'rgba(80,140,255,0.10)',
+          <div style={{ position: 'absolute', top: nextTop - 10, width: rowW + 28, height: (next === 3 ? card + cardText : oneH) + 20, borderRadius: 26, border: `3px dashed ${HF.accent}`, background: 'rgba(80,140,255,0.10)',
             ...at(rowLeft - 14, rowW + 28) }} />
           <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 14, background: 'rgba(80,140,255,0.45)' }} />
           <PlNote big icon="swipe_up" style={{ position: 'absolute', bottom: 30, ...(side === 'left' ? { left: 48 } : { right: 48 }) }}>
@@ -506,12 +522,12 @@ function PlCarBody({ side = 'left', w = 1920, likes = 'buttons', burst, toast, d
 
 
 function PlCarPlayer(props) {
-  return <PlFrame w={props.w || 1920} h={720} glowY="40%"><PlCarBody {...props} /></PlFrame>;
+  return <PlFrame w={props.w || FRAMES.head.w} h={720} glowY="40%"><PlCarBody {...props} /></PlFrame>;
 }
 
 // The old car screen is gone: boards that still call `CarHome` (Phase 1–4 car boards, queue panels, Jellyfin car,
 // the wide split pane) now render the new player body with their queue / track / Next state.
-function PlCarHomeCompat({ dim, w = 1920, weak, pillLead, nextState, played = 0.3, buffered, pillName, track }) {
+function PlCarHomeCompat({ dim, w = FRAMES.head.w, weak, pillLead, nextState, played = 0.3, buffered, pillName, track }) {
   return <PlCarBody w={w} dim={dim} weak={weak} queueLead={pillLead} queueName={pillName} track={track}
     nextState={nextState} played={played} buffered={buffered != null ? buffered : 0.6} />;
 }
@@ -520,7 +536,7 @@ window.CarHome = PlCarHomeCompat;
 function PlCarQueueOpen() {
   const t = useT();
   return (
-    <PlFrame w={1920} h={720} glowY="40%">
+    <PlFrame w={FRAMES.head.w} h={720} glowY="40%">
       <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 120, display: 'flex', alignItems: 'center', gap: 22, padding: '0 48px' }}>
         <Cover size={84} hue="amber" radius={18} />
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -597,7 +613,7 @@ function PlSettings() {
 
 function playerBoards() {
   const P = FRAMES.phone, H = FRAMES.head;
-  const L = { w: 915, h: 412 };
+  const L = { w: FRAMES.land.w, h: FRAMES.land.h };
   return {
     'queues-phone': [
       { after: 'q-home', boards: [
@@ -621,6 +637,7 @@ function playerBoards() {
         { id: 'plc-bottom-l', label: 'Player · Car layout · left-hand wheel · no buttons bar; one top-left row: queue → Tune the wave → search; labels centred between dislike / like; title, progress and controls moved down; cover moved right (where Next was); next 3 under the cover', ...H, el: <PlCarPlayer /> },
         { id: 'plc-bottom-r', label: 'Player · Car layout · right-hand wheel · the same, mirrored', ...H, el: <PlCarPlayer side="right" /> },
         { id: 'plc-unit-1760', label: 'Player · Car layout on the user’s unit (1760×720, navigation panel on the left)', w: 1760, h: 720, el: <PlCarPlayer w={1760} /> },
+        { id: 'plc-next-1', label: 'Player · Car layout · Next tracks 1: one next card under the cover, at the cover’s width', ...H, el: <PlCarPlayer next={1} /> },
         { id: 'plc-likes-gest', label: 'Car · like gestures (variant ii): no like buttons; double tap on the cover = like', ...H, el: <PlCarPlayer likes="gestures" burst /> },
         { id: 'plc-dislike-gest', label: 'Car · hold the cover = dislike, confirmation with Undo', ...H,
           el: <PlCarPlayer likes="gestures" toast={<PlToast big icon="heart_broken" text={t2('Disliked', 'Не нравится')} action={t2('Undo', 'Отменить')} />} /> },

@@ -245,7 +245,7 @@ function HmPhoneHomeCScrolled() {
   );
 }
 
-// ── Home — head unit 1920×720 (landscape with the dock) ──────────────────────
+// ── Home — head unit 1760×720 (landscape with the dock) ──────────────────────
 // The wide screen shows the hero and the provider sections side by side — nothing to scroll.
 function HmHeadSections({ badge }) {
   const t = useT(); const w = useFolderWords(); const seeds = HmUseSeeds();
@@ -526,7 +526,7 @@ function HmNavCompareRow({ sit, title, note, last }) {
   );
 }
 // Where the slim 640 pane ends, measured from the start of the tile row (the row starts 28 dp from the pane's edge).
-const HM_SLIM_EDGE = 640 - 28;
+const HM_SLIM_EDGE = FRAMES.splitN.w - 28;
 function HmNavCompare() {
   const t = useT();
   const col = (width, ml, text) => <Txt t="sectionCaps" color={HF.text2} style={{ width, marginLeft: ml, flex: '0 0 auto' }}>{text}</Txt>;

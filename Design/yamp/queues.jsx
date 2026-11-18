@@ -257,7 +257,7 @@ function PhoneAddToQueue() {
   );
 }
 
-// ── Head unit 1920×720 ───────────────────────────────────────────────────────
+// ── Head unit 1760×720 ───────────────────────────────────────────────────────
 function CarTile({ icon, label, active }) {
   return (
     <div style={{ width: 132, height: 96, borderRadius: 22, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
@@ -299,14 +299,14 @@ function CarTileRow({ count = 5, active = 'folders', style }) {
   );
 }
 
-// Car mode. `w` = pane width (1920 full screen, 1280 wide split pane). `far` replaces the far column.
+// Car mode. `w` = pane width (1760 full screen, 1173 wide split pane). `far` replaces the far column.
 // `weak` = the connection is weak or lost: the radio pill gives way to "play downloaded".
 // `pillLead` (Phase 2a, accounts.jsx): the account marker inside the active-queue pill (> 1 account).
 // `nextState` / `played` / `buffered` (Phase 3b, buffering.jsx): Next knob state, buffered part of the slider, the
 // first next-track artwork's state. Omitted = the boards as before.
 // `pillName` / `track` / `queueLine` (Phase 4, jellyfin.jsx): another queue in the pill, its playing track [title, artist, hue]
 // and its position line.
-function CarHome({ dim, w = 1920, far, weak, activeTile, pillLead, nextState, played = 0.3, buffered, pillName, track, queueLine }) {
+function CarHome({ dim, w = FRAMES.head.w, far, weak, activeTile, pillLead, nextState, played = 0.3, buffered, pillName, track, queueLine }) {
   const t = useT();
   const queueName = pillName || t('With family', 'С семьёй');
   const [nowTitle, nowArtist, nowHue] = track || ['Wish You Were Here', 'Pink Floyd', 'amber'];

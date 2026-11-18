@@ -222,7 +222,7 @@ function CarNextState({ state, start }) {
 function SplitWideNextState({ state }) {
   return (
     <Frame kind="splitW" tint="#8A5A22" glowY="40%">
-      <CarHome w={1280} nextState={state} buffered={0.46} />
+      <CarHome w={FRAMES.splitW.w} nextState={state} buffered={0.46} />
       <NbCaption state={state} style={{ position: 'absolute', left: 48, bottom: 22, transform: 'scale(1.15)', transformOrigin: 'left bottom' }} />
     </Frame>
   );

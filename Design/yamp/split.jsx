@@ -1,14 +1,14 @@
-// split.jsx — head unit in split screen (navigator + music). The unit divides 1920×720 as 1 : 2:
+// split.jsx — head unit in split screen (navigator + music). The unit divides 1760×720 as 1 : 2:
 // a slim pane (about 640×720) and a wide pane (about 1280×720 = the app's car design grid).
 // YAMP can land in either pane, so car mode, the queues panel and folders are shown for both.
 
-function SplitWideCar() { return <Frame kind="splitW" tint="#8A5A22" glowY="40%"><CarHome w={1280} /></Frame>; }
+function SplitWideCar() { return <Frame kind="splitW" tint="#8A5A22" glowY="40%"><CarHome w={FRAMES.splitW.w} /></Frame>; }
 
 function SplitWideQueues() {
   const t = useT(); const queues = useQueues();
   return (
     <Frame kind="splitW" tint="#8A5A22" glowY="40%">
-      <CarHome w={1280} dim />
+      <CarHome w={FRAMES.splitW.w} dim />
       <SidePanel width={660} side="left">
         <QueueSheetHeader big title={t('Queues', 'Очереди')} trailing={<GlassCircle icon="add" size={60} />} />
         <div style={{ padding: '0 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>{queues.map((q) => <QueueRow key={q.id} q={q} big />)}</div>

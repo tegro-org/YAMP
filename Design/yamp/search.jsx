@@ -326,7 +326,7 @@ function SrPhoneEmpty() {
   );
 }
 
-// ── Head unit 1920×720 (parked) ──────────────────────────────────────────────
+// ── Head unit 1760×720 (parked) ──────────────────────────────────────────────
 // The Search tab in landscape: the width is used for one column per type; rows are 78 dp.
 function SrCarColumn({ title, w = 400, children }) {
   return <div style={{ width: w, flex: '0 0 auto' }}><SrCaps big>{title}</SrCaps>{children}</div>;
@@ -341,15 +341,15 @@ function SrCarResults() {
         <SrPills big pad={4} style={{ flex: 1 }} />
       </div>
       <div style={{ position: 'absolute', left: 48, top: 110, display: 'flex', gap: 32 }}>
-        <SrCarColumn title={w.top} w={410}>
+        <SrCarColumn title={w.top} w={380}>
           <SrTop item={d.artists[0]} big chevron={false} />
           <div style={{ height: 20 }} />
           <SrCaps big>{w.artists}</SrCaps>
           {d.artists.map((x, i) => <SrRow key={i} item={x} kind="artist" big />)}
         </SrCarColumn>
-        <SrCarColumn title={w.tracks}>{d.tracks.map((x, i) => <SrRow key={i} item={x} big />)}</SrCarColumn>
-        <SrCarColumn title={w.albums}>{d.albums.map((x, i) => <SrRow key={i} item={x} kind="album" big />)}</SrCarColumn>
-        <SrCarColumn title={w.folders} w={518}>
+        <SrCarColumn title={w.tracks} w={370}>{d.tracks.map((x, i) => <SrRow key={i} item={x} big />)}</SrCarColumn>
+        <SrCarColumn title={w.albums} w={370}>{d.albums.map((x, i) => <SrRow key={i} item={x} kind="album" big />)}</SrCarColumn>
+        <SrCarColumn title={w.folders} w={448}>
           {d.folders.slice(0, 3).map((x, i) => <SrRow key={i} item={x} kind="folder" big />)}
           <div style={{ height: 20 }} />
           <SrCaps big>{w.playlists}</SrCaps>
@@ -395,7 +395,7 @@ function searchSections() {
         { id: 'sr-single', label: 'One provider signed in · no badges, no Folders', w: P.w, h: P.h, el: <SrPhoneResults solo /> },
         { id: 'sr-partial', label: 'Jellyfin did not answer · banner + Retry', w: P.w, h: P.h, el: <SrPhoneResults partial /> },
         { id: 'sr-empty', label: 'No results', w: P.w, h: P.h, el: <SrPhoneEmpty /> },
-        { id: 'sr-head', label: 'Head unit 1920×720 · results in columns (parked)', w: H.w, h: H.h, el: <SrCarResults /> },
+        { id: 'sr-head', label: 'Head unit 1760×720 · results in columns (parked)', w: H.w, h: H.h, el: <SrCarResults /> },
         { id: 'sr-split', label: 'Slim pane 640×720 · results in one column (parked)', w: N.w, h: N.h, el: <SrSplitResults /> },
       ] },
   ];
