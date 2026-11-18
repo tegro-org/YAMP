@@ -2,14 +2,14 @@
 
 ## State
 
-- **Release:** `v0.5.0` is everything on `feature/album-artist-menu`, fast-forwarded into `main`:
+- **Release:** `v0.5.1` is everything on `feature/album-artist-menu`, fast-forwarded into `main`:
   - Phase 3 and 3b: providers, disk stream cache, early preload, Next states;
   - Phase 4: Jellyfin;
   - first start, Jellyfin-only mode, the album/artist menu, smooth fades, Fade then rise, pop-free handovers;
   - quality per account, Jellyfin playlists;
   - the new player.
 
-  Notes: `tasks/release-notes-v0.5.0.md`. Before it: `v0.3.0` (new app id `org.tegro.music.yamp`), `v0.2.1`.
+  Notes: `tasks/release-notes-v0.5.1.md`. Before it: `v0.3.0` (new app id `org.tegro.music.yamp`), `v0.2.1`.
 - **Branches:**
   - `main` is the release;
   - `debug/radio-probe`, a debug rotor probe, is pushed;
@@ -60,7 +60,7 @@
 
 ## Next steps (the user sets the pace)
 
-See "Next: gaps after v0.5.0" in `tasks/todo.md`:
+See "Next: gaps after v0.5.1" in `tasks/todo.md`:
 - (a) the Yandex seek;
 - (b) Jellyfin downloads and offline playback;
 - (c) the taller threshold (controls < 1/3 of the width ≈ `w/h < 1.66`);
@@ -85,3 +85,6 @@ See "Next: gaps after v0.5.0" in `tasks/todo.md`:
 - **Public repo:** docs and commit messages describe YAMP only. No server URLs, tokens or keystores.
 - **References:** user setup in `kb/environment.md`; the upstream clone for reading is
   `~/Projects/Github/YandexMusicLite`.
+
+- Audio Router (`com.usbswitch`, MonJaro USB amplifier / passenger headphones): no focus or effects; while its USB
+  routing is on it overrides per-player volume every 2.5 s — crossfade/fades break; set crossfade 0 then (todo).

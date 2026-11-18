@@ -1,0 +1,4 @@
+# Jellyfin UserData "Key" values recorded from the local dev server (scripts/jellyfin-dev) in commit 78761b0;
+# item keys, not credentials — scrubbed to zeros since. Fingerprints: commit:file:rule:line.
+78761b0c2f0169fdb876f8d7f1a2d579e0803ea6:android/provider/jellyfin/src/test/resources/jellyfin/items-albums.json:generic-api-key:18
+78761b0c2f0169fdb876f8d7f1a2d579e0803ea6:android/provider/jellyfin/src/test/resources/jellyfin/items-albums.json:generic-api-key:65

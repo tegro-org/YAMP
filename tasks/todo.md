@@ -714,6 +714,7 @@ the next-track cards can't both fit well), so: **two screens**.
       boards are approved and built, and Yandex-only Home stays pixel-identical.
 - [ ] (f) **Car long press on album tiles.** This needs a car album view; canvas first. *Done when* a car album
       tile opens the album menu with car-sized rows.
+- [ ] **Audio Router (com.usbswitch) awareness:** while its USB routing is active it overwrites per-player volume every 2.5 s — detect it (its AudioPolicy / package running + routed) and fall back to hard cuts (no crossfade/fades), with a hint; until then the user sets crossfade 0 when routing to USB.
 - [ ] (g) **Foldable shape classes in the tests:**
       - the Fold 5 cover and inner screens;
       - Galaxy Z Fold 8 (specs from the user, 2026-11-18): **cover** 5.5", 1248×1972 px, 428 ppi (≈ 466×737 dp

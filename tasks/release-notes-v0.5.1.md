@@ -1,4 +1,4 @@
-## YAMP 0.5.0
+## YAMP 0.5.1
 
 The app id is unchanged since 0.3.0 (`org.tegro.music.yamp`), so 0.3.0 users update in place.
 
@@ -62,4 +62,4 @@ In Poweramp Equalizer → Known Players → YAMP, set **Затухание (Fade
 - Android Auto with Jellyfin accounts hasn't been verified yet.
 - A seek in a Yandex track sometimes restarts it at the new position, with a short gap.
 
-**Full Changelog**: https://github.com/tegro-org/YAMP/compare/v0.3.0...v0.5.0
+**Full Changelog**: https://github.com/tegro-org/YAMP/compare/v0.3.0...v0.5.1
