@@ -225,12 +225,20 @@ internal fun SoundQualityRow(compatible: Boolean, onChange: (Boolean) -> Unit) {
 }
 
 @Composable
-internal fun SegmentedRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, control: @Composable () -> Unit) {
+internal fun SegmentedRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    hint: String? = null,
+    control: @Composable () -> Unit
+) {
     Column(Modifier.fillMaxWidth().padding(14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconPlaque(icon, size = 32.dp)
             Spacer(Modifier.width(12.dp))
-            Text(title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+            Column {
+                Text(title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                if (hint != null) Text(hint, color = HiFi.TextSecondary, fontSize = 13.sp, lineHeight = 18.sp)
+            }
         }
         Spacer(Modifier.height(12.dp))
         control()

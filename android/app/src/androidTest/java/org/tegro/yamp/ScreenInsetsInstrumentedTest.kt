@@ -15,7 +15,7 @@ import org.tegro.yamp.data.dto.ArtistDto
 import org.tegro.yamp.data.dto.TrackDetailsDto
 import org.tegro.yamp.data.repository.RadioRepository
 import org.tegro.yamp.domain.model.RadioCategory
-import org.tegro.yamp.presentation.car.CarScreen
+import org.tegro.yamp.presentation.player.FullScreenPlayer
 import org.tegro.yamp.presentation.main.HomeScreen
 import org.tegro.yamp.presentation.main.LibraryScreen
 import org.tegro.yamp.presentation.main.SearchScreen
@@ -128,10 +128,12 @@ class ScreenInsetsInstrumentedTest {
     @Test
     fun carStaysClearOfBothSystemBars() {
         show {
-            CarScreen(
-                currentTrack = tracks[0].toTrack(), isPlaying = true, likedTrackIds = emptySet(), onPlayPauseClick = {}, onNextClick = {},
-                onPrevClick = {}, onToggleLike = {}, onDislikeClick = {}, onPlayMyVibe = {}, onPlayFavorites = {}, onPlayHits = {},
-                onPlayDownloaded = {}, onPlayRadio = {}, onExit = {}, progress = { 60_000L }, durationMs = 215_000
+            // The player's Car layout (the car screen is retired)
+            FullScreenPlayer(
+                track = tracks[0].toTrack(), isPlaying = true, isLiked = false, progress = { 60_000L }, queue = tracks.map { it.toTrack() },
+                onPlayPauseClick = {}, onToggleLike = {}, onNextClick = {}, onPrevClick = {}, onSeekTo = {},
+                onTrackSelect = {}, onRemoveFromQueue = {}, onCollapse = {}, onCloseAndClear = {}, onDislikeClick = {},
+                carLayout = true, nextThree = true
             )
         }
         assertBelowStatusBar("Car")

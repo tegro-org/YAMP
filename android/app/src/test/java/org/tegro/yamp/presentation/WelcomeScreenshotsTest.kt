@@ -26,7 +26,6 @@ import org.tegro.yamp.domain.media.Track
 import org.tegro.yamp.domain.queue.PlayQueue
 import org.tegro.yamp.domain.queue.QueueKind
 import org.tegro.yamp.presentation.auth.WelcomeScreen
-import org.tegro.yamp.presentation.car.CarScreen
 import org.tegro.yamp.presentation.car.LocalCarClock
 import org.tegro.yamp.presentation.hifi.ArtworkTint
 import org.tegro.yamp.presentation.hifi.HiFiBackdrop
@@ -102,7 +101,7 @@ class WelcomeScreenshotsTest {
             HomeScreen(
                 waveTrack = null, isPlaying = false, isLoading = false, isLiked = false, progress = { 0L },
                 shelf = queueShelfOf(emptyDefault, playing = false), shimmer = false,
-                onPlayPause = {}, onLike = {}, onDislike = {}, onOpenPlayer = null, onShelfClick = {}, queueCount = 1,
+                onPlayPause = {}, onLike = {}, onDislike = {}, onOpenPlayer = null, onShelfClick = {}, queueName = "Home Media",
                 mode = homeModeOf(emptyDefault), emptyQueue = true
             )
         }
@@ -117,14 +116,7 @@ class WelcomeScreenshotsTest {
             durationMs = 180_000L, cover = null, explicit = false
         )
         show {
-            CarScreen(
-                currentTrack = song, isPlaying = true, likedTrackIds = emptySet(), onPlayPauseClick = {}, onNextClick = {},
-                onPrevClick = {}, onToggleLike = {}, onDislikeClick = {}, onPlayMyVibe = {}, onPlayFavorites = {}, onPlayHits = {},
-                onPlayDownloaded = {}, onPlayRadio = {}, onExit = {}, isLandscape = true, steeringWheelOnLeft = true,
-                progress = { 40_000L }, durationMs = 180_000, upcoming = emptyList(), upcomingLoading = false,
-                source = org.tegro.yamp.data.player.PlaylistSource.NONE, showClock = true, activeQueueName = "Home Media",
-                waveActive = false, yandex = false
-            )
+            CarPlayerForTest(track = song, queue = listOf(song), upcoming = emptyList(), waveActive = false, queueName = "Home Media", caption = "")
         }
         snap("car_jellyfin_only")
     }

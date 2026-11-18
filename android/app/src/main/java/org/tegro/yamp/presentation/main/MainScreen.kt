@@ -1,8 +1,6 @@
 package org.tegro.yamp.presentation.main
 
 import org.tegro.yamp.presentation.player.look
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.systemBars
 import kotlinx.coroutines.launch
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.SnackbarDuration
@@ -152,9 +150,9 @@ fun MainScreen(
     // The tab chosen in this session; before any choice, the one the settings open on
     var chosenTab by rememberSaveable { mutableStateOf<MainTab?>(null) }
     val startTab by viewModel.startTab.collectAsStateWithLifecycle()
-    val currentTab = chosenTab ?: startTab ?: MainTab.HOME
+    // "Player" is not a page (the car screen is retired): it opens the player over the first tab
+    val currentTab = (chosenTab ?: startTab ?: MainTab.HOME).takeIf { it != MainTab.PLAYER } ?: MainTab.HOME
     val tabKnown = chosenTab != null || startTab != null
-    val currentTabState = androidx.compose.runtime.rememberUpdatedState(currentTab)
     LaunchedEffect(currentTab, tabKnown) { if (tabKnown) viewModel.rememberTab(currentTab) }
     LaunchedEffect(Unit) { viewModel.applyStartMusic() }
     val swipeToClose by viewModel.swipeToCloseMiniPlayer.collectAsStateWithLifecycle()
@@ -164,17 +162,43 @@ fun MainScreen(
     LaunchedEffect(openPlayerSignal) {
         if (openPlayerSignal > 0 && viewModel.currentTrack.value != null) isPlayerExpanded = true
     }
-    // "Open the player when the music starts": only for music the user started, never in the car
+    // "Open the player when the music starts": only for music the user started
     LaunchedEffect(Unit) {
-        viewModel.openPlayerRequests.collect { if (currentTabState.value != MainTab.CAR) isPlayerExpanded = true }
+        viewModel.openPlayerRequests.collect { isPlayerExpanded = true }
     }
-    // Nothing to show: a stale "expanded" would open an empty player with the next track
-    LaunchedEffect(currentTrack == null) { if (currentTrack == null) isPlayerExpanded = false }
+    // The "Player" tab (or "open on: Player"): the player opens as soon as there is something in it; with nothing
+    // on, the active queue starts first
+    var playerPending by rememberSaveable { mutableStateOf(false) }
+    val openPlayerTab: () -> Unit = {
+        if (viewModel.currentTrack.value != null) isPlayerExpanded = true
+        else {
+            playerPending = true
+            viewModel.togglePlayPause()
+        }
+    }
+    LaunchedEffect(startTab) { if (startTab == MainTab.PLAYER && chosenTab == null) openPlayerTab() }
+    LaunchedEffect(currentTrack != null, playerPending) {
+        if (playerPending && currentTrack != null) {
+            playerPending = false
+            isPlayerExpanded = true
+        }
+    }
+    val navigate: (MainTab) -> Unit = { if (it == MainTab.PLAYER) openPlayerTab() else chosenTab = it }
+    // Nothing to show any more: a stale "expanded" would open an empty player with the next track. Only a track that
+    // went away closes it — not the brief "no track yet" while a restored session loads after the app comes back
+    // (the player was open, and it must stay open).
+    var hadTrack by remember { mutableStateOf(false) }
+    LaunchedEffect(currentTrack == null) {
+        if (PlayerOpenRule.closesPlayer(hadTrack, hasTrack = currentTrack != null)) isPlayerExpanded = false
+        if (currentTrack != null) hadTrack = true
+    }
     var showAccountDialog by remember { mutableStateOf(false) }
     // "Add account" asks where the music is: Yandex or Jellyfin (Phase 4 step 21)
     var showAddAccount by remember { mutableStateOf(false) }
     var showCrashLog by remember { mutableStateOf(false) }
     var qualityDetails by remember { mutableStateOf<PlaybackController.QualityDetails?>(null) }
+    // The wide player's ⋮ → quality: the playing account's quality sheet (account key, name, is Jellyfin)
+    var accountQualityFor by remember { mutableStateOf<Triple<String, String, Boolean>?>(null) }
     var trackMenu by remember { mutableStateOf<TrackMenuRequest?>(null) }
     val trackMenuLauncher = remember {
         TrackMenuLauncher { track, playlist -> trackMenu = TrackMenuRequest(track, playlist, pickPlaylist = false) }
@@ -226,7 +250,7 @@ fun MainScreen(
     val sideInsets = WindowInsets.displayCutout.union(WindowInsets.navigationBars).only(WindowInsetsSides.Horizontal)
     // The mini-player stays out of the way on the first tab while that page already shows what plays (D49)
     val activeQueue by viewModel.activeQueue.collectAsStateWithLifecycle()
-    val showMini = currentTrack != null && currentTab != MainTab.CAR && !(currentTab == MainTab.HOME && homePagePlays(homeModeOf(activeQueue), now))
+    val showMini = currentTrack != null && !(currentTab == MainTab.HOME && homePagePlays(homeModeOf(activeQueue), now))
     val snackbar = remember { SnackbarHostState() }
     val openPlayer = { isPlayerExpanded = true }
 
@@ -245,9 +269,7 @@ fun MainScreen(
             val sharedScope = this
             Box(modifier = Modifier.fillMaxSize()) {
                 // One living background under every tab: it does not blink when tabs change
-                if (currentTab != MainTab.CAR) {
-                    HiFiBackdrop(coverUrl = coverForTint)
-                }
+                HiFiBackdrop(coverUrl = coverForTint)
                 // Nothing until the start tab is known: no other tab flashes on the way
                 if (tabKnown) AnimatedContent(
                     targetState = currentTab,
@@ -261,13 +283,13 @@ fun MainScreen(
                     tabStates.SaveableStateProvider(tab.route) {
                         // An artist or album page covers the tab until Back (or another tab) closes it. Pages
                         // slide in from the right as they open and back out to the right on Back.
-                        val depth = if (tab == MainTab.CAR) 0 else catalogStack.size
+                        val depth = catalogStack.size
                         AnimatedContent(
                             targetState = depth to catalogStack.lastOrNull()?.takeIf { depth > 0 },
                             contentKey = { (_, page) -> page?.page },
                             transitionSpec = { catalogTransition(forward = targetState.first > initialState.first, lite = lite) },
                             label = "catalog_page",
-                            modifier = if (isLandscape && tab != MainTab.CAR) Modifier.windowInsetsPadding(sideInsets) else Modifier
+                            modifier = if (isLandscape) Modifier.windowInsetsPadding(sideInsets) else Modifier
                         ) { (_, catalogTop) ->
                         if (catalogTop != null) {
                             CatalogPageScreen(
@@ -282,7 +304,7 @@ fun MainScreen(
                             MainTab.HOME -> HomeTab(
                                 viewModel, now, progress, isLandscape, contentBottom,
                                 onOpenPlayer = if (currentTrack != null) openPlayer else null,
-                                onOpenTab = { chosenTab = it }
+                                onOpenTab = navigate
                             )
                             MainTab.SEARCH -> SearchTab(viewModel, searchVm, catalogVm, now)
                             MainTab.LIBRARY -> LibraryTab(
@@ -293,14 +315,14 @@ fun MainScreen(
                                 onOpenJellyfin = { catalogVm.open(it) }
                             )
                             MainTab.RADIO -> RadioTab(viewModel, radioVm, now)
-                            MainTab.CAR -> CarTab(viewModel, radioVm, now, progress, isLandscape, onExit = { chosenTab = MainTab.HOME })
+                            MainTab.PLAYER -> Unit
                         }
                         }
                     }
                 }
 
-                // Floating navigation and mini-player (hidden in the car)
-                if (currentTab != MainTab.CAR) {
+                // Floating navigation and mini-player
+                run {
                     val mini: @Composable () -> Unit = {
                         val track = currentTrack
                         if (showMini && track != null) {
@@ -328,7 +350,7 @@ fun MainScreen(
                         DockScrim(Modifier.align(Alignment.BottomCenter))
                         FloatingGlassDock(
                             currentRoute = currentTab.route,
-                            onNavigate = { chosenTab = it },
+                            onNavigate = navigate,
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .windowInsetsPadding(sideInsets)
@@ -349,7 +371,7 @@ fun MainScreen(
                                 mini()
                                 Spacer(modifier = Modifier.height(10.dp))
                             }
-                            FloatingGlassBottomBar(currentRoute = currentTab.route, onNavigate = { chosenTab = it })
+                            FloatingGlassBottomBar(currentRoute = currentTab.route, onNavigate = navigate)
                         }
                     }
                 }
@@ -370,8 +392,13 @@ fun MainScreen(
                             viewModel = viewModel,
                             radioVm = radioVm,
                             onCollapse = { isPlayerExpanded = false },
+                            onSearch = {
+                                isPlayerExpanded = false
+                                chosenTab = MainTab.SEARCH
+                            },
                             onAddToPlaylist = { trackMenu = TrackMenuRequest(track, null, pickPlaylist = true) },
                             onQualityClick = { qualityDetails = viewModel.qualityDetails() },
+                            onAccountQuality = { accountQualityFor = it },
                             coverModifier = Modifier.sharedCover(sharedScope, this, enabled = !lite && !track.isRadio)
                         )
                     }
@@ -402,13 +429,25 @@ fun MainScreen(
                         }
                     }
                 }
-                // In the car the message sits right above the big source dock, never over it
-                val bars = WindowInsets.systemBars.asPaddingValues()
-                androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+                // A track was disliked (a button, the cover gesture, the notification or the car): offer to undo it
+                LaunchedEffect(lifecycleOwner) {
+                    lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                        viewModel.dislikes.collect { dislike ->
+                            // The latest dislike's Undo comes at once, not after the earlier ones' snackbars
+                            snackbar.currentSnackbarData?.dismiss()
+                            launch {
+                                val result = snackbar.showSnackbar(
+                                    message = resources.getString(org.tegro.yamp.R.string.player_disliked_gesture),
+                                    actionLabel = undoLabel,
+                                    duration = SnackbarDuration.Long
+                                )
+                                if (result == SnackbarResult.ActionPerformed) viewModel.undoDislike(dislike)
+                            }
+                        }
+                    }
+                }
+                Box(Modifier.fillMaxSize()) {
                 val snackBottom = when {
-                    currentTab == MainTab.CAR -> org.tegro.yamp.presentation.car.carDockClearance(
-                        maxWidth, maxHeight, maxHeight - bars.calculateTopPadding() - bars.calculateBottomPadding(), isLandscape
-                    )
                     isLandscape -> DockClearance
                     currentTrack != null -> 160.dp
                     else -> 90.dp
@@ -448,7 +487,9 @@ fun MainScreen(
                     onCloseManagement = { showAccountDialog = false },
                     onAddAccount = onNavigateToAuth,
                     showChooser = showAddAccount,
-                    onChooser = { showAddAccount = it }
+                    onChooser = { showAddAccount = it },
+                    qualitySheet = accountQualityFor,
+                    onCloseQualitySheet = { accountQualityFor = null }
                 )
             }
         }
@@ -477,8 +518,10 @@ private fun PlayerHost(
     viewModel: MainViewModel,
     radioVm: RadioViewModel,
     onCollapse: () -> Unit,
+    onSearch: () -> Unit,
     onAddToPlaylist: () -> Unit,
     onQualityClick: () -> Unit,
+    onAccountQuality: (Triple<String, String, Boolean>) -> Unit,
     coverModifier: Modifier
 ) {
     val queue by viewModel.currentPlaylist.collectAsStateWithLifecycle()
@@ -501,6 +544,20 @@ private fun PlayerHost(
         )
     }
     val steeringWheelOnLeft by viewModel.steeringWheelOnLeft.collectAsStateWithLifecycle()
+    val carLayout by viewModel.playerCarLayout.collectAsStateWithLifecycle()
+    val nextThree by viewModel.playerNextThree.collectAsStateWithLifecycle()
+    val likeGestures by viewModel.likeGestures.collectAsStateWithLifecycle()
+    val showClock by viewModel.carClock.collectAsStateWithLifecycle()
+    val waveTuning by viewModel.waveTuning.collectAsStateWithLifecycle()
+    val waveSeed by viewModel.waveSeed.collectAsStateWithLifecycle()
+    val skipExplicit by viewModel.skipExplicit.collectAsStateWithLifecycle()
+    // What will really play next, by the player's own rule (explicit passed over, a playlist goes on from its start)
+    val upcoming = remember(queue, now.trackId, now.source, skipExplicit, track.isRadio) {
+        if (track.isRadio) emptyList()
+        else org.tegro.yamp.data.player.PlaybackQueue.upcoming(queue, queue.indexOfFirst { it.id == now.trackId }, now.source, 3) { skipExplicit && it.explicit }
+    }
+    val caption = entries?.let { stringResource(org.tegro.yamp.R.string.player_queue_position, it.cursorIndex + 1, it.entries.size) }
+        ?: playerSourceLabelRes(now.source, track.isRadio)?.let { stringResource(it) }.orEmpty()
     FullScreenPlayer(
         track = track,
         isPlaying = now.isPlaying,
@@ -535,11 +592,37 @@ private fun PlayerHost(
         onCancelSleepTimer = { viewModel.cancelSleepTimer() },
         onAddToPlaylist = onAddToPlaylist,
         onQualityClick = onQualityClick,
+        onAccountQuality = {
+            val key = activeQueue?.queue?.account
+            if (key == null || track.isRadio) onQualityClick()
+            else onAccountQuality(
+                Triple(
+                    key,
+                    accountTags.firstOrNull { it.key == key }?.name ?: org.tegro.yamp.domain.account.AccountId(key).id,
+                    org.tegro.yamp.domain.account.AccountId(key).provider == org.tegro.yamp.domain.account.Provider.JELLYFIN
+                )
+            )
+        },
         coverModifier = coverModifier,
         queueEntryIds = entries?.entries?.map { it.entryId }.orEmpty(),
         queueCursorIndex = entries?.cursorIndex ?: -1,
         queueModes = queueModes,
-        onEntrySelect = viewModel::playEntry
+        onEntrySelect = viewModel::playEntry,
+        carLayout = carLayout,
+        nextThree = nextThree,
+        likeGestures = likeGestures,
+        upcoming = upcoming,
+        upcomingLoading = now.source == org.tegro.yamp.data.player.PlaylistSource.VIBE && !track.isRadio && upcoming.isEmpty(),
+        onUpcomingClick = { viewModel.playTrack(it.id, queue, now.source, byUser = false) },
+        caption = caption,
+        queueName = activeQueue?.queue?.name ?: stringResource(org.tegro.yamp.R.string.queue_switcher_title),
+        onQueues = { queueSwitcher?.open(org.tegro.yamp.presentation.queues.QueueSwitcherRequest.Switch()) },
+        onSearch = onSearch,
+        showClock = showClock,
+        waveTuning = waveTuning,
+        trackWaveSeed = waveSeed,
+        onWaveTuningChange = viewModel::setWaveTuning,
+        onBackToMyWave = viewModel::returnToMyWave
     )
 }
 
@@ -582,4 +665,13 @@ private fun InstallDownloadedUpdateOnResume(updateVm: UpdateViewModel) {
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
+}
+
+/** When the open player closes by itself. */
+internal object PlayerOpenRule {
+    /**
+     * Only when a track that was on screen went away (the queue ran empty). "No track yet" — a restored session still
+     * loading after the app comes back from the background or process death — leaves the player open.
+     */
+    fun closesPlayer(hadTrack: Boolean, hasTrack: Boolean): Boolean = hadTrack && !hasTrack
 }

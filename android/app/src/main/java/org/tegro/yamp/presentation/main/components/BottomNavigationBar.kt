@@ -25,7 +25,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.DirectionsCar
+import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.Search
@@ -62,7 +62,8 @@ enum class MainTab(@param:androidx.annotation.StringRes val title: Int, val icon
     SEARCH(R.string.tab_search, Icons.Rounded.Search, "search"),
     LIBRARY(R.string.tab_music, Icons.Rounded.LibraryMusic, "library"),
     RADIO(R.string.tab_radio, Icons.Rounded.Radio, "radio"),
-    CAR(R.string.tab_car, Icons.Rounded.DirectionsCar, "car")
+    /** Not a page: opens the player (the car screen is retired; its ideas live in the player's Car layout). */
+    PLAYER(R.string.tab_player, Icons.Rounded.PlayCircle, "player")
 }
 
 private val BarShape = RoundedCornerShape(32.dp)

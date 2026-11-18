@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.Layers
@@ -97,6 +98,49 @@ fun MediaMenuHost(
     }
     val onFailed: () -> Unit = { say(failed) }
 
+    // "Add to playlist…" (D84): the picker shows while the tracks load; the add happens once both are there
+    val playlistsVm: org.tegro.yamp.presentation.main.PlaylistsViewModel = hiltViewModel()
+    var picking by remember(target) { mutableStateOf(false) }
+    var naming by remember(target) { mutableStateOf(false) }
+    var loaded by remember(target) { mutableStateOf<List<org.tegro.yamp.domain.media.Track>?>(null) }
+    var chosen by remember(target) { mutableStateOf<org.tegro.yamp.domain.media.Playlist?>(null) }
+    var newTitle by remember(target) { mutableStateOf<String?>(null) }
+    val yandexPlaylists by playlistsVm.playlists.collectAsStateWithLifecycle()
+    val otherPlaylists by playlistsVm.pickerPlaylists.collectAsStateWithLifecycle()
+    val onAddToPlaylist: (List<org.tegro.yamp.domain.media.Track>) -> Unit = { tracks -> loaded = tracks }
+    val startPicking = {
+        playlistsVm.loadPickerFor(target.ref)
+        picking = true
+    }
+    androidx.compose.runtime.LaunchedEffect(loaded, chosen, newTitle) {
+        val tracks = loaded ?: return@LaunchedEffect
+        when {
+            chosen != null -> playlistsVm.addTracks(chosen!!, tracks)
+            newTitle != null -> playlistsVm.createWith(newTitle!!, tracks)
+            else -> return@LaunchedEffect
+        }
+        onDismiss()
+    }
+    if (picking && !naming) {
+        MediaPlaylistPicker(
+            title = target.title,
+            playlists = if (target.provider == org.tegro.yamp.domain.account.Provider.JELLYFIN) otherPlaylists
+            else playlistsVm.pickerFor(target.ref, yandexPlaylists, otherPlaylists),
+            onNew = { naming = true },
+            onPick = { picking = false; chosen = it; if (loaded == null) say(resources.getString(R.string.media_loading)) },
+            onDismiss = { picking = false; onDismiss() }
+        )
+    }
+    if (naming) {
+        org.tegro.yamp.presentation.main.components.PlaylistNameDialog(
+            title = stringResource(R.string.playlist_new),
+            confirmLabel = stringResource(R.string.playlist_create),
+            initialName = target.title,
+            onConfirm = { name -> naming = false; picking = false; newTitle = name },
+            onDismiss = { naming = false }
+        )
+    }
+
     if (menuOpen) {
         MediaMenuSheet(
             target = target,
@@ -108,6 +152,13 @@ fun MediaMenuHost(
                     MediaMenuRow.START_RADIO -> {
                         switcher?.open(QueueSwitcherRequest.StartRadio(RadioSeed(target.ref, target.title)))
                         onDismiss()
+                    }
+                    MediaMenuRow.ADD_TO_PLAYLIST -> {
+                        if (target.isArtist) vm.chooseArtist(target, MediaAction.ADD_TO_PLAYLIST)
+                        else {
+                            vm.albumAction(target, MediaAction.ADD_TO_PLAYLIST, onAddTo, onDone, { onFailed(); onDismiss() }, onAddToPlaylist)
+                            startPicking()
+                        }
                     }
                     else -> {
                         val action = row.action()
@@ -126,8 +177,13 @@ fun MediaMenuHost(
         ArtistAddDialog(
             state = state,
             onConfirm = { choice, extras ->
-                vm.artistAction(choice, extras, onAddTo, onDone, onFailed)
-                onDismiss()
+                if (state.action == MediaAction.ADD_TO_PLAYLIST) {
+                    vm.artistAction(choice, extras, onAddTo, onDone, { onFailed(); onDismiss() }, onAddToPlaylist)
+                    startPicking()
+                } else {
+                    vm.artistAction(choice, extras, onAddTo, onDone, onFailed)
+                    onDismiss()
+                }
             },
             onDismiss = {
                 vm.dismissArtist()
@@ -149,6 +205,7 @@ private fun MediaMenuRow.action(): MediaAction = when (this) {
     MediaMenuRow.PLAY_NEXT -> MediaAction.PLAY_NEXT
     MediaMenuRow.ADD_TO_END -> MediaAction.ADD_TO_END
     MediaMenuRow.ADD_TO_QUEUE, MediaMenuRow.START_RADIO -> MediaAction.ADD_TO_QUEUE
+    MediaMenuRow.ADD_TO_PLAYLIST -> MediaAction.ADD_TO_PLAYLIST
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -202,6 +259,7 @@ internal fun MediaMenuContent(target: MediaTarget, rows: List<MediaMenuRow>, onR
                 MediaMenuRow.PLAY_NEXT -> MenuRow(Icons.Rounded.SkipNext, stringResource(R.string.track_context_menu_igrat_sleduyuschim)) { onRow(row) }
                 MediaMenuRow.ADD_TO_END -> MenuRow(Icons.AutoMirrored.Rounded.PlaylistPlay, stringResource(R.string.track_menu_add_to_end)) { onRow(row) }
                 MediaMenuRow.ADD_TO_QUEUE -> MenuRow(Icons.Rounded.Layers, stringResource(R.string.track_menu_add_to_queue)) { onRow(row) }
+                MediaMenuRow.ADD_TO_PLAYLIST -> MenuRow(Icons.AutoMirrored.Rounded.PlaylistAdd, stringResource(R.string.track_context_menu_dobavit_v_pleylist)) { onRow(row) }
                 MediaMenuRow.START_RADIO -> MenuRow(Icons.Rounded.Sensors, stringResource(R.string.radio_start)) { onRow(row) }
             }
         }
@@ -269,6 +327,7 @@ internal fun ArtistAddDialog(state: ArtistDialogState, onConfirm: (ArtistChoice,
                         MediaAction.PLAY_NEXT -> R.string.media_target_next
                         MediaAction.ADD_TO_END -> R.string.media_target_end
                         MediaAction.ADD_TO_QUEUE -> R.string.media_target_queue
+                        MediaAction.ADD_TO_PLAYLIST -> R.string.media_target_playlist
                     }
                 ),
                 fontSize = 14.sp

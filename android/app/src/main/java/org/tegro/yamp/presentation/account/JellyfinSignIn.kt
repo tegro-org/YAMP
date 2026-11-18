@@ -74,7 +74,12 @@ data class JellyfinAccountRow(val tag: AccountTag, val sub: String)
 
 /** The Jellyfin part of Settings → Accounts (the step-20 canvas, `jf-accounts`): shown once one is signed in. */
 @Composable
-internal fun JellyfinAccountRows(rows: List<JellyfinAccountRow>, onRemove: (JellyfinAccountRow) -> Unit) {
+internal fun JellyfinAccountRows(
+    rows: List<JellyfinAccountRow>,
+    onRemove: (JellyfinAccountRow) -> Unit,
+    quality: AccountQualityUi? = null,
+    onOpen: (JellyfinAccountRow) -> Unit = {}
+) {
     Spacer(Modifier.height(12.dp))
     Text("JELLYFIN", color = Color.White.copy(alpha = 0.45f), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.8.sp)
     Spacer(Modifier.height(8.dp))
@@ -86,6 +91,7 @@ internal fun JellyfinAccountRows(rows: List<JellyfinAccountRow>, onRemove: (Jell
                 .clip(RoundedCornerShape(16.dp))
                 .background(Color.White.copy(alpha = 0.05f))
                 .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(16.dp))
+                .clickable(enabled = quality != null) { onOpen(row) }
                 .padding(horizontal = 14.dp, vertical = 11.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -93,6 +99,9 @@ internal fun JellyfinAccountRows(rows: List<JellyfinAccountRow>, onRemove: (Jell
             Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
                 Text(row.tag.name, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(row.sub, color = HiFi.TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (quality != null) {
+                    Text(qualitySummary(quality, row.tag.key, jellyfin = true), color = Color.White.copy(alpha = 0.55f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
             }
             IconButton(onClick = { onRemove(row) }, modifier = Modifier.size(32.dp)) {
                 Icon(Icons.Default.Delete, stringResource(R.string.cd_udalit_profil), tint = HiFi.Danger.copy(alpha = 0.75f), modifier = Modifier.size(18.dp))

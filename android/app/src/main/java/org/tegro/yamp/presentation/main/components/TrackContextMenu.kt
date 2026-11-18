@@ -112,10 +112,12 @@ fun TrackContextMenu(
      * False when the active queue can't hold this track — another account's queue (D84): no "Play next" and no
      * "Add to end"; "Add to queue…" offers the track's own account's queues.
      */
-    fitsActiveQueue: Boolean = true
+    fitsActiveQueue: Boolean = true,
+    /** The track's own account can take it into a playlist (Yandex; a signed-in Jellyfin server). */
+    canAddToPlaylist: Boolean = track.ref.service != org.tegro.yamp.domain.account.Provider.JELLYFIN
 ) {
-    // A Jellyfin track (step 25): queue actions only — likes come in P5, its radio (Instant Mix) in P6, playlists
-    // and its artist/album pages from the menu with the merged Library
+    // A Jellyfin track (step 25): queue actions and its server's playlists — likes come in P5, its radio
+    // (Instant Mix) in P6, its artist/album pages from the menu with the merged Library
     val ownService = track.ref.service != org.tegro.yamp.domain.account.Provider.JELLYFIN
     var picking by remember { mutableStateOf(startWithPlaylists) }
     var naming by remember { mutableStateOf(false) }
@@ -236,7 +238,7 @@ fun TrackContextMenu(
                         }
                     }
                 }
-                if (ownService) {
+                if (canAddToPlaylist) {
                     ContextMenuItem(Icons.AutoMirrored.Filled.PlaylistAdd, stringResource(R.string.track_context_menu_dobavit_v_pleylist)) {
                         picking = true
                     }
@@ -274,7 +276,7 @@ fun TrackContextMenu(
 }
 
 @Composable
-private fun PlaylistPickerRow(playlist: Playlist, onClick: () -> Unit) {
+internal fun PlaylistPickerRow(playlist: Playlist, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()

@@ -46,7 +46,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.HeartBroken
@@ -86,7 +85,6 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import org.tegro.yamp.R
-import org.tegro.yamp.presentation.queues.QueueButton
 import org.tegro.yamp.domain.media.Track
 import org.tegro.yamp.presentation.common.coverUri
 import org.tegro.yamp.presentation.common.id
@@ -99,7 +97,6 @@ import org.tegro.yamp.presentation.hifi.HiFiKnob
 import org.tegro.yamp.presentation.hifi.HiFiLargeTitle
 import org.tegro.yamp.presentation.hifi.HiFiMotion
 import org.tegro.yamp.presentation.hifi.HiFiSectionHeader
-import org.tegro.yamp.presentation.hifi.HiFiTextAction
 import org.tegro.yamp.presentation.hifi.HiFiType
 import org.tegro.yamp.presentation.hifi.LocalHiFiLite
 import org.tegro.yamp.presentation.hifi.PlayPauseGlyph
@@ -172,8 +169,10 @@ fun HomeScreen(
     trackWaveSeed: Track? = null,
     onTune: () -> Unit = {},
     onBackToMyWave: () -> Unit = {},
-    /** How many queues the user has: the badge on the queue button. */
-    queueCount: Int = 0,
+    /** The active queue's name on the queue dropdown at the top (canvas `pl-main`); it opens the switcher. */
+    queueName: String = "",
+    /** Settings → Player → Like by gestures: no like / dislike buttons under the knob. */
+    likeButtons: Boolean = true,
     mode: HomeMode = HomeMode.Wave,
     /** The active queue's account, with more than one account: "as Anna" under the title (D56, D58). */
     account: org.tegro.yamp.presentation.account.AccountTag? = null,
@@ -231,19 +230,25 @@ fun HomeScreen(
                 }
             }
             Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.Bottom) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    HiFiLargeTitle(title, modifier = Modifier.weight(1f))
-                    HiFiLinkBadge()
-                    QueueButton(queueCount, modifier = Modifier.padding(start = 8.dp))
+                Row(verticalAlignment = Alignment.Top) {
+                    Column(Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            HiFiLargeTitle(title, modifier = Modifier.weight(1f, fill = false))
+                            HiFiLinkBadge()
+                        }
+                        if (account != null) AccountCaption(account, Modifier.padding(top = 4.dp))
+                    }
+                    Column(Modifier.padding(start = 8.dp), horizontalAlignment = Alignment.End) {
+                        HomeQueueDropdown(queueName)
+                        if (!chipsOverKnob) chips(Modifier.padding(top = 8.dp))
+                    }
                 }
-                if (account != null) AccountCaption(account, Modifier.padding(top = 4.dp))
-                if (!chipsOverKnob) chips(Modifier.padding(top = if (account != null) 8.dp else 10.dp))
                 Spacer(Modifier.weight(1f))
                 if (emptyQueue) {
                     EmptyQueueCard(big = windowSize.widthDp >= 900, onOpenLibrary = onOpenLibrary, onOpenSearch = onOpenSearch)
                 } else {
-                    WaveTrackInfo(waveTrack, shelf.startsWith, wave, isLiked, onLike, onDislike)
-                    WaveShelf(shelf, wave, shimmer, onOpenPlayer, onShelfClick, horizontalPadding = 0.dp, cardSize = if (windowSize.heightDp < 480) 84.dp else 112.dp)
+                    WaveTrackInfo(waveTrack, shelf.startsWith, wave, isLiked, onLike, onDislike, likeButtons, onOpenPlayer)
+                    WaveShelf(shelf, wave, shimmer, onShelfClick, horizontalPadding = 0.dp, cardSize = if (windowSize.heightDp < 480) 84.dp else 112.dp)
                 }
             }
         }
@@ -256,13 +261,20 @@ fun HomeScreen(
                 {
                     // The knob's place is counted from this height: it must not change with the title
                     Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 14.dp)) {
-                        Row(Modifier.fillMaxWidth().heightIn(min = 40.dp), verticalAlignment = Alignment.CenterVertically) {
-                            HiFiLargeTitle(title, modifier = Modifier.weight(1f))
-                            HiFiLinkBadge()
-                            QueueButton(queueCount, modifier = Modifier.padding(start = 8.dp))
+                        Row(Modifier.fillMaxWidth().heightIn(min = 40.dp), verticalAlignment = Alignment.Top) {
+                            Column(Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    HiFiLargeTitle(title, modifier = Modifier.weight(1f, fill = false))
+                                    HiFiLinkBadge()
+                                }
+                                if (account != null) AccountCaption(account, Modifier.padding(top = 4.dp))
+                            }
+                            // The queue dropdown and "Настроить волну", right-aligned (canvas `pl-main`)
+                            Column(Modifier.padding(start = 8.dp), horizontalAlignment = Alignment.End) {
+                                HomeQueueDropdown(queueName)
+                                chips(Modifier.padding(top = 8.dp).height(36.dp))
+                            }
                         }
-                        if (account != null) AccountCaption(account, Modifier.padding(top = 4.dp))
-                        chips(Modifier.padding(top = if (account != null) 8.dp else 10.dp).height(36.dp))
                     }
                 },
                 {
@@ -275,8 +287,8 @@ fun HomeScreen(
                         if (emptyQueue) {
                             Box(Modifier.padding(horizontal = 20.dp)) { EmptyQueueCard(big = false, onOpenLibrary = onOpenLibrary, onOpenSearch = onOpenSearch) }
                         } else {
-                            Box(Modifier.padding(horizontal = 20.dp)) { WaveTrackInfo(waveTrack, shelf.startsWith, wave, isLiked, onLike, onDislike) }
-                            WaveShelf(shelf, wave, shimmer, onOpenPlayer, onShelfClick, horizontalPadding = 20.dp, cardSize = portraitShelfCard(windowSize.widthDp.dp))
+                            Box(Modifier.padding(horizontal = 20.dp)) { WaveTrackInfo(waveTrack, shelf.startsWith, wave, isLiked, onLike, onDislike, likeButtons, onOpenPlayer) }
+                            WaveShelf(shelf, wave, shimmer, onShelfClick, horizontalPadding = 20.dp, cardSize = portraitShelfCard(windowSize.widthDp.dp))
                         }
                     }
                 }
@@ -425,7 +437,17 @@ private val TrackInfoHeight = 56.dp
  * height. With nothing at all: the wave is being fetched, a queue of the user's own is empty.
  */
 @Composable
-private fun WaveTrackInfo(track: Track?, startsWith: Track?, wave: Boolean, isLiked: Boolean, onLike: () -> Unit, onDislike: () -> Unit) {
+private fun WaveTrackInfo(
+    track: Track?,
+    startsWith: Track?,
+    wave: Boolean,
+    isLiked: Boolean,
+    onLike: () -> Unit,
+    onDislike: () -> Unit,
+    likeButtons: Boolean = true,
+    /** A tap on the title opens the player (canvas `pl-main`). */
+    onOpenPlayer: (() -> Unit)? = null
+) {
     AnimatedContent(
         targetState = track to startsWith,
         contentKey = { (playing, next) -> playing?.id ?: ("idle:" + next?.id) },
@@ -456,7 +478,7 @@ private fun WaveTrackInfo(track: Track?, startsWith: Track?, wave: Boolean, isLi
             }
         } else {
             Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-                if (shown.supportsLikes) {
+                if (shown.supportsLikes && likeButtons) {
                     GlassCircleButton(onClick = onDislike, contentDescription = stringResource(R.string.cd_ne_nravitsya), size = 48.dp) {
                         Icon(Icons.Rounded.HeartBroken, contentDescription = null, tint = Color.White.copy(alpha = 0.86f), modifier = Modifier.size(21.dp))
                     }
@@ -464,7 +486,17 @@ private fun WaveTrackInfo(track: Track?, startsWith: Track?, wave: Boolean, isLi
                     // Keeps the title centred where the buttons would be (Jellyfin tracks have no likes yet)
                     Spacer(Modifier.size(48.dp))
                 }
-                Column(Modifier.weight(1f).padding(horizontal = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                val openPlayer = stringResource(R.string.wave_player)
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .padding(horizontal = 12.dp)
+                        .then(
+                            if (onOpenPlayer == null) Modifier
+                            else Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button, onClickLabel = openPlayer, onClick = onOpenPlayer)
+                        ),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
                     Text(
                         text = shown.title.ifEmpty { stringResource(R.string.bez_nazvaniya) },
                         color = Color.White,
@@ -486,7 +518,7 @@ private fun WaveTrackInfo(track: Track?, startsWith: Track?, wave: Boolean, isLi
                         textAlign = TextAlign.Center
                     )
                 }
-                if (shown.supportsLikes) {
+                if (shown.supportsLikes && likeButtons) {
                     GlassCircleButton(onClick = onLike, contentDescription = stringResource(R.string.cd_nravitsya), size = 48.dp) {
                         Icon(
                             if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
@@ -512,7 +544,6 @@ private fun WaveShelf(
     state: WaveShelfState,
     wave: Boolean,
     shimmer: Boolean,
-    onOpenPlayer: (() -> Unit)?,
     onClick: (Track) -> Unit,
     horizontalPadding: Dp,
     cardSize: Dp
@@ -523,14 +554,9 @@ private fun WaveShelf(
             text = stringResource(if (wave) R.string.wave_next_up else R.string.home_next_up),
             modifier = Modifier.padding(start = horizontalPadding, end = (horizontalPadding - 8.dp).coerceAtLeast(0.dp))
         ) {
-            // Opens the full-screen player; hidden while there is nothing to open
-            if (onOpenPlayer != null) {
-                HiFiTextAction(text = stringResource(R.string.wave_player), onClick = onOpenPlayer)
-                Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
-            } else {
-                // Keeps the header as tall as with the action, so the shelf does not shift
-                Spacer(Modifier.height(44.dp))
-            }
+            // The "Player" link is gone (canvas `pl-main`): a tap around Play or on the title opens the player.
+            // The header keeps its height, so the shelf does not shift
+            Spacer(Modifier.height(44.dp))
         }
         Spacer(Modifier.height(4.dp))
         when {
@@ -632,5 +658,18 @@ private fun SkeletonBlock(modifier: Modifier, radius: Dp, phase: State<Float>?, 
                 }
             }
         }
+    )
+}
+
+/** The queue dropdown at the top of the main screen (canvas `pl-main`): the active queue's name; opens the switcher. */
+@Composable
+private fun HomeQueueDropdown(name: String) {
+    val launcher = org.tegro.yamp.presentation.queues.LocalQueueSwitcher.current
+    org.tegro.yamp.presentation.player.QueueDropdown(
+        name = name.ifEmpty { stringResource(R.string.queue_switcher_title) },
+        account = null,
+        height = 40.dp,
+        fontSize = 15.sp,
+        onClick = { launcher?.open(org.tegro.yamp.presentation.queues.QueueSwitcherRequest.Switch()) }
     )
 }

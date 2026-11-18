@@ -142,4 +142,21 @@ class AlbumMenuScreenshotsTest {
         show { ArtistAddDialog(ArtistDialogState(artist, MediaAction.PLAY_NOW, page), { _, _ -> }, {}) }
         snap("media_artist_play")
     }
+
+    /** "Add to playlist…" from an album (canvas `am-add-to-playlist`): the account's playlists, "New playlist" on top. */
+    @Test
+    fun addToPlaylistPicker() {
+        val lists = listOf("В дорогу" to 48, "Вечер" to 23, "Русский рок" to 112, "Спокойное" to 37).mapIndexed { i, (name, count) ->
+            org.tegro.yamp.domain.media.Playlist(MediaRef(MediaRef.PROVIDER_YANDEX, "playlist", "u:$i"), name, count, null, isPublic = false)
+        }
+        show {
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)), contentAlignment = Alignment.BottomCenter) {
+                Box(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                        .background(HiFiDialogDefaults.Container).padding(top = 20.dp)
+                ) { org.tegro.yamp.presentation.media.MediaPlaylistPickerContent("Дикие травы", lists, {}, {}) }
+            }
+        }
+        snap("media_add_to_playlist")
+    }
 }

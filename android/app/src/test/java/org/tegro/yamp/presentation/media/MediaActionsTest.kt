@@ -39,18 +39,18 @@ class MediaActionsTest {
     @Test
     fun `a Yandex item gets every row, a Jellyfin one no radio`() {
         assertEquals(
-            listOf(MediaMenuRow.PLAY_NOW, MediaMenuRow.PLAY_NEXT, MediaMenuRow.ADD_TO_END, MediaMenuRow.ADD_TO_QUEUE, MediaMenuRow.START_RADIO),
+            listOf(MediaMenuRow.PLAY_NOW, MediaMenuRow.PLAY_NEXT, MediaMenuRow.ADD_TO_END, MediaMenuRow.ADD_TO_QUEUE, MediaMenuRow.ADD_TO_PLAYLIST, MediaMenuRow.START_RADIO),
             mediaMenuRows(yandexAlbum, fitsActiveQueue = true)
         )
         assertEquals(
-            listOf(MediaMenuRow.PLAY_NOW, MediaMenuRow.PLAY_NEXT, MediaMenuRow.ADD_TO_END, MediaMenuRow.ADD_TO_QUEUE),
+            listOf(MediaMenuRow.PLAY_NOW, MediaMenuRow.PLAY_NEXT, MediaMenuRow.ADD_TO_END, MediaMenuRow.ADD_TO_QUEUE, MediaMenuRow.ADD_TO_PLAYLIST),
             mediaMenuRows(jellyfinAlbum, fitsActiveQueue = true)
         )
     }
 
     @Test
-    fun `when the active queue can't take the tracks only play now and add to queue remain (D84)`() {
-        assertEquals(listOf(MediaMenuRow.PLAY_NOW, MediaMenuRow.ADD_TO_QUEUE), mediaMenuRows(jellyfinAlbum, fitsActiveQueue = false))
+    fun `when the active queue can't take the tracks only play now, add to queue and add to playlist remain (D84)`() {
+        assertEquals(listOf(MediaMenuRow.PLAY_NOW, MediaMenuRow.ADD_TO_QUEUE, MediaMenuRow.ADD_TO_PLAYLIST), mediaMenuRows(jellyfinAlbum, fitsActiveQueue = false))
     }
 
     @Test

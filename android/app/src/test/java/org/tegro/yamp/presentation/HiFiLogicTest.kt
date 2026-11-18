@@ -5,8 +5,6 @@ import org.tegro.yamp.data.provider.yandex.toTrack
 import org.tegro.yamp.data.player.PlaylistSource
 import org.tegro.yamp.domain.model.RadioCategory
 import org.tegro.yamp.domain.model.RadioStation
-import org.tegro.yamp.presentation.car.CarSource
-import org.tegro.yamp.presentation.car.carSourceOf
 import org.tegro.yamp.presentation.hifi.TimelineMath
 import org.tegro.yamp.presentation.main.HomeMode
 import org.tegro.yamp.presentation.main.NowPlaying
@@ -196,19 +194,6 @@ class HiFiLogicTest {
         assertEquals("b", RadioDial.nearest(list, 0.52f)?.id)
         assertEquals("c", RadioDial.nearest(list, 1f)?.id)
         assertNull(RadioDial.nearest(listOf(station("web", "Online")), 0.5f))
-    }
-
-    // --- Car -------------------------------------------------------------------------------------
-
-    @Test
-    fun dockLightsThePlayingSource() {
-        assertEquals(CarSource.WAVE, carSourceOf(PlaylistSource.VIBE, isRadio = false))
-        assertEquals(CarSource.LIKED, carSourceOf(PlaylistSource.LIBRARY, false))
-        assertEquals(CarSource.HITS, carSourceOf(PlaylistSource.TRENDS, false))
-        assertEquals(CarSource.RADIO, carSourceOf(PlaylistSource.RADIO, false))
-        assertEquals("a radio stream wins over the queue source", CarSource.RADIO, carSourceOf(PlaylistSource.VIBE, true))
-        assertNull(carSourceOf(PlaylistSource.SEARCH, false))
-        assertNull(carSourceOf(PlaylistSource.NONE, false))
     }
 
     // --- Car timeline ----------------------------------------------------------------------------

@@ -34,10 +34,8 @@ import org.tegro.yamp.data.dto.AlbumDto
 import org.tegro.yamp.data.dto.ArtistDto
 import org.tegro.yamp.data.dto.TrackDetailsDto
 import org.tegro.yamp.data.dto.UserPlaylistDto
-import org.tegro.yamp.data.player.PlaylistSource
 import org.tegro.yamp.data.repository.RadioRepository
 import org.tegro.yamp.domain.model.RadioCategory
-import org.tegro.yamp.presentation.car.CarScreen
 import org.tegro.yamp.presentation.car.LocalCarClock
 import org.tegro.yamp.presentation.hifi.ArtworkTint
 import org.tegro.yamp.presentation.hifi.HiFiBackdrop
@@ -203,12 +201,14 @@ class PromoScreenshots {
         }.timeInMillis
         shoot("car", settleMs = 3_500, backdropCover = null) {
             CompositionLocalProvider(LocalCarClock provides { noon }) {
-                CarScreen(
-                    currentTrack = nowPlaying.toTrack(), isPlaying = true, likedTrackIds = liked,
-                    onPlayPauseClick = {}, onNextClick = {}, onPrevClick = {}, onToggleLike = {}, onDislikeClick = {},
-                    onPlayMyVibe = {}, onPlayFavorites = {}, onPlayHits = {}, onPlayDownloaded = {}, onPlayRadio = {}, onExit = {},
-                    isLandscape = true, steeringWheelOnLeft = true, progress = { 82_000L }, durationMs = 286_000,
-                    upcoming = tracks.drop(1).take(3).map { it.toTrack() }, source = PlaylistSource.VIBE
+                // The player's Car layout (the car screen is retired)
+                FullScreenPlayer(
+                    track = nowPlaying.toTrack(), isPlaying = true, isLiked = nowPlaying.id.toString() in liked,
+                    progress = { 82_000L }, queue = tracks.map { it.toTrack() },
+                    onPlayPauseClick = {}, onToggleLike = {}, onNextClick = {}, onPrevClick = {}, onSeekTo = {},
+                    onTrackSelect = {}, onRemoveFromQueue = {}, onCollapse = {}, onCloseAndClear = {}, onDislikeClick = {},
+                    controlsOnLeft = true, carLayout = true, nextThree = true, upcoming = tracks.drop(1).take(3).map { it.toTrack() },
+                    queueName = "Моя волна", caption = "Моя волна"
                 )
             }
         }

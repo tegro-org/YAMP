@@ -1,7 +1,6 @@
 package org.tegro.yamp.presentation.main
 
 import org.tegro.yamp.presentation.main.components.MainTab
-import org.tegro.yamp.data.player.PlaybackQueue
 import org.tegro.yamp.presentation.main.components.SettingsActions
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.compose.runtime.Composable
@@ -24,10 +23,7 @@ import org.tegro.yamp.domain.queue.QueueKind
 import org.tegro.yamp.domain.queue.QueueEntry
 import org.tegro.yamp.data.queue.ActiveQueue
 import org.tegro.yamp.presentation.account.AccountViewModel
-import org.tegro.yamp.presentation.car.CarScreen
-import org.tegro.yamp.presentation.hifi.PanelSide
 import org.tegro.yamp.presentation.queues.LocalQueueSwitcher
-import org.tegro.yamp.presentation.queues.QueueSwitcherRequest
 import org.tegro.yamp.presentation.catalog.CatalogViewModel
 import org.tegro.yamp.presentation.crash.CrashLogViewModel
 import org.tegro.yamp.presentation.radio.RadioScreen
@@ -114,8 +110,8 @@ internal fun HomeTab(
     }
     val tuning by viewModel.waveTuning.collectAsStateWithLifecycle()
     val seed by viewModel.waveSeed.collectAsStateWithLifecycle()
-    val queues by viewModel.queues.collectAsStateWithLifecycle()
     val accountTags by viewModel.accountTags.collectAsStateWithLifecycle()
+    val likeGestures by viewModel.likeGestures.collectAsStateWithLifecycle()
     var tuneOpen by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     if (tuneOpen) {
         org.tegro.yamp.presentation.main.components.WaveTuneSheet(tuning, onChange = viewModel::setWaveTuning, onDismiss = { tuneOpen = false })
@@ -147,7 +143,8 @@ internal fun HomeTab(
         trackWaveSeed = remember(seed, wavePage, pagePlays) { seed?.takeIf { wavePage && pagePlays } },
         onTune = { tuneOpen = true },
         onBackToMyWave = viewModel::returnToMyWave,
-        queueCount = queues.size,
+        queueName = active?.queue?.name.orEmpty(),
+        likeButtons = !likeGestures,
         account = viewModel.markOf(accountTags, active?.queue?.account),
         mode = mode,
         // A queue of the user's own with nothing in it yet (a new Jellyfin account's default queue, D83)
@@ -281,12 +278,8 @@ internal fun LibraryTab(
             onClearDiagnosticLog = settingsVm::clearDiagnosticLog,
             onCompatibleSoundChange = settingsVm::setCompatibleSound,
             onCrossfadeChange = settingsVm::setCrossfade,
-            onAnnounceEqualizerChange = settingsVm::setAnnounceEqualizer,
-            onKeepAudioStreamsChange = settingsVm::setKeepAudioStreams,
             onDuckForAnnouncementsChange = settingsVm::setDuckForAnnouncements,
             onResumeWhenQuietChange = settingsVm::setResumeWhenQuiet,
-            onKeepBothPlayersRunningChange = settingsVm::setKeepBothPlayersRunning,
-            onFixedOutputFormatChange = settingsVm::setFixedOutputFormat,
             onTransitionFadeThenRiseChange = settingsVm::setTransitionFadeThenRise,
             onNormalizeVolumeChange = settingsVm::setNormalizeVolume,
             onOpenEqualizer = settingsVm::openEqualizer,
@@ -309,6 +302,9 @@ internal fun LibraryTab(
             onSwipeToCloseChange = settingsVm::setSwipeToClose,
             onSteeringWheelChange = settingsVm::setSteeringWheelOnLeft,
             onCarClockChange = settingsVm::setCarClock,
+            onPlayerCarLayoutChange = settingsVm::setPlayerCarLayout,
+            onPlayerNextThreeChange = settingsVm::setPlayerNextThree,
+            onLikeGesturesChange = settingsVm::setLikeGestures,
             onUiScaleAutoChange = settingsVm::setUiScaleAuto,
             onUiScaleManualChange = settingsVm::setUiScaleManual,
             onAnimationModeChange = settingsVm::setAnimationMode
@@ -395,76 +391,5 @@ internal fun RadioTab(viewModel: MainViewModel, radioVm: RadioViewModel, now: No
         onToggleFavorite = { radioVm.toggleFavorite(it) },
         onPlayPause = { viewModel.togglePlayPause() },
         hasActiveTrack = now.hasTrack
-    )
-}
-
-@Composable
-internal fun CarTab(
-    viewModel: MainViewModel,
-    radioVm: RadioViewModel,
-    now: NowPlaying,
-    progress: () -> Long,
-    isLandscape: Boolean,
-    onExit: () -> Unit
-) {
-    val queue by viewModel.currentPlaylist.collectAsStateWithLifecycle()
-    val steeringWheelOnLeft by viewModel.steeringWheelOnLeft.collectAsStateWithLifecycle()
-    val showClock by viewModel.carClock.collectAsStateWithLifecycle()
-    val waveTuning by viewModel.waveTuning.collectAsStateWithLifecycle()
-    val waveSeed by viewModel.waveSeed.collectAsStateWithLifecycle()
-    val skipExplicit by viewModel.skipExplicit.collectAsStateWithLifecycle()
-    val activeQueue by viewModel.activeQueue.collectAsStateWithLifecycle()
-    val accountTags by viewModel.accountTags.collectAsStateWithLifecycle()
-    val isYandexSignedIn by viewModel.isAuthorized.collectAsStateWithLifecycle()
-    val queueSwitcher = LocalQueueSwitcher.current
-    val track = now.track
-    // What will really play next, by the player's own rule (explicit passed over, a playlist goes on from its start)
-    val upcoming = remember(queue, now.trackId, now.source, skipExplicit, track?.isRadio) {
-        if (track == null || track.isRadio) emptyList()
-        else PlaybackQueue.upcoming(queue, queue.indexOfFirst { it.id == now.trackId }, now.source, 3) { skipExplicit && it.explicit }
-    }
-    CarScreen(
-        currentTrack = track,
-        isPlaying = now.isPlaying,
-        likedTrackIds = now.likedTrackIds,
-        onPlayPauseClick = { viewModel.togglePlayPause() },
-        onNextClick = { viewModel.playNext() },
-        onPrevClick = { viewModel.playPrev() },
-        onToggleLike = { viewModel.toggleLike(it) },
-        onDislikeClick = { viewModel.dislikeTrack(it) },
-        onPlayMyVibe = { viewModel.playMyVibe() },
-        onPlayFavorites = { viewModel.playAllLikedTracks() },
-        onPlayHits = { viewModel.playHits(shuffle = true) },
-        onPlayDownloaded = { viewModel.playDownloaded() },
-        yandex = isYandexSignedIn,
-        onPlayRadio = { radioVm.playFirst() },
-        onExit = onExit,
-        isLandscape = isLandscape,
-        steeringWheelOnLeft = steeringWheelOnLeft,
-        progress = progress,
-        durationMs = track?.durationMs ?: 0L,
-        onSeek = { viewModel.seekTo(it) },
-        upcoming = upcoming,
-        // The wave with nothing fetched yet ahead: placeholders keep the row's place
-        upcomingLoading = now.source == PlaylistSource.VIBE && track != null && !track.isRadio && upcoming.isEmpty(),
-        onUpcomingClick = { viewModel.playTrack(it.id, queue, now.source, byUser = false) },
-        source = now.source,
-        isBuffering = now.isBuffering,
-        showClock = showClock,
-        waveTuning = waveTuning,
-        trackWaveSeed = waveSeed,
-        onWaveTuningChange = viewModel::setWaveTuning,
-        onTrackWave = { shown ->
-            viewModel.waveOrRadio(shown) {
-                queueSwitcher?.open(QueueSwitcherRequest.StartRadio.of(shown, car = true, side = if (steeringWheelOnLeft) PanelSide.LEFT else PanelSide.RIGHT))
-            }
-        },
-        onBackToMyWave = viewModel::returnToMyWave,
-        activeQueueName = activeQueue?.queue?.name,
-        activeQueueAccount = viewModel.markOf(accountTags, activeQueue?.queue?.account),
-        // The wave's pills only while the wave queue is active (D49); the queue pill is always there
-        waveActive = activeQueue?.queue?.kind == QueueKind.WAVE,
-        // The panel opens on the driver's side, as the tune panel does
-        onQueues = { queueSwitcher?.open(QueueSwitcherRequest.Switch(car = true, side = if (steeringWheelOnLeft) PanelSide.LEFT else PanelSide.RIGHT)) }
     )
 }

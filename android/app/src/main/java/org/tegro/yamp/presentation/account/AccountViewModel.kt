@@ -8,7 +8,9 @@ import org.tegro.yamp.domain.repository.AuthRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
@@ -20,8 +22,33 @@ class AccountViewModel @Inject constructor(
     accountContext: org.tegro.yamp.data.account.AccountContext,
     jellyfinStore: org.tegro.yamp.data.provider.jellyfin.JellyfinAccountStore,
     private val jellyfinSession: org.tegro.yamp.data.provider.jellyfin.JellyfinAccountSession,
-    signedInAccounts: org.tegro.yamp.data.account.SignedInAccounts
+    signedInAccounts: org.tegro.yamp.data.account.SignedInAccounts,
+    private val qualityStore: org.tegro.yamp.data.player.AccountQualityStore,
+    private val soundMode: org.tegro.yamp.data.player.SoundMode,
+    private val playbackController: org.tegro.yamp.data.player.PlaybackController,
+    private val accountContextRef: org.tegro.yamp.data.account.AccountContext
 ) : ViewModel() {
+
+    /** Quality per account (canvas `qa-*`): every stored choice; an account without one follows [globalCompatible]. */
+    val qualityChoices: StateFlow<Map<String, Boolean>> = qualityStore.choices
+    val globalCompatible: StateFlow<Boolean> = soundMode.compatible
+
+    /** The network in use is metered: the "metered" choices apply now. */
+    val nowMetered: StateFlow<Boolean> = qualityStore.metered
+
+    /**
+     * Saves [account]'s choice for [metered] networks. When it changes what the playing account gets now, the
+     * playback follows as with the old global switch (links dropped; a lossless track playing in "compatible"
+     * restarts from its position).
+     */
+    fun setQuality(account: String, metered: Boolean, compatible: Boolean) {
+        viewModelScope.launch {
+            qualityStore.set(account, metered, compatible)
+            val key = org.tegro.yamp.domain.repository.SettingsRepository.accountQualityKey(account, metered)
+            kotlinx.coroutines.withTimeoutOrNull(QUALITY_SAVE_WAIT_MS) { qualityStore.choices.first { it[key] == compatible } }
+            playbackController.onSoundModeChanged(soundMode.compatibleFor(accountContextRef.current()))
+        }
+    }
 
     /** The Jellyfin accounts for Settings → Accounts, with the markers they have among all accounts (D78). */
     val jellyfinRows: StateFlow<List<JellyfinAccountRow>> =
@@ -82,6 +109,10 @@ class AccountViewModel @Inject constructor(
 
     fun unhideAccount(uid: String) {
         session.launch { unhideAccount(uid) }
+    }
+
+    private companion object {
+        const val QUALITY_SAVE_WAIT_MS = 2_000L
     }
 
     private val UserAccount.displayLabel: String

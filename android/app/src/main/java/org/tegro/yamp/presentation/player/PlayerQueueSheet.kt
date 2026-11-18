@@ -4,6 +4,7 @@ import org.tegro.yamp.utils.cover
 import org.tegro.yamp.utils.CoverSize
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -107,6 +108,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import org.tegro.yamp.R
@@ -123,10 +125,69 @@ import org.tegro.yamp.presentation.player.components.AudioVisualizer
 
 // --- Queue sheet ------------------------------------------------------------------------------------
 
+/** How a drag of the queue sheet ends: open or closed, by the fling's speed or by how far up it is. Pure; unit-tested. */
+object QueueDrag {
+    /** A fling this fast (px/s) decides on its own; slower, the sheet goes where it is nearer. */
+    const val FLING_VELOCITY = 1200f
+    const val HALF = 0.5f
+
+    /** [velocity] is the finger's vertical speed, positive downwards (Compose's convention). */
+    fun settlesOpen(fraction: Float, velocity: Float): Boolean = when {
+        velocity < -FLING_VELOCITY -> true
+        velocity > FLING_VELOCITY -> false
+        else -> fraction >= HALF
+    }
+
+    /** The new open fraction after the finger moved [deltaPx] (positive = down) over a sheet [heightPx] tall. */
+    fun dragged(fraction: Float, deltaPx: Float, heightPx: Float): Float =
+        if (heightPx <= 0f) fraction else (fraction - deltaPx / heightPx).coerceIn(0f, 1f)
+}
+
+/**
+ * Where the queue sheet is: [fraction] 0 = hidden, 1 = fully up. A drag moves it with the finger (from the player's
+ * bottom edge or next tracks, from the sheet's header, or from its list once scrolled to the top); a release
+ * settles it ([QueueDrag.settlesOpen]). [heightPx] is the sheet's full height, set by the screen that holds it.
+ */
+@androidx.compose.runtime.Stable
+class QueueSheetState(initiallyOpen: Boolean) {
+    var fraction by mutableFloatStateOf(if (initiallyOpen) 1f else 0f)
+        private set
+    var heightPx by mutableFloatStateOf(0f)
+    private var settling: kotlinx.coroutines.Job? = null
+
+    val isVisible: Boolean get() = fraction > 0f
+
+    fun dragBy(deltaPx: Float) {
+        settling?.cancel()
+        fraction = QueueDrag.dragged(fraction, deltaPx, heightPx)
+    }
+
+    fun settle(scope: kotlinx.coroutines.CoroutineScope, velocity: Float) = animateTo(scope, if (QueueDrag.settlesOpen(fraction, velocity)) 1f else 0f)
+    fun open(scope: kotlinx.coroutines.CoroutineScope) = animateTo(scope, 1f)
+    fun close(scope: kotlinx.coroutines.CoroutineScope) = animateTo(scope, 0f)
+
+    private fun animateTo(scope: kotlinx.coroutines.CoroutineScope, target: Float) {
+        settling?.cancel()
+        settling = scope.launch {
+            androidx.compose.animation.core.animate(fraction, target, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) { value, _ ->
+                fraction = value
+            }
+        }
+    }
+}
+
+/** Saved as open / closed only: a recreated screen (back from the background, process death) keeps the queue up. */
+val QueueSheetStateSaver: androidx.compose.runtime.saveable.Saver<QueueSheetState, Boolean> =
+    androidx.compose.runtime.saveable.Saver(save = { it.fraction >= 0.5f }, restore = { QueueSheetState(it) })
+
+@Composable
+fun rememberQueueSheetState(initiallyOpen: Boolean = false): QueueSheetState =
+    androidx.compose.runtime.saveable.rememberSaveable(saver = QueueSheetStateSaver) { QueueSheetState(initiallyOpen) }
+
 /** The queue as a dark sheet from the bottom: "Сейчас играет" on anodized metal, then what follows. */
 @Composable
 internal fun QueueSheet(
-    visible: Boolean,
+    state: QueueSheetState,
     split: QueueSplit,
     isPlaying: Boolean,
     sourceLabel: String,
@@ -142,47 +203,51 @@ internal fun QueueSheet(
     account: AccountTag? = null
 ) {
     // Back closes the sheet first; the predictive gesture lowers it under the finger
+    val visible by remember(state) { androidx.compose.runtime.derivedStateOf { state.isVisible } }
     val back = rememberPredictiveBack(enabled = visible, onBack = onDismiss)
-    AnimatedVisibility(visible = visible, enter = fadeIn(HiFiMotion.standard()), exit = fadeOut(HiFiMotion.quick())) {
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.55f))
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss)
+    if (!visible) return
+    // The scrim darkens with how far up the sheet is
+    Box(
+        Modifier
+            .fillMaxSize()
+            .graphicsLayer { alpha = state.fraction }
+            .background(Color.Black.copy(alpha = 0.55f))
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss)
+    )
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+        QueueSheetContent(
+            state = state,
+            split = split,
+            isPlaying = isPlaying,
+            sourceLabel = sourceLabel,
+            account = account,
+            isFetchingMore = isFetchingMore,
+            onDismiss = onDismiss,
+            onTrackSelect = onTrackSelect,
+            onRemove = onRemove,
+            onMove = onMove,
+            onLoadMore = onLoadMore,
+            modes = modes,
+            onEntrySelect = onEntrySelect,
+            modifier = Modifier
+                // Follows the finger: hidden below the screen at 0, fully up at 1
+                .graphicsLayer { translationY = (1f - state.fraction) * size.height + back.value * 160.dp.toPx() }
+                .widthIn(max = 640.dp)
+                .fillMaxWidth()
+                .fillMaxHeight(if (fullHeight) QueueSheetHeight.FULL else QueueSheetHeight.PART)
         )
     }
-    AnimatedVisibility(
-        visible = visible,
-        enter = slideInVertically(HiFiMotion.large()) { it },
-        exit = slideOutVertically(HiFiMotion.standard()) { it },
-        modifier = Modifier.fillMaxSize()
-    ) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
-            QueueSheetContent(
-                split = split,
-                isPlaying = isPlaying,
-                sourceLabel = sourceLabel,
-                account = account,
-                isFetchingMore = isFetchingMore,
-                onDismiss = onDismiss,
-                onTrackSelect = onTrackSelect,
-                onRemove = onRemove,
-                onMove = onMove,
-                onLoadMore = onLoadMore,
-                modes = modes,
-                onEntrySelect = onEntrySelect,
-                modifier = Modifier
-                    .graphicsLayer { translationY = back.value * 160.dp.toPx() }
-                    .widthIn(max = 640.dp)
-                    .fillMaxWidth()
-                    .fillMaxHeight(if (fullHeight) 0.94f else 0.78f)
-            )
-        }
-    }
+}
+
+/** The sheet's height as a share of the screen: nearly all of it on a wide screen, most of it in portrait. */
+internal object QueueSheetHeight {
+    const val FULL = 0.94f
+    const val PART = 0.78f
 }
 
 @Composable
 private fun QueueSheetContent(
+    state: QueueSheetState,
     split: QueueSplit,
     isPlaying: Boolean,
     sourceLabel: String,
@@ -216,12 +281,9 @@ private fun QueueSheetContent(
         }
     }
 
-    // Pull the sheet down by its header to close it
-    val density = LocalDensity.current
-    val drag = remember { Animatable(0f) }
+    // The sheet follows the finger: pulled by its header, or by its list once that is scrolled to the top
     val scope = rememberCoroutineScope()
-    val closeAt = with(density) { 120.dp.toPx() }
-    val dismiss by rememberUpdatedState(onDismiss)
+    val listDrag = remember(state, scope) { QueueListDrag(state, scope) }
     val total = split.next.size + if (split.current != null) 1 else 0
     val subtitle = listOfNotNull(
         sourceLabel.takeIf { it.isNotEmpty() },
@@ -231,7 +293,6 @@ private fun QueueSheetContent(
 
     Column(
         modifier
-            .offset { IntOffset(0, drag.value.roundToInt()) }
             .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
             .background(HiFi.SheetFill)
             .drawBehind { drawLine(Color.White.copy(alpha = 0.14f), Offset(28.dp.toPx(), 0.5f), Offset(size.width - 28.dp.toPx(), 0.5f), 1f) }
@@ -241,11 +302,8 @@ private fun QueueSheetContent(
         Column(
             Modifier.draggable(
                 orientation = Orientation.Vertical,
-                state = rememberDraggableState { delta -> scope.launch { drag.snapTo((drag.value + delta).coerceAtLeast(0f)) } },
-                onDragStopped = {
-                    if (drag.value > closeAt) dismiss()
-                    else drag.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
-                }
+                state = rememberDraggableState { delta -> state.dragBy(delta) },
+                onDragStopped = { velocity -> state.settle(scope, velocity) }
             )
         ) {
             Box(
@@ -298,7 +356,7 @@ private fun QueueSheetContent(
 
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxWidth().weight(1f),
+            modifier = Modifier.fillMaxWidth().weight(1f).nestedScroll(listDrag),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(
                 bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 16.dp
             )
@@ -341,6 +399,41 @@ private fun QueueSheetContent(
                 items(2, key = { "skeleton_$it" }) { QueueSkeletonRow() }
             }
         }
+    }
+}
+
+/**
+ * The list's share of the sheet drag: while the sheet is not fully up, an upward drag lifts it before the list
+ * scrolls; a downward drag the list cannot use (it is at the top) pulls the sheet down. A fling on a partly open
+ * sheet settles it instead of scrolling the list.
+ */
+private class QueueListDrag(
+    private val state: QueueSheetState,
+    private val scope: kotlinx.coroutines.CoroutineScope
+) : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+    override fun onPreScroll(available: Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): Offset {
+        if (source != androidx.compose.ui.input.nestedscroll.NestedScrollSource.UserInput) return Offset.Zero
+        if (available.y < 0f && state.fraction < 1f) {
+            state.dragBy(available.y)
+            return Offset(0f, available.y)
+        }
+        return Offset.Zero
+    }
+
+    override fun onPostScroll(
+        consumed: Offset,
+        available: Offset,
+        source: androidx.compose.ui.input.nestedscroll.NestedScrollSource
+    ): Offset {
+        if (source != androidx.compose.ui.input.nestedscroll.NestedScrollSource.UserInput || available.y <= 0f) return Offset.Zero
+        state.dragBy(available.y)
+        return Offset(0f, available.y)
+    }
+
+    override suspend fun onPreFling(available: androidx.compose.ui.unit.Velocity): androidx.compose.ui.unit.Velocity {
+        if (state.fraction >= 1f) return androidx.compose.ui.unit.Velocity.Zero
+        state.settle(scope, available.y)
+        return available
     }
 }
 

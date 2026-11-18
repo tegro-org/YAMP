@@ -46,14 +46,14 @@ fun interface MediaMenuLauncher {
 val LocalMediaMenu = staticCompositionLocalOf<MediaMenuLauncher?> { null }
 
 /** What a menu row does with the album's or artist's tracks. */
-enum class MediaAction { PLAY_NOW, PLAY_NEXT, ADD_TO_END, ADD_TO_QUEUE }
+enum class MediaAction { PLAY_NOW, PLAY_NEXT, ADD_TO_END, ADD_TO_QUEUE, ADD_TO_PLAYLIST }
 
 /** The menu's rows, in order (canvas `AmMenu`). Pure; unit-tested. */
-enum class MediaMenuRow { PLAY_NOW, PLAY_NEXT, ADD_TO_END, ADD_TO_QUEUE, START_RADIO }
+enum class MediaMenuRow { PLAY_NOW, PLAY_NEXT, ADD_TO_END, ADD_TO_QUEUE, ADD_TO_PLAYLIST, START_RADIO }
 
 /**
  * The rows for [target]: "Play next" and "Add to end" only when the active queue can take its tracks (D84) — else
- * "Add to queue…" offers its own account's queues; "Start radio" only for Yandex (`album:` / `artist:` stations,
+ * "Add to queue…" offers its own account's queues; "Add to playlist…" its own account's playlists; "Start radio" only for Yandex (`album:` / `artist:` stations,
  * Jellyfin's Instant Mix is Phase 6).
  */
 fun mediaMenuRows(target: MediaTarget, fitsActiveQueue: Boolean): List<MediaMenuRow> = buildList {
@@ -63,6 +63,8 @@ fun mediaMenuRows(target: MediaTarget, fitsActiveQueue: Boolean): List<MediaMenu
         add(MediaMenuRow.ADD_TO_END)
     }
     add(MediaMenuRow.ADD_TO_QUEUE)
+    // The account's own playlists, Yandex or Jellyfin (D84)
+    add(MediaMenuRow.ADD_TO_PLAYLIST)
     if (target.provider == Provider.YANDEX) add(MediaMenuRow.START_RADIO)
 }
 

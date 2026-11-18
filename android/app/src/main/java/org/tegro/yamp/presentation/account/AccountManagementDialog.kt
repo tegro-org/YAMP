@@ -59,8 +59,18 @@ fun AccountManagementDialog(
     onDismiss: () -> Unit,
     debugActions: AccountDebugActions? = null,
     jellyfinAccounts: List<JellyfinAccountRow> = emptyList(),
-    onRemoveJellyfin: (String) -> Unit = {}
+    onRemoveJellyfin: (String) -> Unit = {},
+    /** Quality per account (canvas `qa-*`): a tap on an account opens its sheet; null hides it. */
+    quality: AccountQualityUi? = null
 ) {
+    // The account whose quality sheet is open: (account key, name, is Jellyfin)
+    var qualityFor by remember { mutableStateOf<Triple<String, String, Boolean>?>(null) }
+    val big = with(androidx.compose.ui.platform.LocalDensity.current) {
+        androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.width.toDp().value >= HEAD_UNIT_MIN_WIDTH_DP
+    }
+    if (quality != null) qualityFor?.let { (key, name, jellyfin) ->
+        AccountQualitySheet(name, key, jellyfin, quality, big, onDismiss = { qualityFor = null })
+    }
     var confirmLogoutCurrent by remember { mutableStateOf(false) }
     var confirmLogoutAll by remember { mutableStateOf(false) }
     var accountToDelete by remember { mutableStateOf<UserAccount?>(null) }
@@ -155,6 +165,8 @@ fun AccountManagementDialog(
                         ) {
                             items(accounts, key = { it.uid }) { account ->
                                 val isActive = !multi && account.uid == activeAccount?.uid
+                                val accountKey = org.tegro.yamp.domain.account.AccountId.yandex(account.uid).value
+                                val shownName = account.displayName.ifBlank { account.login }.ifBlank { "UID: ${account.uid}" }
                                 val initialLetter = (account.displayName.ifBlank { account.login }.firstOrNull() ?: 'Я')
                                     .uppercaseChar()
 
@@ -180,6 +192,7 @@ fun AccountManagementDialog(
                                             ),
                                             RoundedCornerShape(16.dp)
                                         )
+                                        .clickable(enabled = quality != null) { qualityFor = Triple(accountKey, shownName, false) }
                                         .padding(horizontal = 14.dp, vertical = 11.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
@@ -240,6 +253,15 @@ fun AccountManagementDialog(
                                             Text(
                                                 text = account.login,
                                                 color = Color.White.copy(alpha = 0.45f),
+                                                fontSize = 11.5.sp,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                        if (quality != null) {
+                                            Text(
+                                                text = qualitySummary(quality, accountKey, jellyfin = false),
+                                                color = Color.White.copy(alpha = 0.55f),
                                                 fontSize = 11.5.sp,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
@@ -322,7 +344,21 @@ fun AccountManagementDialog(
                     }
 
                     if (jellyfinAccounts.isNotEmpty()) {
-                        JellyfinAccountRows(jellyfinAccounts, onRemove = { jellyfinToDelete = it })
+                        JellyfinAccountRows(
+                            jellyfinAccounts,
+                            onRemove = { jellyfinToDelete = it },
+                            quality = quality,
+                            onOpen = { row -> qualityFor = Triple(row.tag.key, row.tag.name, true) }
+                        )
+                    }
+
+                    if (quality != null) {
+                        Text(
+                            text = stringResource(R.string.quality_tap_account),
+                            color = Color.White.copy(alpha = 0.45f),
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp)
+                        )
                     }
 
                     debugActions?.let { AccountDebugRows(accounts, it) }
@@ -449,6 +485,9 @@ fun AccountManagementDialog(
         )
     }
 }
+
+/** At least this wide (dp): the head unit's layout — bigger quality switches (the user asked). */
+internal const val HEAD_UNIT_MIN_WIDTH_DP = 900
 
 // Debug: test sign-out without losing credentials
 /** Debug builds only: hide an account the way a sign-out does, keeping its token, and bring it back. */

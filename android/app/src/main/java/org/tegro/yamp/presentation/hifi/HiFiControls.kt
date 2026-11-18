@@ -314,12 +314,19 @@ fun IconPlaque(icon: ImageVector, modifier: Modifier = Modifier, size: Dp = 34.d
 
 /** Segmented control: a recessed track with a metal piece sliding under the selected option. */
 @Composable
-fun HiFiSegmented(options: List<String>, selectedIndex: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier, fontSize: TextUnit = 15.sp) {
+fun HiFiSegmented(
+    options: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    fontSize: TextUnit = 15.sp,
+    height: androidx.compose.ui.unit.Dp = 44.dp
+) {
     BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
-            .height(44.dp)
-            .hifiRecessed(22.dp)
+            .height(height)
+            .hifiRecessed(height / 2)
             .padding(3.dp)
     ) {
         val segment = maxWidth / options.size
@@ -329,7 +336,7 @@ fun HiFiSegmented(options: List<String>, selectedIndex: Int, onSelect: (Int) -> 
                 .offset { IntOffset(offset.roundToPx(), 0) }
                 .width(segment)
                 .fillMaxHeight()
-                .hifiAnodized(RoundedCornerShape(19.dp))
+                .hifiAnodized(RoundedCornerShape(height / 2 - 3.dp))
         )
         Row(Modifier.fillMaxWidth().fillMaxHeight()) {
             options.forEachIndexed { index, label ->
@@ -338,7 +345,7 @@ fun HiFiSegmented(options: List<String>, selectedIndex: Int, onSelect: (Int) -> 
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .clip(RoundedCornerShape(19.dp))
+                        .clip(RoundedCornerShape(height / 2 - 3.dp))
                         .selectable(selected = selected, role = Role.RadioButton) { onSelect(index) },
                     contentAlignment = Alignment.Center
                 ) {

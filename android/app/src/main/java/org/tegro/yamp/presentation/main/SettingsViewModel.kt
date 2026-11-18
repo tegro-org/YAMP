@@ -42,34 +42,44 @@ class SettingsViewModel @Inject constructor(
     private val journal: PlaybackJournal,
     private val diagnosticLog: org.tegro.yamp.data.diagnostics.DiagnosticLog,
     private val streamCache: org.tegro.yamp.data.player.StreamCache,
-    @param:dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
+    @param:dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
+    qualityStore: org.tegro.yamp.data.player.AccountQualityStore,
+    private val accountContext: org.tegro.yamp.data.account.AccountContext
 ) : ViewModel() {
+
+    /** The quality the playing account gets on the network in use: its own choice, else the global one (summary line). */
+    private val effectiveCompatible: Flow<Boolean> =
+        combine(soundMode.compatible, qualityStore.choices, qualityStore.metered) { _, _, _ -> soundMode.compatibleFor(accountContext.current()) }
 
     private data class Sound(
         val compatible: Boolean, val crossfade: Int, val normalize: Boolean, val startMusic: StartMusic,
-        val bluetooth: Boolean, val explicit: Boolean, val announce: Boolean = true, val history: Boolean = true, val keepStreams: Boolean = false,
-        val duck: Boolean = true, val bothPlayers: Boolean = false, val resumeQuiet: Boolean = true, val fixedOutput: Boolean = false,
-        val fadeThenRise: Boolean = false
+        val bluetooth: Boolean, val explicit: Boolean, val history: Boolean = true,
+        val duck: Boolean = false, val resumeQuiet: Boolean = false, val fadeThenRise: Boolean = false
     )
-    private data class Look(val startPage: StartPage, val expand: Boolean, val swipe: Boolean, val left: Boolean, val clock: Boolean)
+    private data class Look(
+        val startPage: StartPage, val expand: Boolean, val swipe: Boolean, val left: Boolean, val clock: Boolean,
+        val carLayout: Boolean = false, val nextThree: Boolean = false, val likeGestures: Boolean = false
+    )
     private data class Scale(val auto: Boolean, val manual: Float, val animations: AnimationMode)
     private data class Library(val reserveMb: Int, val reserveUsed: Long, val autoDownload: Boolean, val cacheBytes: Long, val journal: PlaybackJournal.Snapshot = PlaybackJournal.Snapshot(), val diagnosticLog: Boolean = false, val groupQueues: Boolean = true, val streamCacheMb: Int = SettingsRepository.DEFAULT_STREAM_CACHE_MB, val streamCacheUsed: Long = 0L)
 
     private val sound: Flow<Sound> = combine(
-        combine(soundMode.compatible, settings.crossfadeSeconds, settings.normalizeVolume, settings.keepAudioStreams) { c, f, n, k -> Sound(c, f, n, StartMusic.OFF, false, false, keepStreams = k) },
-        combine(settings.startMusic, settings.bluetoothAutoplay, settings.skipExplicit, settings.announceEqualizer, settings.listeningHistory) { s, b, e, a, h ->
-            Sound(false, 0, false, s, b, e, a, h)
+        combine(effectiveCompatible, settings.crossfadeSeconds, settings.normalizeVolume) { c, f, n -> Sound(c, f, n, StartMusic.OFF, false, false) },
+        combine(settings.startMusic, settings.bluetoothAutoplay, settings.skipExplicit, settings.listeningHistory) { s, b, e, h ->
+            Sound(false, 0, false, s, b, e, h)
         }
-    ) { sound, rest -> sound.copy(startMusic = rest.startMusic, bluetooth = rest.bluetooth, explicit = rest.explicit, announce = rest.announce, history = rest.history) }
-        .combine(combine(settings.duckForAnnouncements, settings.keepBothPlayersRunning, settings.resumeWhenQuiet, ::Triple)) { sound, (duck, both, quiet) ->
-            sound.copy(duck = duck, bothPlayers = both, resumeQuiet = quiet)
+    ) { sound, rest -> sound.copy(startMusic = rest.startMusic, bluetooth = rest.bluetooth, explicit = rest.explicit, history = rest.history) }
+        .combine(combine(settings.duckForAnnouncements, settings.resumeWhenQuiet, ::Pair)) { sound, (duck, quiet) ->
+            sound.copy(duck = duck, resumeQuiet = quiet)
         }
-        .combine(settings.fixedOutputFormat) { sound, fixed -> sound.copy(fixedOutput = fixed) }
         .combine(settings.transitionFadeThenRise) { sound, fadeRise -> sound.copy(fadeThenRise = fadeRise) }
 
     private val look: Flow<Look> = combine(
-        settings.startPage, settings.expandPlayerOnPlay, settings.swipeToCloseMiniPlayer, settings.steeringWheelOnLeft, settings.carClock, ::Look
-    )
+        settings.startPage, settings.expandPlayerOnPlay, settings.swipeToCloseMiniPlayer, settings.steeringWheelOnLeft, settings.carClock
+    ) { page, expand, swipe, left, clock -> Look(page, expand, swipe, left, clock) }
+        .combine(combine(settings.playerCarLayout, settings.playerNextThree, settings.likeGestures, ::Triple)) { look, (car, three, gestures) ->
+            look.copy(carLayout = car, nextThree = three, likeGestures = gestures)
+        }
 
     private val scale: Flow<Scale> = combine(settings.uiScaleAuto, settings.uiScaleManual, settings.animationMode, ::Scale)
 
@@ -93,12 +103,8 @@ class SettingsViewModel @Inject constructor(
             compatibleSound = s.compatible,
             crossfadeSeconds = s.crossfade,
             normalizeVolume = s.normalize,
-            announceEqualizer = s.announce,
-            keepAudioStreams = s.keepStreams,
             duckForAnnouncements = s.duck,
             resumeWhenQuiet = s.resumeQuiet,
-            keepBothPlayersRunning = s.bothPlayers,
-            fixedOutputFormat = s.fixedOutput,
             transitionFadeThenRise = s.fadeThenRise,
             equalizerAvailable = equalizer.isAvailable(),
             powerampEqualizer = equalizer.powerampEqualizerInstalled(),
@@ -121,6 +127,9 @@ class SettingsViewModel @Inject constructor(
             swipeToCloseMiniPlayer = l.swipe,
             steeringWheelOnLeft = l.left,
             carClock = l.clock,
+            playerCarLayout = l.carLayout,
+            playerNextThree = l.nextThree,
+            likeGestures = l.likeGestures,
             uiScaleAuto = sc.auto,
             uiScaleManual = sc.manual,
             animationMode = sc.animations
@@ -140,12 +149,8 @@ class SettingsViewModel @Inject constructor(
 
     fun setCrossfade(seconds: Int) = save { setCrossfadeSeconds(seconds) }
     fun setNormalizeVolume(enabled: Boolean) = save { setNormalizeVolume(enabled) }
-    fun setAnnounceEqualizer(enabled: Boolean) = save { setAnnounceEqualizer(enabled) }
-    fun setKeepAudioStreams(enabled: Boolean) = save { setKeepAudioStreams(enabled) }
     fun setDuckForAnnouncements(enabled: Boolean) = save { setDuckForAnnouncements(enabled) }
     fun setResumeWhenQuiet(enabled: Boolean) = save { setResumeWhenQuiet(enabled) }
-    fun setKeepBothPlayersRunning(enabled: Boolean) = save { setKeepBothPlayersRunning(enabled) }
-    fun setFixedOutputFormat(enabled: Boolean) = save { setFixedOutputFormat(enabled) }
     fun setTransitionFadeThenRise(enabled: Boolean) = save { setTransitionFadeThenRise(enabled) }
     fun setGroupQueues(enabled: Boolean) = save { setGroupQueuesByAccount(enabled) }
     fun openEqualizer() = equalizer.open()
@@ -205,6 +210,9 @@ class SettingsViewModel @Inject constructor(
     fun setSwipeToClose(enabled: Boolean) = save { setSwipeToCloseMiniPlayer(enabled) }
     fun setSteeringWheelOnLeft(onLeft: Boolean) = save { setSteeringWheelOnLeft(onLeft) }
     fun setCarClock(enabled: Boolean) = save { setCarClock(enabled) }
+    fun setPlayerCarLayout(enabled: Boolean) = save { setPlayerCarLayout(enabled) }
+    fun setPlayerNextThree(enabled: Boolean) = save { setPlayerNextThree(enabled) }
+    fun setLikeGestures(enabled: Boolean) = save { setLikeGestures(enabled) }
     fun setUiScaleAuto(enabled: Boolean) = save { setUiScaleAuto(enabled) }
     fun setUiScaleManual(scale: Float) = save { setUiScaleManual(scale) }
     fun setAnimationMode(value: AnimationMode) = save { setAnimationMode(value) }

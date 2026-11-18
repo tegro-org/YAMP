@@ -3,6 +3,7 @@ package org.tegro.yamp.presentation.main
 import org.tegro.yamp.domain.queue.fitsQueueOf
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,7 +47,11 @@ internal fun TrackMenuHost(
     onDismiss: () -> Unit,
     onLeavePlayer: () -> Unit
 ) {
-    val playlists by playlistsVm.playlists.collectAsStateWithLifecycle()
+    val yandexPlaylists by playlistsVm.playlists.collectAsStateWithLifecycle()
+    val otherPlaylists by playlistsVm.pickerPlaylists.collectAsStateWithLifecycle()
+    // The picker lists the track's own account's playlists (D84): Yandex's, or its Jellyfin server's
+    LaunchedEffect(request.track.ref) { playlistsVm.loadPickerFor(request.track) }
+    val playlists = playlistsVm.pickerFor(request.track, yandexPlaylists, otherPlaylists)
     val playNextDone = stringResource(R.string.track_menu_play_next_done)
     val scope = rememberCoroutineScope()
     val track = request.track
@@ -64,8 +69,9 @@ internal fun TrackMenuHost(
             scope.launch { snackbar.showSnackbar(playNextDone) }
         },
         onToggleLike = { viewModel.toggleLike(track) },
-        onAddTo = { playlistsVm.addTrack(it, track) },
-        onCreatePlaylist = { playlistsVm.create(it, thenAdd = track) },
+        onAddTo = { playlistsVm.addTracks(it, listOf(track)) },
+        onCreatePlaylist = { playlistsVm.createWith(it, listOf(track)) },
+        canAddToPlaylist = playlistsVm.canAddToPlaylist(track),
         onRemoveFromPlaylist = { request.playlist?.let { playlistsVm.removeTrack(it, track.id) } },
         onTrackWave = { viewModel.waveOrRadio(track) { queueSwitcher?.open(QueueSwitcherRequest.StartRadio.of(track)) } },
         waveActive = viewModel.waveActive.collectAsStateWithLifecycle().value,
@@ -125,14 +131,42 @@ internal fun AccountHost(
     onCloseManagement: () -> Unit,
     onAddAccount: () -> Unit,
     showChooser: Boolean = false,
-    onChooser: (Boolean) -> Unit = {}
+    onChooser: (Boolean) -> Unit = {},
+    /** The player's ⋮ → quality: one account's quality sheet (account key, name, is Jellyfin) without the list. */
+    qualitySheet: Triple<String, String, Boolean>? = null,
+    onCloseQualitySheet: () -> Unit = {}
 ) {
     val accounts by accountVm.allAccounts.collectAsStateWithLifecycle()
     val active by accountVm.activeAccount.collectAsStateWithLifecycle()
     val defaultUid by accountVm.defaultAccountUid.collectAsStateWithLifecycle()
     val hidden by accountVm.hiddenAccounts.collectAsStateWithLifecycle()
     val jellyfin by accountVm.jellyfinRows.collectAsStateWithLifecycle()
+    val qualityChoices by accountVm.qualityChoices.collectAsStateWithLifecycle()
+    val globalCompatible by accountVm.globalCompatible.collectAsStateWithLifecycle()
+    val nowMetered by accountVm.nowMetered.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
     var jellyfinSignIn by remember { mutableStateOf(false) }
+    val qualityUi = org.tegro.yamp.presentation.account.AccountQualityUi(
+        choices = qualityChoices,
+        global = globalCompatible,
+        nowMetered = nowMetered,
+        onSet = { account, metered, compatible -> accountVm.setQuality(account, metered, compatible) },
+        onOpenWifi = {
+            runCatching {
+                context.startActivity(
+                    android.content.Intent(android.provider.Settings.ACTION_WIFI_SETTINGS)
+                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            }
+        }
+    )
+    qualitySheet?.let { (key, name, jellyfin) ->
+        val big = with(androidx.compose.ui.platform.LocalDensity.current) {
+            androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.width.toDp().value >=
+                org.tegro.yamp.presentation.account.HEAD_UNIT_MIN_WIDTH_DP
+        }
+        org.tegro.yamp.presentation.account.AccountQualitySheet(name, key, jellyfin, qualityUi, big, onDismiss = onCloseQualitySheet)
+    }
     if (showChooser) {
         org.tegro.yamp.presentation.account.AddAccountChooser(
             onYandex = { onChooser(false); onAddAccount() },
@@ -162,7 +196,8 @@ internal fun AccountHost(
                 )
             } else null,
             jellyfinAccounts = jellyfin,
-            onRemoveJellyfin = { accountVm.removeJellyfin(it) }
+            onRemoveJellyfin = { accountVm.removeJellyfin(it) },
+            quality = qualityUi
         )
     }
 }

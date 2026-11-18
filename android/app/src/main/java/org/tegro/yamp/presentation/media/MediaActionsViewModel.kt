@@ -69,11 +69,12 @@ class MediaActionsViewModel @Inject constructor(
         action: MediaAction,
         onAddTo: (List<Track>, String) -> Unit,
         onDone: (Int) -> Unit,
-        onFailed: () -> Unit
+        onFailed: () -> Unit,
+        onAddToPlaylist: (List<Track>) -> Unit = {}
     ) {
         viewModelScope.launch {
             val tracks = albumTracks(target.ref)
-            if (tracks.isNullOrEmpty()) onFailed() else apply(target, action, tracks, onAddTo, onDone)
+            if (tracks.isNullOrEmpty()) onFailed() else apply(target, action, tracks, onAddTo, onDone, onAddToPlaylist)
         }
     }
 
@@ -97,7 +98,8 @@ class MediaActionsViewModel @Inject constructor(
         withExtras: Boolean,
         onAddTo: (List<Track>, String) -> Unit,
         onDone: (Int) -> Unit,
-        onFailed: () -> Unit
+        onFailed: () -> Unit,
+        onAddToPlaylist: (List<Track>) -> Unit = {}
     ) {
         val state = _artistDialog.value ?: return
         val page = state.page ?: return
@@ -107,7 +109,7 @@ class MediaActionsViewModel @Inject constructor(
                 ArtistChoice.POPULAR -> page.popularTracks
                 ArtistChoice.ALBUMS -> loadAlbums(artistReleases(page, withExtras).map { it.ref })
             }
-            if (tracks.isEmpty()) onFailed() else apply(state.target, state.action, tracks, onAddTo, onDone)
+            if (tracks.isEmpty()) onFailed() else apply(state.target, state.action, tracks, onAddTo, onDone, onAddToPlaylist)
         }
     }
 
@@ -116,7 +118,8 @@ class MediaActionsViewModel @Inject constructor(
         action: MediaAction,
         tracks: List<Track>,
         onAddTo: (List<Track>, String) -> Unit,
-        onDone: (Int) -> Unit
+        onDone: (Int) -> Unit,
+        onAddToPlaylist: (List<Track>) -> Unit
     ) {
         journal.record(PlaybackJournal.Kind.TAP, target.title, "${action.name.lowercase()} ${if (target.isArtist) "artist" else "album"}: ${tracks.size} tracks")
         when (action) {
@@ -135,6 +138,7 @@ class MediaActionsViewModel @Inject constructor(
                 onDone(tracks.size)
             }
             MediaAction.ADD_TO_QUEUE -> onAddTo(tracks, target.title)
+            MediaAction.ADD_TO_PLAYLIST -> onAddToPlaylist(tracks)
         }
     }
 

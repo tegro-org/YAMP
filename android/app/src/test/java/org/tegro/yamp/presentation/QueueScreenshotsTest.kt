@@ -42,7 +42,6 @@ import org.tegro.yamp.domain.queue.MediaRef
 import org.tegro.yamp.domain.queue.RadioSeed
 import org.tegro.yamp.domain.queue.RepeatMode
 import org.tegro.yamp.domain.queue.TrackRef
-import org.tegro.yamp.presentation.car.CarScreen
 import org.tegro.yamp.presentation.car.LocalCarClock
 import org.tegro.yamp.presentation.hifi.ArtworkTint
 import org.tegro.yamp.presentation.hifi.HiFiBackdrop
@@ -331,7 +330,7 @@ class QueueScreenshotsTest {
             HomeScreen(
                 waveTrack = shown[0], isPlaying = true, isLoading = false, isLiked = true, progress = { 70_000L },
                 shelf = waveShelfOf(true, shown.drop(1), emptyList()), shimmer = false,
-                onPlayPause = {}, onLike = {}, onDislike = {}, onOpenPlayer = {}, onShelfClick = {}, queueCount = 5
+                onPlayPause = {}, onLike = {}, onDislike = {}, onOpenPlayer = {}, onShelfClick = {}, queueName = "With family"
             )
         }
         snap("wave_queue_button")
@@ -351,7 +350,7 @@ class QueueScreenshotsTest {
         HomeScreen(
             waveTrack = shown[1], isPlaying = true, isLoading = false, isLiked = false, progress = { 70_000L },
             shelf = queueShelfOf(familyQueue, playing = true), shimmer = false,
-            onPlayPause = {}, onLike = {}, onDislike = {}, onOpenPlayer = {}, onShelfClick = {}, queueCount = 5,
+            onPlayPause = {}, onLike = {}, onDislike = {}, onOpenPlayer = {}, onShelfClick = {}, queueName = "With family",
             contentBottom = contentBottom, mode = homeModeOf(familyQueue)
         )
     }
@@ -369,7 +368,7 @@ class QueueScreenshotsTest {
             HomeScreen(
                 waveTrack = null, isPlaying = false, isLoading = false, isLiked = false, progress = { 0L },
                 shelf = queueShelfOf(familyQueue, playing = false), shimmer = false,
-                onPlayPause = {}, onLike = {}, onDislike = {}, onOpenPlayer = null, onShelfClick = {}, queueCount = 5,
+                onPlayPause = {}, onLike = {}, onDislike = {}, onOpenPlayer = null, onShelfClick = {}, queueName = "With family",
                 mode = homeModeOf(familyQueue)
             )
         }
@@ -570,15 +569,11 @@ class QueueScreenshotsTest {
     }
 
     @Composable
-    private fun Car(steeringWheelOnLeft: Boolean = true, waveActive: Boolean = true, account: AccountTag? = null) = CompositionLocalProvider(LocalCarClock provides { FIXED_TIME }) {
-        CarScreen(
-            currentTrack = tracks[0].toTrack(), isPlaying = true, likedTrackIds = setOf("1"), onPlayPauseClick = {}, onNextClick = {},
-            onPrevClick = {}, onToggleLike = {}, onDislikeClick = {}, onPlayMyVibe = {}, onPlayFavorites = {}, onPlayHits = {},
-            onPlayDownloaded = {}, onPlayRadio = {}, onExit = {}, isLandscape = true, steeringWheelOnLeft = steeringWheelOnLeft,
-            progress = { 82_000L }, durationMs = 286_000, upcoming = tracks.drop(1).map { it.toTrack() }, source = org.tegro.yamp.data.player.PlaylistSource.LIBRARY,
-            activeQueueName = "With family", waveActive = waveActive, activeQueueAccount = account
+    private fun Car(steeringWheelOnLeft: Boolean = true, waveActive: Boolean = true, account: AccountTag? = null) =
+        CarPlayerForTest(
+            track = tracks[0].toTrack(), queue = tracks.map { it.toTrack() }, steeringWheelOnLeft = steeringWheelOnLeft,
+            waveActive = waveActive, account = account
         )
-    }
 
     private companion object {
         const val FIXED_TIME = 1_792_567_800_000L

@@ -476,17 +476,25 @@ internal fun QualityChip(isRadio: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-internal fun PlayerTimeline(progress: () -> Long, durationMs: Long, isPlaying: Boolean, onSeek: (Long) -> Unit) {
+internal fun PlayerTimeline(
+    progress: () -> Long,
+    durationMs: Long,
+    isPlaying: Boolean,
+    onSeek: (Long) -> Unit,
+    /** The car layout scales the timeline and its times up (canvas `plc-*`); the phone keeps 1 and 13 sp. */
+    unit: androidx.compose.ui.unit.Dp = 1.dp,
+    timeSize: androidx.compose.ui.unit.TextUnit = 13.sp
+) {
     var scrub by remember(durationMs) { mutableStateOf<Float?>(null) }
     Column(Modifier.fillMaxWidth()) {
-        HiFiTimeline(progress, durationMs, isPlaying, onSeek, height = 44f, onScrub = { scrub = it }, buffered = LocalPlaybackAux.current.buffered)
-        TimeReadout(progress, durationMs, scrub)
+        HiFiTimeline(progress, durationMs, isPlaying, onSeek, unit = unit, height = 44f, onScrub = { scrub = it }, buffered = LocalPlaybackAux.current.buffered)
+        TimeReadout(progress, durationMs, scrub, timeSize)
     }
 }
 
 /** "1:22 … −3:24": recomposes once a second (or with the finger), not with every progress tick. */
 @Composable
-private fun TimeReadout(progress: () -> Long, durationMs: Long, scrub: Float?) {
+private fun TimeReadout(progress: () -> Long, durationMs: Long, scrub: Float?, size: androidx.compose.ui.unit.TextUnit = 13.sp) {
     val currentProgress by rememberUpdatedState(progress)
     val second by remember(durationMs, scrub) {
         derivedStateOf { (scrub?.let { TimelineMath.seekPosition(it, durationMs) } ?: currentProgress()) / 1000L }
@@ -498,8 +506,8 @@ private fun TimeReadout(progress: () -> Long, durationMs: Long, scrub: Float?) {
         label = "time_color"
     )
     Row(Modifier.fillMaxWidth().offset(y = (-4).dp), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(elapsed, color = color, fontSize = 13.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold, style = androidx.compose.ui.text.TextStyle(fontFeatureSettings = "tnum"))
-        Text(remaining, color = color, fontSize = 13.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold, style = androidx.compose.ui.text.TextStyle(fontFeatureSettings = "tnum"))
+        Text(elapsed, color = color, fontSize = size, lineHeight = (size.value + 3f).sp, fontWeight = FontWeight.SemiBold, style = androidx.compose.ui.text.TextStyle(fontFeatureSettings = "tnum"))
+        Text(remaining, color = color, fontSize = size, lineHeight = (size.value + 3f).sp, fontWeight = FontWeight.SemiBold, style = androidx.compose.ui.text.TextStyle(fontFeatureSettings = "tnum"))
     }
 }
 

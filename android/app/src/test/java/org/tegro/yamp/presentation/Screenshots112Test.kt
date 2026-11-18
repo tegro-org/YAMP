@@ -42,7 +42,6 @@ import org.tegro.yamp.domain.model.WaveTuning
 import org.tegro.yamp.presentation.auth.NoWebViewScreen
 import org.tegro.yamp.presentation.auth.PhoneSignInScreen
 import org.tegro.yamp.presentation.auth.PhoneSignInState
-import org.tegro.yamp.presentation.car.CarScreen
 import org.tegro.yamp.presentation.car.LocalCarClock
 import org.tegro.yamp.presentation.hifi.ArtworkTint
 import org.tegro.yamp.presentation.hifi.HiFiBackdrop
@@ -377,11 +376,9 @@ class Screenshots112Test {
         source: PlaylistSource = PlaylistSource.VIBE,
         current: TrackDetailsDto = tracks[0]
     ) = CompositionLocalProvider(LocalCarClock provides { FIXED_TIME }, LocalLinkState provides LinkState.WEAK) {
-        CarScreen(
-            currentTrack = current?.toTrack(), isPlaying = true, likedTrackIds = setOf("1"), onPlayPauseClick = {}, onNextClick = {},
-            onPrevClick = {}, onToggleLike = {}, onDislikeClick = {}, onPlayMyVibe = {}, onPlayFavorites = {}, onPlayHits = {},
-            onPlayDownloaded = {}, onPlayRadio = {}, onExit = {}, isLandscape = isLandscape, steeringWheelOnLeft = wheelOnLeft,
-            progress = { 82_000L }, durationMs = 286_000, upcoming = next.map { it.toTrack() }, upcomingLoading = loading, source = source,
+        CarPlayerForTest(
+            track = current.toTrack(), queue = (listOf(current) + next).map { it.toTrack() }, upcoming = next.map { it.toTrack() },
+            upcomingLoading = loading, steeringWheelOnLeft = wheelOnLeft, waveActive = source == PlaylistSource.VIBE,
             showClock = clock, waveTuning = tuning, trackWaveSeed = seedTrack?.toTrack(), initialTuneOpen = tuneOpen
         )
     }

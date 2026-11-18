@@ -44,7 +44,6 @@ import org.tegro.yamp.data.dto.TrackDetailsDto
 import org.tegro.yamp.data.dto.UserPlaylistDto
 import org.tegro.yamp.data.repository.RadioRepository
 import org.tegro.yamp.domain.model.RadioCategory
-import org.tegro.yamp.presentation.car.CarScreen
 import org.tegro.yamp.presentation.catalog.CatalogActions
 import org.tegro.yamp.presentation.catalog.CatalogPage
 import org.tegro.yamp.presentation.catalog.CatalogPageScreen
@@ -361,6 +360,14 @@ class ScreenshotTest {
     @Test
     @Config(qualifiers = "w411dp-h2400dp")
     fun settingsPlayback() = settings("settings_playback", org.tegro.yamp.presentation.main.components.SettingsPage.PLAYBACK)
+
+    /** Settings → Player (canvas `pl-settings`): the layout, the next tracks, likes by gestures. */
+    @Test
+    fun settingsPlayer() = settings(
+        "settings_player",
+        org.tegro.yamp.presentation.main.components.SettingsPage.PLAYER,
+        settingsState.copy(playerCarLayout = true, playerNextThree = true)
+    )
 
     /** Poweramp Equalizer installed: the hint for its per-app settings shows under the crossfade. */
     @Test
@@ -901,12 +908,12 @@ class ScreenshotTest {
     }
 
     @Composable
-    private fun Car(isLandscape: Boolean, steeringWheelOnLeft: Boolean = true, track: TrackDetailsDto = tracks[0]) = CompositionLocalProvider(LocalCarClock provides { FIXED_TIME }) { CarScreen(
-        currentTrack = track.toTrack(), isPlaying = true, likedTrackIds = setOf("1"), onPlayPauseClick = {}, onNextClick = {},
-        onPrevClick = {}, onToggleLike = {}, onDislikeClick = {}, onPlayMyVibe = {}, onPlayFavorites = {}, onPlayHits = {},
-        onPlayDownloaded = {}, onPlayRadio = {}, onExit = {}, isLandscape = isLandscape, steeringWheelOnLeft = steeringWheelOnLeft, progress = { 82_000L }, durationMs = 286_000,
-        upcoming = listOf(tracks[2], tracks[1], tracks[0]).map { it.toTrack() }, source = org.tegro.yamp.data.player.PlaylistSource.VIBE
-    ) }
+    @Suppress("UNUSED_PARAMETER") // standing, the Car layout is the phone player (the wide layout needs a wide screen)
+    private fun Car(isLandscape: Boolean, steeringWheelOnLeft: Boolean = true, track: TrackDetailsDto = tracks[0]) =
+        CarPlayerForTest(
+            track = track.toTrack(), queue = listOf(track, tracks[2], tracks[1], tracks[0]).map { it.toTrack() },
+            upcoming = listOf(tracks[2], tracks[1], tracks[0]).map { it.toTrack() }, steeringWheelOnLeft = steeringWheelOnLeft
+        )
 
     /** Radio in the car: no timeline, the on-air line instead. */
     @Test

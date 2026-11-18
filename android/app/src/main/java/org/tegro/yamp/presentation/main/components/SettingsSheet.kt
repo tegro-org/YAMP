@@ -62,7 +62,6 @@ import androidx.compose.material.icons.rounded.DirectionsCar
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Equalizer
 import androidx.compose.material.icons.rounded.RecordVoiceOver
-import androidx.compose.material.icons.rounded.SpeakerGroup
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Explicit
 import androidx.compose.material.icons.rounded.History
@@ -82,6 +81,7 @@ import androidx.compose.material.icons.rounded.UploadFile
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material.icons.rounded.Dashboard
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -250,6 +250,7 @@ fun SettingsSheet(
                             ) {
                                 SectionNavItem(SettingsPage.ACCOUNT, state.accountName.ifEmpty { stringResource(R.string.settings_group_account) }, accountSummary(state), open == SettingsPage.ACCOUNT) { pageName = it.name }
                                 SectionNavItem(SettingsPage.PLAYBACK, stringResource(R.string.settings_section_playback), playbackSummary(state), open == SettingsPage.PLAYBACK) { pageName = it.name }
+                                SectionNavItem(SettingsPage.PLAYER, stringResource(R.string.settings_section_player), playerSummary(state), open == SettingsPage.PLAYER) { pageName = it.name }
                                 SectionNavItem(SettingsPage.INTERFACE, stringResource(R.string.settings_section_interface), interfaceSummary(state), open == SettingsPage.INTERFACE) { pageName = it.name }
                                 SectionNavItem(SettingsPage.ABOUT, stringResource(R.string.settings_group_about), aboutSummary(), open == SettingsPage.ABOUT) { pageName = it.name }
                             }
@@ -329,6 +330,7 @@ private val SettingsPage.titleRes: Int
     get() = when (this) {
         SettingsPage.ACCOUNT -> R.string.settings_group_account
         SettingsPage.PLAYBACK -> R.string.settings_section_playback
+        SettingsPage.PLAYER -> R.string.settings_section_player
         SettingsPage.INTERFACE -> R.string.settings_section_interface
         SettingsPage.ABOUT -> R.string.settings_group_about
     }
@@ -337,6 +339,7 @@ private val SettingsPage.icon: ImageVector
     get() = when (this) {
         SettingsPage.ACCOUNT -> Icons.Rounded.Person
         SettingsPage.PLAYBACK -> Icons.Rounded.PlayArrow
+        SettingsPage.PLAYER -> Icons.Rounded.PlayCircle
         SettingsPage.INTERFACE -> Icons.Rounded.Dashboard
         SettingsPage.ABOUT -> Icons.Rounded.Info
     }
@@ -382,6 +385,14 @@ private fun interfaceSummary(state: SettingsUiState): String {
     return stringResource(R.string.settings_summary_interface, open.unbroken(), wheel.unbroken(), scale.unbroken())
 }
 
+@Composable
+private fun playerSummary(state: SettingsUiState): String {
+    val layout = stringResource(if (state.playerCarLayout) R.string.settings_player_layout_car else R.string.settings_player_layout_phone)
+    val next = if (state.playerNextThree) "3" else "1"
+    val likes = stringResource(if (state.likeGestures) R.string.settings_player_likes_gestures else R.string.settings_player_likes_buttons)
+    return stringResource(R.string.settings_summary_player, layout.unbroken(), next, likes.unbroken())
+}
+
 /** A value such as "100 МБ" never breaks across two lines. */
 private fun String.unbroken(): String = replace(' ', ' ')
 
@@ -402,6 +413,7 @@ private fun ColumnScope.RootPage(state: SettingsUiState, onOpen: (SettingsPage) 
     Spacer(Modifier.heightIn(min = 14.dp))
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Color.White.copy(alpha = 0.05f)).selectableGroup()) {
         SectionRow(SettingsPage.PLAYBACK, stringResource(R.string.settings_section_playback), playbackSummary(state), onOpen)
+        SectionRow(SettingsPage.PLAYER, stringResource(R.string.settings_section_player), playerSummary(state), onOpen)
         SectionRow(SettingsPage.INTERFACE, stringResource(R.string.settings_section_interface), interfaceSummary(state), onOpen)
         SectionRow(SettingsPage.ABOUT, stringResource(R.string.settings_group_about), aboutSummary(), onOpen)
     }
@@ -461,6 +473,7 @@ private fun ColumnScope.SettingsPageContent(page: SettingsPage, state: SettingsU
     when (page) {
         SettingsPage.ACCOUNT -> AccountPage(state, actions)
         SettingsPage.PLAYBACK -> PlaybackPage(state, actions)
+        SettingsPage.PLAYER -> PlayerPage(state, actions)
         SettingsPage.INTERFACE -> InterfacePage(state, actions)
         SettingsPage.ABOUT -> AboutPage(state, actions)
     }
@@ -488,7 +501,14 @@ private fun ColumnScope.AccountPage(state: SettingsUiState, actions: SettingsAct
 @Composable
 private fun ColumnScope.PlaybackPage(state: SettingsUiState, actions: SettingsActions) {
     SettingsGroup(stringResource(R.string.settings_g_sound)) {
-        SoundQualityRow(state.compatibleSound, actions.onCompatibleSoundChange)
+        // Quality is chosen per account now (canvas `qa-playback`): Settings → Accounts → the account
+        SettingsRow(
+            icon = Icons.Rounded.GraphicEq,
+            title = stringResource(R.string.quality_title),
+            subtitle = stringResource(R.string.quality_per_account),
+            chevron = false,
+            onClick = null
+        )
         CrossfadeRow(state.crossfadeSeconds, actions.onCrossfadeChange)
         if (state.crossfadeSeconds > 0) {
             SegmentedRow(Icons.Rounded.GraphicEq, stringResource(R.string.settings_transition)) {
@@ -511,10 +531,6 @@ private fun ColumnScope.PlaybackPage(state: SettingsUiState, actions: SettingsAc
         }
         SwitchRow(Icons.Rounded.RecordVoiceOver, stringResource(R.string.settings_duck_announcements), stringResource(R.string.settings_duck_announcements_hint), state.duckForAnnouncements, actions.onDuckForAnnouncementsChange)
         SwitchRow(Icons.Rounded.PlayCircle, stringResource(R.string.settings_resume_quiet), stringResource(R.string.settings_resume_quiet_hint), state.resumeWhenQuiet, actions.onResumeWhenQuietChange)
-        SwitchRow(Icons.Rounded.Equalizer, stringResource(R.string.settings_eq_announce), stringResource(R.string.settings_eq_announce_hint), state.announceEqualizer, actions.onAnnounceEqualizerChange)
-        SwitchRow(Icons.Rounded.SpeakerGroup, stringResource(R.string.settings_keep_streams), stringResource(R.string.settings_keep_streams_hint), state.keepAudioStreams, actions.onKeepAudioStreamsChange)
-        SwitchRow(Icons.Rounded.SpeakerGroup, stringResource(R.string.settings_both_players), stringResource(R.string.settings_both_players_hint), state.keepBothPlayersRunning, actions.onKeepBothPlayersRunningChange)
-        SwitchRow(Icons.Rounded.GraphicEq, stringResource(R.string.settings_fixed_output), stringResource(R.string.settings_fixed_output_hint), state.fixedOutputFormat, actions.onFixedOutputFormatChange)
     }
     SettingsGroup(stringResource(R.string.settings_g_start)) {
         SegmentedRow(Icons.Rounded.PowerSettingsNew, stringResource(R.string.settings_start_music)) {
@@ -583,6 +599,33 @@ private fun ColumnScope.PlaybackPage(state: SettingsUiState, actions: SettingsAc
             }
         )
     }
+}
+
+/** Settings → Player (canvas `pl-settings`): the layout, how many next tracks, likes by gestures. */
+@Composable
+private fun ColumnScope.PlayerPage(state: SettingsUiState, actions: SettingsActions) {
+    SettingsGroup(stringResource(R.string.settings_section_player)) {
+        SegmentedRow(Icons.Rounded.DirectionsCar, stringResource(R.string.settings_player_layout), stringResource(R.string.settings_player_layout_hint)) {
+            HiFiSegmented(
+                options = listOf(stringResource(R.string.settings_player_layout_phone), stringResource(R.string.settings_player_layout_car)),
+                selectedIndex = if (state.playerCarLayout) 1 else 0,
+                onSelect = { actions.onPlayerCarLayoutChange(it == 1) }
+            )
+        }
+        SegmentedRow(Icons.Rounded.MusicNote, stringResource(R.string.settings_player_next), stringResource(R.string.settings_player_next_hint)) {
+            HiFiSegmented(
+                options = listOf("1", "3"),
+                selectedIndex = if (state.playerNextThree) 1 else 0,
+                onSelect = { actions.onPlayerNextThreeChange(it == 1) }
+            )
+        }
+        SwitchRow(Icons.Rounded.Favorite, stringResource(R.string.settings_player_likes), stringResource(R.string.settings_player_likes_hint), state.likeGestures, actions.onLikeGesturesChange)
+    }
+    Text(
+        stringResource(R.string.settings_player_wheel_note),
+        color = HiFi.TextTertiary, fontSize = 13.sp, lineHeight = 18.sp,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+    )
 }
 
 @Composable

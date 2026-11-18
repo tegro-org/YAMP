@@ -9,7 +9,7 @@ import org.tegro.yamp.domain.model.StartPage
 import org.tegro.yamp.data.player.PlaybackJournal
 
 /** The pages of the settings: a short root list and one page per section. */
-enum class SettingsPage { ACCOUNT, PLAYBACK, INTERFACE, ABOUT }
+enum class SettingsPage { ACCOUNT, PLAYBACK, PLAYER, INTERFACE, ABOUT }
 
 /** Everything the settings show, in one value: the sheet draws it and calls [SettingsActions]. */
 @Immutable
@@ -34,15 +34,15 @@ data class SettingsUiState(
     val compatibleSound: Boolean = false,
     val crossfadeSeconds: Int = 3,
     val normalizeVolume: Boolean = false,
-    val announceEqualizer: Boolean = true,
-    val keepAudioStreams: Boolean = false,
-    val duckForAnnouncements: Boolean = true,
-    val resumeWhenQuiet: Boolean = true,
-    val keepBothPlayersRunning: Boolean = false,
+    val duckForAnnouncements: Boolean = false,
+    val resumeWhenQuiet: Boolean = false,
     /** "Fixed output format" (D69). */
-    val fixedOutputFormat: Boolean = false,
     /** Transition at a track's end: false = crossfade, true = fade then rise. */
     val transitionFadeThenRise: Boolean = false,
+    /** Settings → Player: the Car layout (false = Phone), three next tracks (false = one), likes by gestures. */
+    val playerCarLayout: Boolean = false,
+    val playerNextThree: Boolean = false,
+    val likeGestures: Boolean = false,
     val equalizerAvailable: Boolean = false,
     /** Poweramp Equalizer is installed: Settings → Playback shows how to set it for a clean crossfade. */
     val powerampEqualizer: Boolean = false,
@@ -83,13 +83,12 @@ data class SettingsActions(
     val onCompatibleSoundChange: (Boolean) -> Unit = {},
     val onCrossfadeChange: (Int) -> Unit = {},
     val onNormalizeVolumeChange: (Boolean) -> Unit = {},
-    val onAnnounceEqualizerChange: (Boolean) -> Unit = {},
-    val onKeepAudioStreamsChange: (Boolean) -> Unit = {},
     val onDuckForAnnouncementsChange: (Boolean) -> Unit = {},
     val onResumeWhenQuietChange: (Boolean) -> Unit = {},
-    val onKeepBothPlayersRunningChange: (Boolean) -> Unit = {},
-    val onFixedOutputFormatChange: (Boolean) -> Unit = {},
     val onTransitionFadeThenRiseChange: (Boolean) -> Unit = {},
+    val onPlayerCarLayoutChange: (Boolean) -> Unit = {},
+    val onPlayerNextThreeChange: (Boolean) -> Unit = {},
+    val onLikeGesturesChange: (Boolean) -> Unit = {},
     val onOpenEqualizer: () -> Unit = {},
     val onOpenPowerampEqualizer: () -> Unit = {},
     val onStartMusicChange: (StartMusic) -> Unit = {},

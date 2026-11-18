@@ -73,6 +73,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        // The launcher icon over a task that already runs YAMP (started from the notification, a widget, Android Auto
+        // or the assistant): Android stacks a fresh MainActivity on top of it, which shows the main screen instead of
+        // the screen the user left. Drop the duplicate; the task underneath comes to the front as it was.
+        if (isLauncherDuplicate()) {
+            finish()
+            return
+        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -166,8 +173,14 @@ class MainActivity : ComponentActivity() {
         super.onStop()
     }
 
+    private fun isLauncherDuplicate(): Boolean = isLauncherReentry(isTaskRoot, intent)
+
     companion object {
         const val EXTRA_OPEN_PLAYER = "open_player"
+
+        /** A launcher start (MAIN + LAUNCHER) of an activity that is not its task's root is a duplicate. */
+        internal fun isLauncherReentry(isTaskRoot: Boolean, intent: Intent?): Boolean =
+            !isTaskRoot && intent?.action == Intent.ACTION_MAIN && intent.hasCategory(Intent.CATEGORY_LAUNCHER)
     }
 }
 

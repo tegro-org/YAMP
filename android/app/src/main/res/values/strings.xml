@@ -246,14 +246,10 @@
     <string name="radio_on_air">В ЭФИРЕ</string>
     <string name="radio_favorites">Избранные</string>
     <string name="radio_all_stations">Все станции</string>
-    <string name="car_label">В АВТО</string>
     <string name="car_next">Далее</string>
     <string name="car_source_wave">Моя волна</string>
-    <string name="car_source_liked">Любимое</string>
     <string name="car_source_radio">Радио</string>
     <string name="car_source_hits">Хиты</string>
-    <string name="car_source_downloaded">Скачанные</string>
-    <string name="car_exit">Выйти из режима В авто</string>
     <string name="car_timeline">Позиция в треке</string>
     <string name="settings_title">Настройки</string>
     <string name="settings_group_account">Аккаунт</string>
@@ -334,7 +330,6 @@
     <string name="tab_search">Поиск</string>
     <string name="tab_music">Музыка</string>
     <string name="tab_radio">Радио</string>
-    <string name="tab_car">В авто</string>
     <string name="radio_live_frequency">Прямой эфир • %1$s</string>
     <string name="search_nothing_found_hint">Попробуйте написать иначе или короче.</string>
     <string name="notification_unlike">Убрать из «Мне нравится»</string>
@@ -373,20 +368,12 @@
     <string name="settings_equalizer">Эквалайзер</string>
     <string name="settings_equalizer_hint">Эквалайзер телефона или магнитолы</string>
     <string name="msg_queue_empty">“%1$s” is empty — add music with “Add to queue…”</string>
-    <string name="settings_eq_announce">Announce sessions to the equalizer</string>
-    <string name="settings_eq_announce_hint">Switch off if the music pauses by itself a second after it starts: some head units take the sound when their equalizer attaches</string>
-    <string name="settings_keep_streams">Keep audio streams open</string>
-    <string name="settings_keep_streams_hint">Experiment for a head unit that pauses the music when a track starts: a finished player waits on silence instead of closing its stream</string>
     <string name="settings_duck_announcements">Keep playing under announcements</string>
     <string name="settings_poweramp_eq">Poweramp Equalizer</string>
-    <string name="settings_poweramp_eq_hint">For a clean crossfade: Known Players → YAMP — «Без DVC» on, «Затухание» (Fade) off. Tap to open it</string>
+    <string name="settings_poweramp_eq_hint">Known Players → YAMP: «Затухание» (Fade) off — it took the sound focus and paused YAMP on head units; «Без DVC» on — YAMP\'s own volume works, so crossfades, fades and skips are clean. Leave the other two options as they are. Tap to open it</string>
     <string name="settings_resume_quiet">Resume when nothing else plays</string>
     <string name="settings_resume_quiet_hint">When another app takes the sound but nothing plays (an equalizer on a head unit does that), the music goes on a moment later. Only if it was playing, never from a pause</string>
     <string name="settings_duck_announcements_hint">A navigator or a radar detector speaking makes the music quieter instead of pausing it. A phone call still pauses</string>
-    <string name="settings_both_players">Keep both players running</string>
-    <string name="settings_both_players_hint">Experiment against stutter on skips: the idle player plays silence, so no audio stream opens or closes. Wins over "Keep audio streams open"</string>
-    <string name="settings_fixed_output">Fixed output format</string>
-    <string name="settings_fixed_output_hint">Players resample every track to the system mixer\'s rate, so the audio output never changes format between tracks. Experiment against stutter on track changes; applies from the next track</string>
     <string name="settings_transition">Transition</string>
     <string name="settings_transition_crossfade">Crossfade</string>
     <string name="settings_transition_fade_rise">Fade then rise</string>
@@ -412,8 +399,8 @@
     <string name="settings_open_last">Последний раздел</string>
     <string name="settings_open_last_hint">Где закрыли, в том числе «В авто»</string>
     <string name="settings_open_wave">Моя волна</string>
-    <string name="settings_open_car">В авто</string>
-    <string name="settings_open_car_hint">Сразу режим для магнитолы</string>
+    <string name="settings_open_car">Плеер</string>
+    <string name="settings_open_car_hint">Сразу открывается плеер</string>
     <string name="settings_expand_player">Разворачивать плеер</string>
     <string name="settings_expand_player_hint">Когда вы включаете музыку: трек, плейлист, альбом или волну</string>
     <string name="settings_swipe_close">Закрывать смахиванием</string>
@@ -453,7 +440,6 @@
     <string name="wave_by_track_title">По треку «%1$s»</string>
     <string name="wave_by_track_cd">Волна по этому треку</string>
     <string name="wave_by_track_started">Волна по треку «%1$s»: этот трек доиграет, дальше — похожие</string>
-    <string name="wave_by_track_car">Волна по треку «%1$s»</string>
     <string name="action_undo">Отменить</string>
     <string name="auth_phone_kicker">YANDEX MUSIC LITE</string>
     <string name="auth_phone_title">Вход с телефона</string>
@@ -484,8 +470,6 @@
     <string name="auth_webview_still_missing">WebView всё ещё недоступен</string>
     <string name="crash_offer_title">Приложение закрылось с ошибкой</string>
     <string name="auth_phone_minutes">Он действует %1$d мин</string>
-    <string name="car_next_wave">Далее в волне</string>
-    <string name="car_next_track_wave">Далее · волна по треку</string>
     <string name="car_next_play_cd">Включить «%1$s»</string>
 
     <!-- Phase 1 queues: English here, Russian in values-ru (ARCHITECTURE K1) -->
@@ -637,6 +621,7 @@
     <string name="media_target_next">Plays right after the current track.</string>
     <string name="media_target_end">Goes to the end of the current queue.</string>
     <string name="media_target_queue">Then choose the queue.</string>
+    <string name="media_target_playlist">Then choose the playlist.</string>
     <string name="media_all_albums">All albums · release order</string>
     <string name="media_with_extras">Include singles and compilations</string>
     <string name="media_popular">Popular tracks</string>
@@ -652,4 +637,49 @@
     <string name="media_releases_few" tools:ignore="PluralsCandidate">%d releases</string>
     <string name="media_releases_many" tools:ignore="PluralsCandidate">%d releases</string>
     <string name="cd_media_menu">Album or artist actions</string>
+    <string name="settings_section_player">Player</string>
+    <string name="settings_summary_player">%1$s · next %2$s · %3$s</string>
+    <string name="settings_player_layout">Layout</string>
+    <string name="settings_player_layout_hint">Chosen here, never automatically</string>
+    <string name="settings_player_layout_phone">Phone</string>
+    <string name="settings_player_layout_car">Car</string>
+    <string name="settings_player_next">Next tracks</string>
+    <string name="settings_player_next_hint">1: one row, tap opens the queue · 3: cards</string>
+    <string name="settings_player_likes">Like by gestures</string>
+    <string name="settings_player_likes_hint">Double tap the cover = like, hold = dislike; no buttons</string>
+    <string name="settings_player_likes_gestures">likes by gestures</string>
+    <string name="settings_player_likes_buttons">like buttons</string>
+    <string name="settings_player_wheel_note">The wheel’s side comes from Settings → Interface</string>
+    <string name="tab_player">Player</string>
+    <string name="player_liked_gesture">Liked</string>
+    <string name="player_disliked_gesture">Disliked — won’t play again</string>
+    <string name="player_queue_position">Queue · %1$d of %2$d</string>
+    <plurals name="playlist_msg_added_many">
+        <item quantity="one">%1$d track added to «%2$s»</item>
+        <item quantity="other">%1$d tracks added to «%2$s»</item>
+    </plurals>
+    <string name="quality_title">Quality</string>
+    <string name="quality_unmetered">Unmetered (Wi-Fi)</string>
+    <string name="quality_metered">Metered (mobile, limited Wi-Fi)</string>
+    <string name="quality_lossless">Lossless (FLAC)</string>
+    <string name="quality_compatible">Compatible (MP3)</string>
+    <string name="quality_original">Original</string>
+    <string name="quality_converted">Converted (MP3 320)</string>
+    <string name="quality_converted_note">Converted can’t seek until the track is on the device.</string>
+    <string name="quality_original_note">The file as it is on the server: seekable, no work for the server.</string>
+    <string name="quality_now_metered">Now: metered</string>
+    <string name="quality_now_unmetered">Now: unmetered</string>
+    <string name="quality_next_track">A network change applies from the next track.</string>
+    <string name="quality_car_title">Car Wi-Fi as metered</string>
+    <string name="quality_car_text">The head unit sees the car’s 4G router as ordinary Wi-Fi. Mark that network as metered once, and YAMP uses the “Metered” quality in the car and the other one at home.</string>
+    <string name="quality_car_steps">Android Settings → Wi-Fi → the car network → Advanced → Metered</string>
+    <string name="quality_open_wifi">Open Wi-Fi settings</string>
+    <string name="quality_summary">Wi-Fi: %1$s · metered: %2$s</string>
+    <string name="quality_short_original">original</string>
+    <string name="quality_short_converted">MP3 320</string>
+    <string name="quality_per_account">Quality is chosen per account: Settings → Accounts → the account.</string>
+    <string name="quality_tap_account">Tap an account for its quality.</string>
+    <string name="wide_menu_more">More</string>
+    <string name="wide_menu_quality">Quality · %1$s</string>
+    <string name="wide_menu_quality_unknown">Quality</string>
 </resources>

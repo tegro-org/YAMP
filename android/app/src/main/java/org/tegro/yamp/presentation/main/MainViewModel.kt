@@ -167,6 +167,11 @@ class MainViewModel @Inject constructor(
         reactions.toggleLike(track)
     }
 
+    /** Every track dislike from any place: the screen offers Undo for it. */
+    val dislikes: kotlinx.coroutines.flow.SharedFlow<org.tegro.yamp.data.player.Dislike> get() = reactions.dislikes
+
+    fun undoDislike(dislike: org.tegro.yamp.data.player.Dislike) = reactions.undoDislike(dislike)
+
     /** "Не нравится": a track leaves the wave and the next one plays; a station leaves the favourites. */
     fun dislikeTrack(track: Track) {
         if (track.ref.service == org.tegro.yamp.domain.account.Provider.JELLYFIN) return
@@ -287,6 +292,13 @@ class MainViewModel @Inject constructor(
 
     val swipeToCloseMiniPlayer: StateFlow<Boolean> = settingsRepository.swipeToCloseMiniPlayer
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+    /** Settings → Player: the Car layout, three next tracks, likes by gestures. */
+    val playerCarLayout: StateFlow<Boolean> = settingsRepository.playerCarLayout
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val playerNextThree: StateFlow<Boolean> = settingsRepository.playerNextThree
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val likeGestures: StateFlow<Boolean> = settingsRepository.likeGestures
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val carClock: StateFlow<Boolean> = settingsRepository.carClock
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
     val animationMode: StateFlow<AnimationMode?> = settingsRepository.animationMode
@@ -296,7 +308,7 @@ class MainViewModel @Inject constructor(
     val startTab: StateFlow<MainTab?> = combine(settingsRepository.startPage, settingsRepository.lastTab) { page, last ->
         when (page) {
             StartPage.WAVE -> MainTab.HOME
-            StartPage.CAR -> MainTab.CAR
+            StartPage.CAR -> MainTab.PLAYER
             StartPage.LAST -> MainTab.entries.firstOrNull { it.route == last } ?: MainTab.HOME
         }
     }.take(1).stateIn(viewModelScope, SharingStarted.Eagerly, null)
