@@ -19,9 +19,16 @@ data class MediaTarget(
     /** "Album · Мельница · 2009" — what the sheet's header shows under the title. */
     val subtitle: String,
     val cover: String?,
-    val isArtist: Boolean
+    val isArtist: Boolean,
+    /** A folder's account (Phase 4b): its tracks load and its pin is kept there. Null: found from the ref. */
+    val account: org.tegro.yamp.domain.account.AccountId? = null,
+    /** A folder pinned to the top of its level (the menu offers Unpin). */
+    val pinned: Boolean = false
 ) {
     val provider: Provider? get() = ref.service
+
+    /** A folder of the file tree (Phase 4b): Shuffle and Pin join its menu. */
+    val isFolder: Boolean get() = ref.kind == KIND_FOLDER
 
     companion object {
         fun of(album: Album, albumWord: String): MediaTarget = MediaTarget(
@@ -35,6 +42,12 @@ data class MediaTarget(
 
         fun of(artist: Artist, artistWord: String): MediaTarget =
             MediaTarget(artist.ref, artist.name, artistWord, artist.cover?.key, isArtist = true)
+
+        /** A folder of [account]'s tree; [subtitle] = "Folder · 97 tracks". */
+        fun of(folder: org.tegro.yamp.domain.media.Folder, subtitle: String, account: org.tegro.yamp.domain.account.AccountId, pinned: Boolean): MediaTarget =
+            MediaTarget(folder.ref, folder.title, subtitle, folder.cover?.key, isArtist = false, account = account, pinned = pinned)
+
+        const val KIND_FOLDER = "folder"
     }
 }
 
@@ -46,10 +59,10 @@ fun interface MediaMenuLauncher {
 val LocalMediaMenu = staticCompositionLocalOf<MediaMenuLauncher?> { null }
 
 /** What a menu row does with the album's or artist's tracks. */
-enum class MediaAction { PLAY_NOW, PLAY_NEXT, ADD_TO_END, ADD_TO_QUEUE, ADD_TO_PLAYLIST }
+enum class MediaAction { PLAY_NOW, SHUFFLE, PLAY_NEXT, ADD_TO_END, ADD_TO_QUEUE, ADD_TO_PLAYLIST }
 
 /** The menu's rows, in order (canvas `AmMenu`). Pure; unit-tested. */
-enum class MediaMenuRow { PLAY_NOW, PLAY_NEXT, ADD_TO_END, ADD_TO_QUEUE, ADD_TO_PLAYLIST, START_RADIO }
+enum class MediaMenuRow { PLAY_NOW, SHUFFLE, PLAY_NEXT, ADD_TO_END, ADD_TO_QUEUE, ADD_TO_PLAYLIST, START_RADIO, PIN, UNPIN }
 
 /**
  * The rows for [target]: "Play next" and "Add to end" only when the active queue can take its tracks (D84) — else
@@ -58,6 +71,8 @@ enum class MediaMenuRow { PLAY_NOW, PLAY_NEXT, ADD_TO_END, ADD_TO_QUEUE, ADD_TO_
  */
 fun mediaMenuRows(target: MediaTarget, fitsActiveQueue: Boolean): List<MediaMenuRow> = buildList {
     add(MediaMenuRow.PLAY_NOW)
+    // A folder (canvas `pf-menu`): the album menu's rows plus Shuffle, and Pin / Unpin last
+    if (target.isFolder) add(MediaMenuRow.SHUFFLE)
     if (fitsActiveQueue) {
         add(MediaMenuRow.PLAY_NEXT)
         add(MediaMenuRow.ADD_TO_END)
@@ -66,7 +81,15 @@ fun mediaMenuRows(target: MediaTarget, fitsActiveQueue: Boolean): List<MediaMenu
     // The account's own playlists, Yandex or Jellyfin (D84)
     add(MediaMenuRow.ADD_TO_PLAYLIST)
     if (target.provider == Provider.YANDEX) add(MediaMenuRow.START_RADIO)
+    if (target.isFolder) add(if (target.pinned) MediaMenuRow.UNPIN else MediaMenuRow.PIN)
 }
+
+/**
+ * The car's album menu (canvas `ca-menu-*`): the phone menu's rows, but "Add to playlist…" only for Yandex (the car
+ * has no Jellyfin playlist picker; board `ca-menu-jf-r`). Pure; unit-tested.
+ */
+fun carMediaMenuRows(target: MediaTarget, fitsActiveQueue: Boolean): List<MediaMenuRow> =
+    mediaMenuRows(target, fitsActiveQueue).filter { it != MediaMenuRow.ADD_TO_PLAYLIST || target.provider == Provider.YANDEX }
 
 /** "Add the artist": every album in release order, or the popular tracks. */
 enum class ArtistChoice { ALBUMS, POPULAR }

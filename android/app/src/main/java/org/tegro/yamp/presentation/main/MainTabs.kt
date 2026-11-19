@@ -94,7 +94,13 @@ internal fun HomeTab(
     contentBottom: Dp,
     onOpenPlayer: (() -> Unit)?,
     /** The empty queue's card sends the user to Library or Search. */
-    onOpenTab: (MainTab) -> Unit = {}
+    onOpenTab: (MainTab) -> Unit = {},
+    /** Home's Jellyfin groups (gap (e)): their pages open on the catalog stack, their folders play at once. */
+    onOpenPage: (org.tegro.yamp.presentation.catalog.CatalogPage) -> Unit = {},
+    onPlayFolder: (org.tegro.yamp.domain.account.AccountId, String, Boolean) -> Unit = { _, _, _ -> },
+    /** The hero scrolled off (the mini player comes back). */
+    onHeroHidden: (Boolean) -> Unit = {},
+    homeVm: HomeJellyfinViewModel = hiltViewModel()
 ) {
     val queue by viewModel.currentPlaylist.collectAsStateWithLifecycle()
     val wavePreview by viewModel.wavePreview.collectAsStateWithLifecycle()
@@ -117,7 +123,11 @@ internal fun HomeTab(
     if (tuneOpen) {
         org.tegro.yamp.presentation.main.components.WaveTuneSheet(tuning, onChange = viewModel::setWaveTuning, onDismiss = { tuneOpen = false }, onLeft = steeringWheelOnLeft)
     }
-    HomeScreen(
+    val groups by homeVm.groups.collectAsStateWithLifecycle()
+    val shownGroups = remember(groups) { groups.filterNot { it.isEmpty } }
+    val yandex by viewModel.isAuthorized.collectAsStateWithLifecycle()
+    val homeBottom = if (pagePlays && !isLandscape) 100.dp else contentBottom
+    val screen: @Composable (Dp) -> Unit = { bottom -> HomeScreen(
         waveTrack = remember(now.track, pagePlays) { if (pagePlays) now.track else null },
         isPlaying = now.isPlaying,
         // The ring loads the page's own music: the wave, or the queue's track (never a station's stream)
@@ -139,7 +149,7 @@ internal fun HomeTab(
                 else -> viewModel.playWaveFrom(track.id)
             }
         },
-        contentBottom = if (pagePlays && !isLandscape) 100.dp else contentBottom,
+        contentBottom = bottom,
         tuning = tuning,
         trackWaveSeed = remember(seed, wavePage, pagePlays) { seed?.takeIf { wavePage && pagePlays } },
         onTune = { tuneOpen = true },
@@ -153,7 +163,33 @@ internal fun HomeTab(
         emptyQueue = !wavePage && active?.entries?.isEmpty() == true,
         onOpenLibrary = { onOpenTab(MainTab.LIBRARY) },
         onOpenSearch = { onOpenTab(MainTab.SEARCH) }
-    )
+    ) }
+    // Yandex only (or the phone on its side): the first tab as it was, never scrolling (canvas `hj-home-a`)
+    if (shownGroups.isEmpty() || isLandscape) {
+        LaunchedEffect(Unit) { onHeroHidden(false) }
+        screen(homeBottom)
+        return
+    }
+    val actions = remember(homeVm) {
+        HomeJellyfinActions(onOpen = onOpenPage, onPlayFolder = onPlayFolder, onPlayFavourites = homeVm::playFavourites)
+    }
+    HomeWithGroups(
+        groups = shownGroups,
+        tags = accountTags,
+        // One Jellyfin account without Yandex needs no name over its group (canvas `hj-home-b`)
+        headers = yandex || shownGroups.size > 1,
+        // The groups scroll under the mini player once it is back
+        contentBottom = contentBottom,
+        heroBottom = homeBottom,
+        collapsedTitle = when (mode) {
+            is HomeMode.Queue -> mode.name
+            HomeMode.Wave -> androidx.compose.ui.res.stringResource(org.tegro.yamp.R.string.wave_title)
+        },
+        queueName = active?.queue?.name.orEmpty(),
+        controlsOnLeft = steeringWheelOnLeft,
+        actions = actions,
+        onHeroHidden = onHeroHidden
+    ) { bottom -> screen(bottom) }
 }
 
 @Composable
@@ -223,11 +259,12 @@ internal fun LibraryTab(
     onAddAccount: () -> Unit,
     settingsVm: SettingsViewModel = hiltViewModel(),
     historyVm: org.tegro.yamp.presentation.history.HistoryViewModel = hiltViewModel(),
-    /** Opens a Jellyfin library list on the catalog stack (step 22). */
-    onOpenJellyfin: (org.tegro.yamp.presentation.catalog.CatalogPage.Browse) -> Unit = {},
+    /** Opens a page of the catalog stack: an account's browse list or its Folders (gap (e)). */
+    onOpenPage: (org.tegro.yamp.presentation.catalog.CatalogPage) -> Unit = {},
     jellyfinVm: org.tegro.yamp.presentation.catalog.JellyfinLibraryViewModel = hiltViewModel()
 ) {
-    val jellyfinLibraries by jellyfinVm.libraries.collectAsStateWithLifecycle()
+    val sections by jellyfinVm.sections.collectAsStateWithLifecycle()
+    val accountTags by viewModel.accountTags.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { jellyfinVm.refresh() }
     val tracks by viewModel.tracks.collectAsStateWithLifecycle()
     val historyState by historyVm.state.collectAsStateWithLifecycle()
@@ -363,9 +400,11 @@ internal fun LibraryTab(
                 modifier = modifier
             )
         },
-        jellyfinLibraries = jellyfinLibraries,
+        sections = sections,
+        accountTags = accountTags,
         yandex = viewModel.isAuthorized.collectAsStateWithLifecycle().value,
-        onOpenJellyfin = onOpenJellyfin
+        onOpenPage = onOpenPage,
+        onPlayFavourites = jellyfinVm::playFavourites
     )
 }
 

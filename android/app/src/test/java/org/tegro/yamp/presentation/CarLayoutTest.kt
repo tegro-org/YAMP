@@ -223,4 +223,17 @@ class CarLayoutTest {
         // FM radio: search and the sleep timer only
         assertEquals(listOf(PlayerMenuItem.SEARCH, PlayerMenuItem.SLEEP), items(gestures = true, radio = true))
     }
+
+    @Test
+    fun musicIsTheLastItemOfTheCarMenuOnly() {
+        val car = playerMenuItems(likeGestures = true, supportsLikes = true, isRadio = false, waveActive = false, canStartRadio = true, trackWave = false, music = true)
+        assertEquals(PlayerMenuItem.MUSIC, car.last())
+        assertEquals(PlayerMenuItem.DISLIKE, car[car.size - 2])
+        // On FM radio too: the Library is a way back to music
+        assertEquals(
+            listOf(PlayerMenuItem.SEARCH, PlayerMenuItem.SLEEP, PlayerMenuItem.MUSIC),
+            playerMenuItems(likeGestures = false, supportsLikes = false, isRadio = true, waveActive = false, canStartRadio = false, trackWave = false, music = true)
+        )
+        assertFalse(PlayerMenuItem.MUSIC in playerMenuItems(false, true, false, false, true, false))
+    }
 }

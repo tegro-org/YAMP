@@ -66,6 +66,13 @@ data class BaseItemDto(
     @SerialName("IndexNumber") val indexNumber: Int? = null,
     @SerialName("ParentIndexNumber") val parentIndexNumber: Int? = null,
     @SerialName("ChildCount") val childCount: Int? = null,
+    /** Items anywhere under a folder (asked for with `Fields=RecursiveItemCount`). */
+    @SerialName("RecursiveItemCount") val recursiveItemCount: Int? = null,
+    @SerialName("IsFolder") val isFolder: Boolean? = null,
+    /** A library view's kind: `music`, `playlists`… (`/UserViews`). */
+    @SerialName("CollectionType") val collectionType: String? = null,
+    /** The file on the server (asked for with `Fields=Path`): orders a folder's tracks by the tree, never shown. */
+    @SerialName("Path") val path: String? = null,
     @SerialName("ImageTags") val imageTags: Map<String, String> = emptyMap(),
     @SerialName("NormalizationGain") val normalizationGain: Double? = null
 )

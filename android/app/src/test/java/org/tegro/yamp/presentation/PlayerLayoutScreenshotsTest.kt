@@ -238,6 +238,14 @@ class PlayerLayoutScreenshotsTest {
         snap("player_fold8_cover_next3")
     }
 
+    /** Galaxy Z Fold 8, the inner screen standing (1848×2448 px @404 ppi ≈ 731×969 dp): the portrait player, column capped. */
+    @Test
+    @Config(qualifiers = "w731dp-h969dp-port-xxhdpi")
+    fun fold8InnerScreenPortrait() {
+        show { Phone(nextThree = true) }
+        snap("player_fold8_inner_port_next3")
+    }
+
     /** Galaxy Z Fold 8, the inner screen on its side (2448×1848 px, 4:3 @404 ppi ≈ 969×731 dp): the taller branch. */
     @Test
     @Config(qualifiers = "w969dp-h731dp-land-xxhdpi")

@@ -62,6 +62,9 @@ import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.DownloadDone
+import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -159,12 +162,27 @@ fun LibraryScreen(
     historyCount: Int = 0,
     /** The History page (D46), given the page modifier, the bottom clearance and the way back. */
     historyPage: @Composable (modifier: Modifier, contentBottom: androidx.compose.ui.unit.Dp, onBack: () -> Unit) -> Unit = { _, _, _ -> },
-    /** Each signed-in Jellyfin account's library (step 22): its rows open the catalog stack's browse pages. */
-    jellyfinLibraries: List<org.tegro.yamp.presentation.catalog.JellyfinLibraryRow> = emptyList(),
-    /** A Yandex account is signed in: its likes, downloads and playlists rows show (`wl-jf-library`: none without). */
+    /**
+     * One section per signed-in account (gap (e), canvas `hj-lib`): its rows with its own counts. The Yandex section's
+     * likes, playlists and downloads of the
+     * account in context are this screen's own lists; the rest come with the section.
+     */
+    sections: List<org.tegro.yamp.presentation.catalog.AccountLibrary> = emptyList(),
+    /** The accounts' markers, for the section headers. */
+    accountTags: List<org.tegro.yamp.presentation.account.AccountTag> = emptyList(),
+    /** A Yandex account is signed in: Play / Shuffle play its likes (`wl-jf-library`: else a Jellyfin account's favourites). */
     yandex: Boolean = true,
-    onOpenJellyfin: (org.tegro.yamp.presentation.catalog.CatalogPage.Browse) -> Unit = {}
+    /** A row of a section that opens a page of the catalog stack: a browse list or the Folders root. */
+    onOpenPage: (org.tegro.yamp.presentation.catalog.CatalogPage) -> Unit = {},
+    /** Play / Shuffle without Yandex: the account's favourites. */
+    onPlayFavourites: (org.tegro.yamp.domain.account.AccountId, Boolean) -> Unit = { _, _ -> }
 ) {
+    // Before the accounts are known, a signed-in Yandex account's rows show at once (its likes are already here)
+    @Suppress("NAME_SHADOWING")
+    val sections = sections.ifEmpty {
+        if (yandex) listOf(org.tegro.yamp.presentation.catalog.AccountLibrary(org.tegro.yamp.domain.account.AccountId.yandex(""), "", "Yandex", inContext = true))
+        else emptyList()
+    }
     var showSettings by remember { mutableStateOf(false) }
     var showProgressModal by remember { mutableStateOf(false) }
     var sectionName by rememberSaveable { mutableStateOf<String?>(null) }
@@ -223,31 +241,73 @@ fun LibraryScreen(
                     .fadeUnderHeader({ with(density) { (statusBar + LibraryFadeStart).toPx() } }, with(density) { LibraryFadeLength.toPx() }),
                 contentPadding = PaddingValues(start = contentStart, end = 20.dp, top = statusBar + LibraryFadeStart + LibraryFadeLength + 2.dp, bottom = contentBottom)
             ) {
-                if (yandex) {
+                val firstJellyfin = sections.firstOrNull { it.account.provider == org.tegro.yamp.domain.account.Provider.JELLYFIN }
+                val play: (Boolean) -> Unit = { shuffle ->
+                    when {
+                        yandex -> if (shuffle) onShuffleClick() else onPlayAllClick()
+                        firstJellyfin != null -> onPlayFavourites(firstJellyfin.account, shuffle)
+                    }
+                }
+                val hasMusic = yandex || firstJellyfin != null
+                if (hasMusic && !isLandscape) {
                     item(key = "buttons") {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            MetalPillButton(stringResource(R.string.library_listen), onPlayAllClick, Modifier.weight(1f), icon = Icons.Rounded.PlayArrow)
-                            GlassPillButton(stringResource(R.string.library_shuffle), onShuffleClick, Modifier.weight(1f), icon = Icons.Rounded.Shuffle)
+                            MetalPillButton(stringResource(R.string.library_listen), { play(false) }, Modifier.weight(1f), icon = Icons.Rounded.PlayArrow)
+                            GlassPillButton(stringResource(R.string.library_shuffle), { play(true) }, Modifier.weight(1f), icon = Icons.Rounded.Shuffle)
                         }
                     }
                 }
-                item(key = "sections") {
-                    Column(Modifier.padding(top = if (yandex) 14.dp else 0.dp)) {
-                        if (yandex) {
-                            SectionRow(Icons.Rounded.Favorite, stringResource(R.string.library_liked), tracks.size) { sectionName = LibrarySection.LIKED.name }
-                            SectionRow(Icons.Rounded.DownloadDone, stringResource(R.string.library_downloaded), downloaded.size) { sectionName = LibrarySection.DOWNLOADED.name }
+                val headers = org.tegro.yamp.presentation.catalog.showsAccountHeaders(sections)
+                val openRow: (org.tegro.yamp.presentation.catalog.AccountLibrary, org.tegro.yamp.presentation.catalog.LibraryRow, String) -> Unit = { section, row, title ->
+                    openLibraryRow(section, row, title, onOpenPage) { sectionName = it.name }
+                }
+                val ownCounts: (org.tegro.yamp.presentation.catalog.AccountLibrary) -> Map<org.tegro.yamp.presentation.catalog.LibraryRow, Int> = { section ->
+                    if (!section.inContext) section.counts
+                    else section.counts + mapOf(
+                        org.tegro.yamp.presentation.catalog.LibraryRow.LIKED to tracks.size,
+                        org.tegro.yamp.presentation.catalog.LibraryRow.PLAYLISTS to playlists.size,
+                        org.tegro.yamp.presentation.catalog.LibraryRow.DOWNLOADED to downloaded.size
+                    )
+                }
+                if (isLandscape && sections.size > 1) {
+                    // Phone on its side (canvas `hj-lib-land`): the accounts side by side, one column each
+                    item(key = "sections") {
+                        Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+                            sections.forEach { section ->
+                                AccountLibrarySection(
+                                    section, accountTags.firstOrNull { it.key == section.account.value }, headers, ownCounts(section),
+                                    Modifier.weight(1f)
+                                ) { row, title -> openRow(section, row, title) }
+                            }
                         }
+                    }
+                } else {
+                    sections.forEachIndexed { index, section ->
+                        item(key = "section:" + section.account.value) {
+                            AccountLibrarySection(
+                                section, accountTags.firstOrNull { it.key == section.account.value }, headers, ownCounts(section),
+                                Modifier.padding(top = if (index == 0) (if (hasMusic && !isLandscape) 10.dp else 0.dp) else 14.dp)
+                            ) { row, title -> openRow(section, row, title) }
+                        }
+                    }
+                }
+                item(key = "history") {
+                    Column(Modifier.padding(top = if (sections.isEmpty()) 0.dp else 14.dp)) {
                         SectionRow(Icons.Rounded.History, stringResource(R.string.history_row), historyCount) { sectionName = LibrarySection.HISTORY.name }
-                        if (yandex) {
-                            SectionRow(Icons.AutoMirrored.Rounded.PlaylistPlay, stringResource(R.string.library_playlists_row), playlists.size) { sectionName = LibrarySection.PLAYLISTS.name }
-                        }
                     }
                 }
-                jellyfinLibraries.forEach { library ->
-                    item(key = "jellyfin:" + library.account.value) { JellyfinLibrarySection(library, onOpenJellyfin) }
+                // "Recently added" with one account only (canvas `hj-lib-a` / `hj-lib-b`): Jellyfin's newest albums
+                val onlyJellyfin = sections.singleOrNull()?.takeIf { it.account.provider == org.tegro.yamp.domain.account.Provider.JELLYFIN }
+                if (onlyJellyfin != null && onlyJellyfin.recent.isNotEmpty()) {
+                    item(key = "recent_title_jf") {
+                        HiFiSectionHeader(stringResource(R.string.home_recently_added), Modifier.padding(top = 26.dp, bottom = 12.dp))
+                    }
+                    albumGrid(onlyJellyfin.recent.take(if (isLandscape) columns * 2 else 6), columns) { album ->
+                        onOpenPage(org.tegro.yamp.presentation.catalog.CatalogPage.Album(album.ref.id, album.title, onlyJellyfin.account))
+                    }
                 }
                 // The likes' states are Yandex's: with Jellyfin only there are none to load or to miss
-                if (yandex) when (LoadState.of(tracks, tracks.isEmpty(), isLoading, loadFailed)) {
+                if (yandex && sections.size <= 1) when (LoadState.of(tracks, tracks.isEmpty(), isLoading, loadFailed)) {
                     LoadState.Loading -> item(key = "loading") { HiFiSkeletonRows(Modifier.padding(top = 28.dp), count = 4) }
                     LoadState.Failed -> item(key = "failed") { HiFiErrorState(onRetry = onRefresh) }
                     LoadState.Empty -> item(key = "empty") {
@@ -292,13 +352,29 @@ fun LibraryScreen(
                     }
                 }
                 val running = downloadState == DownloadQueueState.RUNNING
+                // Landscape (canvas `hj-lib-land`): Play / Shuffle sit in the title row
+                val landButtons: @Composable () -> Unit = {
+                    val firstJellyfin = sections.firstOrNull { it.account.provider == org.tegro.yamp.domain.account.Provider.JELLYFIN }
+                    if (isLandscape && (yandex || firstJellyfin != null)) {
+                        val play: (Boolean) -> Unit = { shuffle ->
+                            if (yandex) { if (shuffle) onShuffleClick() else onPlayAllClick() } else firstJellyfin?.let { onPlayFavourites(it.account, shuffle) }
+                        }
+                        MetalPillButton(stringResource(R.string.library_listen), { play(false) }, Modifier.width(150.dp), icon = Icons.Rounded.PlayArrow, height = 44.dp)
+                        Spacer(Modifier.width(10.dp))
+                        GlassPillButton(stringResource(R.string.library_shuffle), { play(true) }, Modifier.width(170.dp), icon = Icons.Rounded.Shuffle, height = 44.dp)
+                        Spacer(Modifier.width(10.dp))
+                    }
+                }
                 if (controlsOnLeft) {
                     gear()
+                    Spacer(Modifier.width(10.dp))
+                    landButtons()
                     if (running) { Spacer(Modifier.width(10.dp)); downloads() }
                     Spacer(Modifier.width(12.dp))
                     title()
                 } else {
                     title()
+                    landButtons()
                     if (running) { downloads(); Spacer(Modifier.width(10.dp)) }
                     gear()
                 }
@@ -425,22 +501,95 @@ private fun SectionRow(icon: ImageVector, title: String, count: Int?, onClick: (
     Box(Modifier.fillMaxWidth().padding(start = 50.dp).height(1.dp).background(HiFi.Hairline))
 }
 
+/** What a row of an account's section opens: a page of the Library, or one of the catalog stack. */
+private fun openLibraryRow(
+    section: org.tegro.yamp.presentation.catalog.AccountLibrary,
+    row: org.tegro.yamp.presentation.catalog.LibraryRow,
+    title: String,
+    onOpenPage: (org.tegro.yamp.presentation.catalog.CatalogPage) -> Unit,
+    onSection: (LibrarySection) -> Unit
+) {
+    val account = section.account
+    // Only the Yandex account in context has the Library's own pages; any other account's open on the catalog stack
+    val onStack = !section.inContext
+    fun browse(kind: org.tegro.yamp.presentation.catalog.BrowseKind) = onOpenPage(org.tegro.yamp.presentation.catalog.CatalogPage.Browse(kind, title, account))
+    when (row) {
+        org.tegro.yamp.presentation.catalog.LibraryRow.LIKED ->
+            if (onStack) browse(org.tegro.yamp.presentation.catalog.BrowseKind.FAVOURITES) else onSection(LibrarySection.LIKED)
+        org.tegro.yamp.presentation.catalog.LibraryRow.PLAYLISTS ->
+            if (onStack) browse(org.tegro.yamp.presentation.catalog.BrowseKind.PLAYLISTS) else onSection(LibrarySection.PLAYLISTS)
+        org.tegro.yamp.presentation.catalog.LibraryRow.ALBUMS -> browse(org.tegro.yamp.presentation.catalog.BrowseKind.ALBUMS)
+        org.tegro.yamp.presentation.catalog.LibraryRow.ARTISTS -> browse(org.tegro.yamp.presentation.catalog.BrowseKind.ARTISTS)
+        org.tegro.yamp.presentation.catalog.LibraryRow.DOWNLOADED ->
+            if (onStack) browse(org.tegro.yamp.presentation.catalog.BrowseKind.DOWNLOADED) else onSection(LibrarySection.DOWNLOADED)
+        org.tegro.yamp.presentation.catalog.LibraryRow.FOLDERS -> onOpenPage(org.tegro.yamp.presentation.folders.rootFolderPage(account, title))
+    }
+}
+
 /**
- * A Jellyfin account's library rows (step 22, canvas `hm-lib-c` until Library is composed in step 24): Albums,
- * Artists, Playlists and Genres under the account's name, each opening its browse page.
+ * One account's section (canvas `hj-lib`): marker, name and service over a hairline — only with more than one
+ * account — then its rows with their own counts.
  */
 @Composable
-private fun JellyfinLibrarySection(
-    library: org.tegro.yamp.presentation.catalog.JellyfinLibraryRow,
-    onOpen: (org.tegro.yamp.presentation.catalog.CatalogPage.Browse) -> Unit
+internal fun AccountLibrarySection(
+    section: org.tegro.yamp.presentation.catalog.AccountLibrary,
+    tag: org.tegro.yamp.presentation.account.AccountTag?,
+    header: Boolean,
+    counts: Map<org.tegro.yamp.presentation.catalog.LibraryRow, Int>,
+    modifier: Modifier = Modifier,
+    onRow: (org.tegro.yamp.presentation.catalog.LibraryRow, String) -> Unit
 ) {
-    Column(Modifier.padding(top = 18.dp)) {
-        HiFiSectionHeader(library.label, Modifier.padding(bottom = 4.dp))
-        library.rows().forEach { (kind, icon, title) ->
-            val label = stringResource(title)
-            SectionRow(icon, label, library.count(kind)) {
-                onOpen(org.tegro.yamp.presentation.catalog.CatalogPage.Browse(kind, label, library.account))
+    val jellyfin = section.account.provider == org.tegro.yamp.domain.account.Provider.JELLYFIN
+    Column(modifier) {
+        if (header) {
+            Row(Modifier.fillMaxWidth().height(40.dp), verticalAlignment = Alignment.CenterVertically) {
+                tag?.let { org.tegro.yamp.presentation.account.AccountMark(it, 22.dp) }
+                Spacer(Modifier.width(10.dp))
+                Text(section.name, color = Color.White, fontSize = 17.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(" · " + section.service, style = HiFiType.Caption, color = HiFi.TextTertiary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                Spacer(Modifier.width(4.dp))
+                Box(Modifier.weight(1f).height(1.dp).background(HiFi.Hairline))
             }
+        }
+        section.rows.forEach { row ->
+            val (icon, title) = when (row) {
+                org.tegro.yamp.presentation.catalog.LibraryRow.LIKED ->
+                    Icons.Rounded.Favorite to stringResource(if (jellyfin) R.string.library_row_favourites else R.string.library_row_liked)
+                org.tegro.yamp.presentation.catalog.LibraryRow.PLAYLISTS -> Icons.AutoMirrored.Rounded.PlaylistPlay to stringResource(R.string.jellyfin_lib_playlists)
+                org.tegro.yamp.presentation.catalog.LibraryRow.ALBUMS -> Icons.Rounded.Album to stringResource(R.string.jellyfin_lib_albums)
+                org.tegro.yamp.presentation.catalog.LibraryRow.ARTISTS -> Icons.Rounded.Person to stringResource(R.string.jellyfin_lib_artists)
+                org.tegro.yamp.presentation.catalog.LibraryRow.DOWNLOADED -> Icons.Rounded.DownloadDone to stringResource(R.string.library_row_downloaded)
+                org.tegro.yamp.presentation.catalog.LibraryRow.FOLDERS -> Icons.Rounded.Folder to stringResource(R.string.library_row_folders)
+            }
+            SectionRow(icon, title, counts[row]) { onRow(row, title) }
+        }
+    }
+}
+
+/** Album covers in rows of [columns] (Jellyfin's "Recently added"). */
+private fun LazyListScope.albumGrid(albums: List<org.tegro.yamp.domain.media.Album>, columns: Int, onClick: (org.tegro.yamp.domain.media.Album) -> Unit) {
+    items(albums.chunked(columns), key = { row -> "agrid_" + row.joinToString("|") { it.ref.value } }, contentType = { "album_row" }) { row ->
+        Row(Modifier.fillMaxWidth().padding(bottom = 18.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            row.forEach { album ->
+                Column(Modifier.weight(1f).hifiPress({ onClick(album) })) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current).cover(album.cover?.key, CoverSize.Medium).crossfade(true).build(),
+                        contentDescription = album.title.ifEmpty { null },
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(1f)
+                            .hifiSoftShadow(RoundedCornerShape(16.dp), 18.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(HiFi.Placeholder)
+                            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(16.dp))
+                    )
+                    Spacer(Modifier.height(9.dp))
+                    Text(album.title, style = HiFiType.CardTitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(album.artists.joinToString { it.name }, style = HiFiType.Caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
         }
     }
 }

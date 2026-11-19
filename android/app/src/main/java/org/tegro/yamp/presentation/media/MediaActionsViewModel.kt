@@ -47,8 +47,15 @@ class MediaActionsViewModel @Inject constructor(
     private val accountContext: AccountContext,
     private val playbackController: PlaybackController,
     private val playRequests: PlayRequests,
-    private val journal: PlaybackJournal
+    private val journal: PlaybackJournal,
+    private val folderPins: org.tegro.yamp.data.folders.FolderPins
 ) : ViewModel() {
+
+    /** Pin / Unpin a folder (Phase 4b) in its account's list. */
+    fun togglePin(target: MediaTarget) {
+        val account = target.account ?: accountOf(target.ref) ?: return
+        folderPins.toggle(account, org.tegro.yamp.data.folders.PinnedFolder(target.ref.id, target.title, target.cover))
+    }
 
     private val _artistDialog = MutableStateFlow<ArtistDialogState?>(null)
     val artistDialog: StateFlow<ArtistDialogState?> = _artistDialog.asStateFlow()
@@ -73,7 +80,7 @@ class MediaActionsViewModel @Inject constructor(
         onAddToPlaylist: (List<Track>) -> Unit = {}
     ) {
         viewModelScope.launch {
-            val tracks = albumTracks(target.ref)
+            val tracks = if (target.isFolder) folderTracks(target) else albumTracks(target.ref)
             if (tracks.isNullOrEmpty()) onFailed() else apply(target, action, tracks, onAddTo, onDone, onAddToPlaylist)
         }
     }
@@ -121,13 +128,19 @@ class MediaActionsViewModel @Inject constructor(
         onDone: (Int) -> Unit,
         onAddToPlaylist: (List<Track>) -> Unit
     ) {
-        journal.record(PlaybackJournal.Kind.TAP, target.title, "${action.name.lowercase()} ${if (target.isArtist) "artist" else "album"}: ${tracks.size} tracks")
+        val what = when {
+            target.isArtist -> "artist"
+            target.isFolder -> "folder"
+            else -> "album"
+        }
+        journal.record(PlaybackJournal.Kind.TAP, target.title, "${action.name.lowercase()} $what: ${tracks.size} tracks")
         when (action) {
-            MediaAction.PLAY_NOW -> {
+            MediaAction.PLAY_NOW, MediaAction.SHUFFLE -> {
                 playRequests.userStarted()
-                val account = accountOf(target.ref)
-                if (account?.provider == Provider.JELLYFIN) playbackController.playInAccount(account, tracks, null)
-                else playbackController.playFrom(tracks, PlaylistSource.SEARCH, null)
+                val account = target.account ?: accountOf(target.ref)
+                val queue = if (action == MediaAction.SHUFFLE) tracks.shuffled() else tracks
+                if (account?.provider == Provider.JELLYFIN) playbackController.playInAccount(account, queue, null)
+                else playbackController.playFrom(queue, PlaylistSource.SEARCH, null)
             }
             MediaAction.PLAY_NEXT -> {
                 playbackController.playNextTracks(tracks)
@@ -140,6 +153,12 @@ class MediaActionsViewModel @Inject constructor(
             MediaAction.ADD_TO_QUEUE -> onAddTo(tracks, target.title)
             MediaAction.ADD_TO_PLAYLIST -> onAddToPlaylist(tracks)
         }
+    }
+
+    /** Every track under a folder, subfolders included, in folder order (Phase 4b). */
+    private suspend fun folderTracks(target: MediaTarget): List<Track>? {
+        val account = target.account ?: accountOf(target.ref) ?: return null
+        return (registry.provider(account)?.folders?.tracks(target.ref) as? Outcome.Ok)?.value
     }
 
     private suspend fun albumTracks(ref: MediaRef): List<Track>? =

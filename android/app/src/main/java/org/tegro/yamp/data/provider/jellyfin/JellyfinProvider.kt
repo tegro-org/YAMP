@@ -4,6 +4,7 @@ import kotlinx.coroutines.flow.StateFlow
 import org.tegro.yamp.domain.account.AccountId
 import org.tegro.yamp.domain.media.Album
 import org.tegro.yamp.domain.media.Artist
+import org.tegro.yamp.domain.media.FolderLevel
 import org.tegro.yamp.domain.media.Genre
 import org.tegro.yamp.domain.media.Playlist
 import org.tegro.yamp.domain.media.Track
@@ -11,6 +12,7 @@ import org.tegro.yamp.domain.provider.ArtistPage
 import org.tegro.yamp.domain.provider.Browse
 import org.tegro.yamp.domain.provider.BrowseCounts
 import org.tegro.yamp.domain.provider.Catalog
+import org.tegro.yamp.domain.provider.Folders
 import org.tegro.yamp.domain.provider.Library
 import org.tegro.yamp.domain.provider.MusicProvider
 import org.tegro.yamp.domain.provider.PlaylistEdit
@@ -95,6 +97,14 @@ class JellyfinProvider(
         override suspend fun genres(cursor: Page.Cursor?): Outcome<Page<Genre>> = lib.genres(cursor)
         override suspend fun playlists(cursor: Page.Cursor?): Outcome<Page<Playlist>> = lib.playlists(cursor)
         override suspend fun genreAlbums(genre: MediaRef, cursor: Page.Cursor?): Outcome<Page<Album>> = lib.genreAlbums(genre.id, cursor)
+        override suspend fun recentAlbums(limit: Int): Outcome<List<Album>> = lib.recentAlbums(limit)
+    }
+
+    /** The file tree (Phase 4b). */
+    override val folders: Folders = object : Folders {
+        override suspend fun root(): Outcome<FolderLevel> = lib.folderRoot()
+        override suspend fun level(folder: MediaRef): Outcome<FolderLevel> = lib.folderLevel(folder.id)
+        override suspend fun tracks(folder: MediaRef): Outcome<List<Track>> = lib.folderTracks(folder.id)
     }
 
     /** No resolver given (tests of the library alone): the controller gets "unavailable", never a wrong link. */

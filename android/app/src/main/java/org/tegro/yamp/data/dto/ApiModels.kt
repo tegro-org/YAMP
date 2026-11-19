@@ -230,6 +230,13 @@ data class AlbumDto(
         get() = volumes.flatten()
 }
 
+/** One entry of `users/{uid}/likes/albums?rich=true`: the liked album and when. */
+@Serializable
+data class LikedAlbumDto(
+    @SerialName("timestamp") val timestamp: String? = null,
+    @SerialName("album") val album: AlbumDto? = null
+)
+
 /** `artists/{id}/brief-info`: the artist, popular tracks and albums. */
 @Serializable
 data class ArtistBriefDto(

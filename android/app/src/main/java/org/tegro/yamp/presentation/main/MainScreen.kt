@@ -221,6 +221,16 @@ fun MainScreen(
             onAddToEnd = viewModel::addToEnd
         )
     }
+    val folderActions = remember(catalogVm) {
+        org.tegro.yamp.presentation.folders.FolderActions(
+            onPlay = catalogVm::playFolder,
+            onOpen = { catalogVm.open(it) },
+            onJump = catalogVm::jumpTo,
+            onPlayTracks = { _, tracks, id -> catalogVm.play(tracks, id) }
+        )
+    }
+    val folderPins by catalogVm.pins.collectAsStateWithLifecycle()
+    val allAccountTags by viewModel.accountTags.collectAsStateWithLifecycle()
     // Another tab: the catalog pages belong to where they were opened
     LaunchedEffect(currentTab) { catalogVm.closeAll() }
     InstallDownloadedUpdateOnResume(updateVm)
@@ -250,7 +260,11 @@ fun MainScreen(
     val sideInsets = WindowInsets.displayCutout.union(WindowInsets.navigationBars).only(WindowInsetsSides.Horizontal)
     // The mini-player stays out of the way on the first tab while that page already shows what plays (D49)
     val activeQueue by viewModel.activeQueue.collectAsStateWithLifecycle()
-    val showMini = currentTrack != null && !(currentTab == MainTab.HOME && homePagePlays(homeModeOf(activeQueue), now))
+    // Home with Jellyfin groups scrolled past its hero: the mini player comes back (canvas `hj-home-c-scroll`)
+    var homeHeroHidden by remember { mutableStateOf(false) }
+    // The car Library over the player (gap (f)): the account key it opened on ("" = the Yandex account in context)
+    var carLibraryFor by rememberSaveable { mutableStateOf<String?>(null) }
+    val showMini = currentTrack != null && !(currentTab == MainTab.HOME && homePagePlays(homeModeOf(activeQueue), now) && !homeHeroHidden)
     val snackbar = remember { SnackbarHostState() }
     val openPlayer = { isPlayerExpanded = true }
 
@@ -298,13 +312,19 @@ fun MainScreen(
                                 isPlaying = isPlaying,
                                 likedTrackIds = likedTrackIds,
                                 contentBottom = contentBottom,
-                                actions = catalogActions
+                                actions = catalogActions,
+                                folderPins = folderPins,
+                                accountTags = allAccountTags,
+                                folderActions = folderActions
                             )
                         } else when (tab) {
                             MainTab.HOME -> HomeTab(
                                 viewModel, now, progress, isLandscape, contentBottom,
                                 onOpenPlayer = if (currentTrack != null) openPlayer else null,
-                                onOpenTab = navigate
+                                onOpenTab = navigate,
+                                onOpenPage = { catalogVm.open(it) },
+                                onPlayFolder = catalogVm::playFolder,
+                                onHeroHidden = { homeHeroHidden = it }
                             )
                             MainTab.SEARCH -> SearchTab(viewModel, searchVm, catalogVm, now)
                             MainTab.LIBRARY -> LibraryTab(
@@ -312,7 +332,7 @@ fun MainScreen(
                                 onOpenAccounts = { showAccountDialog = true },
                                 onOpenCrashLog = { showCrashLog = true },
                                 onAddAccount = { showAddAccount = true },
-                                onOpenJellyfin = { catalogVm.open(it) }
+                                onOpenPage = { catalogVm.open(it) }
                             )
                             MainTab.RADIO -> RadioTab(viewModel, radioVm, now)
                             MainTab.PLAYER -> Unit
@@ -399,9 +419,29 @@ fun MainScreen(
                             onAddToPlaylist = { trackMenu = TrackMenuRequest(track, null, pickPlaylist = true) },
                             onQualityClick = { qualityDetails = viewModel.qualityDetails() },
                             onAccountQuality = { accountQualityFor = it },
-                            coverModifier = Modifier.sharedCover(sharedScope, this, enabled = !lite && !track.isRadio)
+                            coverModifier = Modifier.sharedCover(sharedScope, this, enabled = !lite && !track.isRadio),
+                            onMusic = { carLibraryFor = activeQueue?.queue?.account.orEmpty() }
                         )
                     }
+                }
+
+                carLibraryFor?.let { key ->
+                    val wheelLeft by viewModel.steeringWheelOnLeft.collectAsStateWithLifecycle()
+                    val queuesState by queuesVm.state.collectAsStateWithLifecycle()
+                    org.tegro.yamp.presentation.car.CarLibraryHost(
+                        accountKey = key.ifEmpty { null },
+                        controlsOnLeft = wheelLeft,
+                        accountTags = allAccountTags,
+                        nowPlaying = currentTrack?.let {
+                            org.tegro.yamp.presentation.car.CarNowPlaying(it.title, it.artists.joinToString { a -> a.name }, it.coverUri, isPlaying, it.ref)
+                        },
+                        queueRows = queuesState.queues,
+                        snackbar = snackbar,
+                        scope = mediaScope,
+                        onPlayPause = { viewModel.togglePlayPause() },
+                        onNext = { viewModel.playNext() },
+                        onClose = { carLibraryFor = null }
+                    )
                 }
 
                 // Playback and playlist errors ("no connection", "station unavailable"), above the mini-player
@@ -522,7 +562,8 @@ private fun PlayerHost(
     onAddToPlaylist: () -> Unit,
     onQualityClick: () -> Unit,
     onAccountQuality: (Triple<String, String, Boolean>) -> Unit,
-    coverModifier: Modifier
+    coverModifier: Modifier,
+    onMusic: () -> Unit = {}
 ) {
     val queue by viewModel.currentPlaylist.collectAsStateWithLifecycle()
     val activeQueue by viewModel.activeQueue.collectAsStateWithLifecycle()
@@ -628,7 +669,8 @@ private fun PlayerHost(
         waveTuning = waveTuning,
         trackWaveSeed = waveSeed,
         onWaveTuningChange = viewModel::setWaveTuning,
-        onBackToMyWave = viewModel::returnToMyWave
+        onBackToMyWave = viewModel::returnToMyWave,
+        onMusic = onMusic
     )
 }
 

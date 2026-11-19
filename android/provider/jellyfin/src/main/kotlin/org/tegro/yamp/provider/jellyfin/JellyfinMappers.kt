@@ -5,6 +5,7 @@ import org.tegro.yamp.domain.media.AlbumBrief
 import org.tegro.yamp.domain.media.Artist
 import org.tegro.yamp.domain.media.ArtistBrief
 import org.tegro.yamp.domain.media.Cover
+import org.tegro.yamp.domain.media.Folder
 import org.tegro.yamp.domain.media.Genre
 import org.tegro.yamp.domain.media.Playlist
 import org.tegro.yamp.domain.media.Track
@@ -27,6 +28,7 @@ class JellyfinRefs(val serverId: String) {
         const val KIND_ARTIST = "artist"
         const val KIND_PLAYLIST = "playlist"
         const val KIND_GENRE = "genre"
+        const val KIND_FOLDER = "folder"
     }
 }
 
@@ -81,6 +83,15 @@ class JellyfinMappers(private val refs: JellyfinRefs, private val baseUrl: Strin
         cover = cover(item),
         isPublic = false,
         tracks = tracks.map(::track)
+    )
+
+    /** A folder of the file tree (Phase 4b): any item that is a folder — a plain folder, an artist's, an album's. */
+    fun folder(item: BaseItemDto): Folder = Folder(
+        ref = refs.ref(JellyfinRefs.KIND_FOLDER, item.id),
+        title = item.name.orEmpty(),
+        cover = cover(item),
+        childCount = item.childCount,
+        trackCount = item.recursiveItemCount
     )
 
     fun genre(item: BaseItemDto): Genre =

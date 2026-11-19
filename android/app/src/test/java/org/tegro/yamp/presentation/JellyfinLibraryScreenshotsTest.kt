@@ -28,7 +28,6 @@ import org.tegro.yamp.domain.media.Artist
 import org.tegro.yamp.domain.media.ArtistBrief
 import org.tegro.yamp.domain.media.Genre
 import org.tegro.yamp.domain.media.Track
-import org.tegro.yamp.domain.provider.BrowseCounts
 import org.tegro.yamp.domain.queue.MediaRef
 import org.tegro.yamp.domain.queue.TrackRef
 import org.tegro.yamp.presentation.catalog.BrowseItem
@@ -38,7 +37,8 @@ import org.tegro.yamp.presentation.catalog.CatalogActions
 import org.tegro.yamp.presentation.catalog.CatalogPage
 import org.tegro.yamp.presentation.catalog.CatalogPageScreen
 import org.tegro.yamp.presentation.catalog.CatalogPageState
-import org.tegro.yamp.presentation.catalog.JellyfinLibraryRow
+import org.tegro.yamp.presentation.catalog.AccountLibrary
+import org.tegro.yamp.presentation.catalog.LibraryRow
 import org.tegro.yamp.presentation.hifi.ArtworkTint
 import org.tegro.yamp.presentation.hifi.HiFiBackdrop
 import org.tegro.yamp.presentation.hifi.LocalArtworkTint
@@ -110,7 +110,13 @@ class JellyfinLibraryScreenshotsTest {
                 tracks = emptyList(), isLoading = false, currentTrackId = null, isPlaying = false, likedTrackIds = emptySet(),
                 downloadedTrackIds = emptySet(), downloadProgress = null, onTrackClick = {}, onPlayAllClick = {}, onShuffleClick = {},
                 onDownloadAllClick = {}, onCancelDownload = {}, onToggleLike = {},
-                jellyfinLibraries = listOf(JellyfinLibraryRow(account, "yamp-dev · Home Media", BrowseCounts(486, 212, 31, 9)))
+                yandex = false,
+                sections = listOf(
+                    AccountLibrary(
+                        account, "yamp-dev", "Home Media",
+                        mapOf(LibraryRow.LIKED to 87, LibraryRow.PLAYLISTS to 9, LibraryRow.ALBUMS to 486, LibraryRow.ARTISTS to 212, LibraryRow.DOWNLOADED to 64, LibraryRow.FOLDERS to 34)
+                    )
+                )
             )
         }
         snap("jellyfin_library_rows")

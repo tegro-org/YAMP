@@ -208,7 +208,9 @@ fun FullScreenPlayer(
     /** The wide layouts' ⋮ → quality: the playing account's quality sheet. */
     onAccountQuality: () -> Unit = onQualityClick,
     /** Opens with the wide layouts' ⋮ menu down (screenshots). */
-    initialMoreOpen: Boolean = false
+    initialMoreOpen: Boolean = false,
+    /** The car layout's ⋮ → «Музыка» (gap (f)): the car Library of the active queue's account. */
+    onMusic: () -> Unit = {}
 ) {
     // The queue sheet follows the finger (a drag up from the bottom edge or the next tracks, D: pl-drag)
     val sheet = rememberQueueSheetState(initialQueueOpen)
@@ -375,7 +377,8 @@ fun FullScreenPlayer(
                 onAddToPlaylist = onAddToPlaylist,
                 onQuality = onAccountQuality,
                 onDislikeWithUndo = onDislikeGesture,
-                initialMoreOpen = initialMoreOpen
+                initialMoreOpen = initialMoreOpen,
+                onMusic = onMusic
             )
         } else {
             // Portrait (canvas `pl-player-*`, approved 2026-11-18): the top row ⋮ · queue (everything else in ⋮), the

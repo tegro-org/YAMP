@@ -107,6 +107,24 @@ class LibraryRepository @Inject constructor(
     /** [account]'s liked tracks from memory or its cache, whichever account the context is (step 10). */
     suspend fun likedTracksOf(account: AccountId): List<TrackDetailsDto> = likesOf(account.value).tracks
 
+    /** The account's liked albums, newest first (gap (e): Library and the car's Albums tab). Throws on a network error. */
+    suspend fun likedAlbumsOf(account: AccountId): List<org.tegro.yamp.data.dto.AlbumDto> {
+        val folder = folderOf(account)
+        return apiOf(folder).getLikedAlbums(resolveUid(folder)).result.orEmpty().mapNotNull { it.album }
+            .also { likedAlbumsByAccount[folder] = it }
+    }
+
+    /** What [likedAlbumsOf] last answered for the account, without a request. */
+    fun knownLikedAlbums(account: AccountId): List<org.tegro.yamp.data.dto.AlbumDto>? = likedAlbumsByAccount[folderOf(account)]
+
+    /** The account's liked artists. Throws on a network error. */
+    suspend fun likedArtistsOf(account: AccountId): List<org.tegro.yamp.data.dto.ArtistDto> {
+        val folder = folderOf(account)
+        return apiOf(folder).getLikedArtists(resolveUid(folder)).result.orEmpty()
+    }
+
+    private val likedAlbumsByAccount = java.util.concurrent.ConcurrentHashMap<String, List<org.tegro.yamp.data.dto.AlbumDto>>()
+
     /** Keeps [folder]'s likes and shows them when it is the account context. */
     private fun putLikes(folder: String, tracks: List<TrackDetailsDto>, ids: Set<String> = tracks.map { it.idString }.toSet()) {
         likesByAccount[folder] = Likes(tracks, ids)

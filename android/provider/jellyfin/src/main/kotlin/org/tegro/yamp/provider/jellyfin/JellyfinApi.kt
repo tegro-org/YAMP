@@ -52,6 +52,10 @@ interface JellyfinApi {
         @Query("SearchTerm") searchTerm: String? = null
     ): ItemsResultDto
 
+    /** The user's libraries (views): music libraries, playlists… — the folder tree starts at a music library (Phase 4b). */
+    @GET("UserViews")
+    suspend fun userViews(@Query("userId") userId: String): ItemsResultDto
+
     /** One item of the user's library (an album, artist or playlist page's head). */
     @GET("Users/{userId}/Items/{itemId}")
     suspend fun item(@Path("userId") userId: String, @Path("itemId") itemId: String): BaseItemDto

@@ -27,6 +27,10 @@ import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.CloudOff
+import androidx.compose.material.icons.rounded.DownloadDone
+import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.Icon
@@ -65,8 +69,12 @@ import org.tegro.yamp.utils.russianQuantityString
  * shows under the banner (canvas `jf-unreachable`).
  */
 @Composable
-fun BrowsePageScreen(state: CatalogPageState, contentBottom: Dp, actions: CatalogActions) {
+fun BrowsePageScreen(state: CatalogPageState, contentBottom: Dp, actions: CatalogActions, currentTrackId: String? = null, isPlaying: Boolean = false) {
     val page = state.page as CatalogPage.Browse
+    if (page.kind == BrowseKind.FAVOURITES || page.kind == BrowseKind.DOWNLOADED) {
+        TrackListPage(state, page, contentBottom, actions, currentTrackId, isPlaying)
+        return
+    }
     val back = rememberPredictiveBack(enabled = true, onBack = actions.onBack)
     val list = rememberLazyListState()
     val items = state.browse?.items.orEmpty()
@@ -119,6 +127,71 @@ fun BrowsePageScreen(state: CatalogPageState, contentBottom: Dp, actions: Catalo
                 if (state.browse?.loadingMore == true) item(key = "more") {
                     Box(Modifier.fillMaxWidth().padding(vertical = 16.dp), contentAlignment = Alignment.Center) { HiFiActivityIndicator() }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * A Jellyfin account's Favourites or Downloaded (gap (e), Library per account): Play / Shuffle and the tracks, played
+ * in the account's own queue.
+ */
+@Composable
+private fun TrackListPage(state: CatalogPageState, page: CatalogPage.Browse, contentBottom: Dp, actions: CatalogActions, currentTrackId: String?, isPlaying: Boolean) {
+    val back = rememberPredictiveBack(enabled = true, onBack = actions.onBack)
+    val tracks = state.tracks.orEmpty()
+    LazyColumn(
+        contentPadding = PaddingValues(start = 8.dp, end = 8.dp, bottom = contentBottom),
+        modifier = Modifier.fillMaxSize().predictiveBack(back).navigationBarsPadding()
+    ) {
+        item(key = "header") {
+            Column(Modifier.fillMaxWidth().statusBarsPadding().padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp)) {
+                GlassCircleButton(onClick = actions.onBack, contentDescription = stringResource(R.string.cd_nazad)) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+                }
+                Spacer(Modifier.height(12.dp))
+                Text(page.title, style = HiFiType.LargeTitle.copy(fontSize = 28.sp, lineHeight = 34.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(
+                    listOfNotNull(state.serverName, russianQuantityString(tracks.size, R.string.tracks_count_one, R.string.tracks_count_few, R.string.tracks_count_many))
+                        .joinToString(" · "),
+                    color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp)
+                )
+                if (tracks.isNotEmpty()) {
+                    Spacer(Modifier.height(14.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        org.tegro.yamp.presentation.hifi.MetalPillButton(
+                            stringResource(R.string.cd_slushat), { actions.onPlay(tracks, null, false) }, Modifier.weight(1f),
+                            icon = Icons.Rounded.PlayArrow, height = 48.dp
+                        )
+                        org.tegro.yamp.presentation.hifi.GlassPillButton(
+                            stringResource(R.string.media_shuffle), { actions.onPlay(tracks, null, true) }, Modifier.weight(1f),
+                            icon = Icons.Rounded.Shuffle, height = 48.dp
+                        )
+                    }
+                }
+            }
+        }
+        if (state.offline) item(key = "offline") { OfflineBanner(state.serverName, actions.onRetry) }
+        when {
+            state.isLoading -> item(key = "loading") { HiFiSkeletonRows(Modifier.padding(top = 12.dp), count = 6) }
+            state.failed && tracks.isEmpty() -> item(key = "failed") {
+                HiFiErrorState(onRetry = actions.onRetry, message = stringResource(R.string.catalog_load_failed))
+            }
+            tracks.isEmpty() -> item(key = "empty") {
+                HiFiEmptyState(
+                    icon = if (page.kind == BrowseKind.DOWNLOADED) Icons.Rounded.DownloadDone else Icons.Rounded.FavoriteBorder,
+                    title = stringResource(if (page.kind == BrowseKind.DOWNLOADED) R.string.library_downloaded_jellyfin_empty else R.string.jellyfin_list_empty)
+                )
+            }
+            else -> items(tracks, key = { it.ref.value }) { track ->
+                org.tegro.yamp.presentation.main.components.TrackItem(
+                    track = track,
+                    isPlaying = isPlaying && track.ref.id == currentTrackId,
+                    isLiked = false,
+                    onToggleLike = {},
+                    onClick = { actions.onPlay(tracks, track.ref.id, false) },
+                    showLike = false
+                )
             }
         }
     }

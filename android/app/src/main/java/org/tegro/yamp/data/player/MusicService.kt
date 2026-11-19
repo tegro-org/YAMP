@@ -375,6 +375,32 @@ class MusicService : MediaLibraryService() {
                     ?: LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
             }
 
+            // The car's search: every account's results (Yandex and Jellyfin), announced then fetched by page
+            override fun onSearch(
+                session: MediaLibrarySession,
+                browser: MediaSession.ControllerInfo,
+                query: String,
+                params: LibraryParams?
+            ): ListenableFuture<LibraryResult<Void>> = libraryFuture {
+                val found = searchResults(query)
+                session.notifySearchResultChanged(browser, query, found.size, params)
+                LibraryResult.ofVoid(params)
+            }
+
+            override fun onGetSearchResult(
+                session: MediaLibrarySession,
+                browser: MediaSession.ControllerInfo,
+                query: String,
+                page: Int,
+                pageSize: Int,
+                params: LibraryParams?
+            ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> = libraryFuture {
+                val found = searchResults(query)
+                val from = (page.toLong() * pageSize).coerceAtMost(found.size.toLong()).toInt()
+                val to = (from.toLong() + pageSize).coerceAtMost(found.size.toLong()).toInt()
+                LibraryResult.ofItemList(found.subList(from, to), params)
+            }
+
             // A car or another browser picked an item: PlaybackController builds the real queue,
             // the forwarding player ignores the metadata-only items it is then given.
             override fun onSetMediaItems(
@@ -459,6 +485,14 @@ class MusicService : MediaLibraryService() {
                 .distinctUntilChanged()
                 .collect { session.setMediaButtonPreferences(it) }
         }
+    }
+
+    /** The last search's results: `onSearch` and the pages that follow ask for the same query. */
+    private var lastSearch: Pair<String, List<MediaItem>>? = null
+
+    private suspend fun searchResults(query: String): List<MediaItem> {
+        lastSearch?.takeIf { it.first == query }?.let { return it.second }
+        return libraryTree.search(query).also { lastSearch = query to it }
     }
 
     private fun <T : Any> libraryFuture(block: suspend () -> LibraryResult<T>): ListenableFuture<LibraryResult<T>> {

@@ -77,7 +77,7 @@ import org.tegro.yamp.utils.CoverSize
 import org.tegro.yamp.utils.cover
 
 /** The canvas numbers (Design/yamp/queues.jsx `QueueRow`, `QueueSheetHeader`) for a phone row or a big car row. */
-private class RowDims(val big: Boolean, private val factor: Float) {
+internal class RowDims(val big: Boolean, private val factor: Float) {
     fun dp(phone: Float, car: Float): Dp = ((if (big) car else phone) * factor).dp
     fun sp(phone: Float, car: Float): TextUnit = ((if (big) car else phone) * factor).sp
 }
@@ -310,7 +310,7 @@ private fun QueueSheetHeader(title: String, subtitle: String?, d: RowDims, onClo
 
 /** One queue: cover with the kind badge, name, current track, progress; the active one on anodized metal. */
 @Composable
-private fun QueueRow(row: QueueRowState, d: RowDims, onClick: () -> Unit, onLongClick: (() -> Unit)?, mark: AccountTag? = null, dim: Boolean = false) {
+internal fun QueueRow(row: QueueRowState, d: RowDims, onClick: () -> Unit, onLongClick: (() -> Unit)?, mark: AccountTag? = null, dim: Boolean = false) {
     val shape = RoundedCornerShape(d.dp(18f, 24f))
     Row(
         Modifier

@@ -1,5 +1,7 @@
 package org.tegro.yamp.data.provider.yandex.network
 
+import org.tegro.yamp.data.dto.ArtistDto
+
 import org.tegro.yamp.data.dto.AccountStatusResponseDto
 import org.tegro.yamp.data.dto.DownloadInfoResponseDto
 import org.tegro.yamp.data.dto.ResponseWrapper
@@ -34,6 +36,20 @@ interface YandexMusicApi {
         @Path("userId") userId: String,
         @retrofit2.http.Query("rich-tracks") richTracks: Boolean = true
     ): ResponseWrapper<TracksResponseDto>
+
+    /** The albums the user liked, with the album in each entry (`rich`); newest first. */
+    @GET("users/{userId}/likes/albums")
+    suspend fun getLikedAlbums(
+        @Path("userId") userId: String,
+        @retrofit2.http.Query("rich") rich: Boolean = true
+    ): ResponseWrapper<List<org.tegro.yamp.data.dto.LikedAlbumDto>>
+
+    /** The artists the user liked (without timestamps: the artists themselves). */
+    @GET("users/{userId}/likes/artists")
+    suspend fun getLikedArtists(
+        @Path("userId") userId: String,
+        @retrofit2.http.Query("with-timestamps") withTimestamps: Boolean = false
+    ): ResponseWrapper<List<ArtistDto>>
 
     @GET("users/{userId}/likes/tracks")
     suspend fun getLikedTracksRaw(

@@ -83,4 +83,32 @@ class MediaActionsTest {
         assertFalse(request.fits(AccountId.yandex("1").value))
         assertFalse(request.fits(AccountId.jellyfin("other", "u1").value))
     }
+
+    private val folder = MediaTarget(MediaRef("jellyfin@srv", "folder", "f1"), "Мельница", "Folder", null, isArtist = false)
+
+    @Test
+    fun `a folder adds Shuffle after Play now and Pin or Unpin last`() {
+        assertEquals(
+            listOf(
+                MediaMenuRow.PLAY_NOW, MediaMenuRow.SHUFFLE, MediaMenuRow.PLAY_NEXT, MediaMenuRow.ADD_TO_END, MediaMenuRow.ADD_TO_QUEUE,
+                MediaMenuRow.ADD_TO_PLAYLIST, MediaMenuRow.PIN
+            ),
+            mediaMenuRows(folder, fitsActiveQueue = true)
+        )
+        assertEquals(
+            listOf(MediaMenuRow.PLAY_NOW, MediaMenuRow.SHUFFLE, MediaMenuRow.ADD_TO_QUEUE, MediaMenuRow.ADD_TO_PLAYLIST, MediaMenuRow.UNPIN),
+            mediaMenuRows(folder.copy(pinned = true), fitsActiveQueue = false)
+        )
+        assertTrue(folder.isFolder)
+        assertFalse(jellyfinAlbum.isFolder)
+    }
+
+    @Test
+    fun `the car menu keeps Add to playlist for Yandex only`() {
+        assertEquals(
+            listOf(MediaMenuRow.PLAY_NOW, MediaMenuRow.PLAY_NEXT, MediaMenuRow.ADD_TO_END, MediaMenuRow.ADD_TO_QUEUE, MediaMenuRow.ADD_TO_PLAYLIST, MediaMenuRow.START_RADIO),
+            carMediaMenuRows(yandexAlbum, fitsActiveQueue = true)
+        )
+        assertEquals(listOf(MediaMenuRow.PLAY_NOW, MediaMenuRow.ADD_TO_QUEUE), carMediaMenuRows(jellyfinAlbum, fitsActiveQueue = false))
+    }
 }

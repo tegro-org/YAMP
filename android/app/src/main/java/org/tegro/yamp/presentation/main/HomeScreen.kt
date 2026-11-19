@@ -709,7 +709,7 @@ private fun SkeletonBlock(modifier: Modifier, radius: Dp, phase: State<Float>?, 
 
 /** The queue dropdown at the top of the main screen (canvas `pl-main`): the active queue's name; opens the switcher. */
 @Composable
-private fun HomeQueueDropdown(name: String, onLeft: Boolean) {
+internal fun HomeQueueDropdown(name: String, onLeft: Boolean) {
     val launcher = org.tegro.yamp.presentation.queues.LocalQueueSwitcher.current
     org.tegro.yamp.presentation.player.QueueDropdown(
         name = name.ifEmpty { stringResource(R.string.queue_switcher_title) },

@@ -9,12 +9,16 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import org.tegro.yamp.BuildConfig
 import org.tegro.yamp.R
+import org.tegro.yamp.data.account.AccountContext
+import org.tegro.yamp.data.folders.FolderPins
 import org.tegro.yamp.data.network.TrackDownloadManager
-import org.tegro.yamp.data.provider.yandex.toTrack
-import org.tegro.yamp.data.provider.yandex.repository.LibraryRepository
+import org.tegro.yamp.data.provider.ProviderRegistry
 import org.tegro.yamp.data.provider.radio.FmRadio
+import org.tegro.yamp.domain.account.AccountId
+import org.tegro.yamp.domain.account.Provider
+import org.tegro.yamp.domain.account.accountId
 import org.tegro.yamp.domain.media.Track
-import org.tegro.yamp.data.provider.yandex.repository.UserPlaylistsRepository
+import org.tegro.yamp.domain.queue.QueueKind
 import org.tegro.yamp.utils.toCoverUrl
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -22,22 +26,66 @@ import kotlinx.coroutines.flow.first
 import javax.inject.Singleton
 
 /**
- * Browse tree for Android Auto, Android Automotive and other media browsers:
- * My Wave, Liked, Downloaded and Radio. Playback requests go to [PlaybackController],
- * so the car gets the same queue, crossfade and offline handling as the app.
+ * Browse tree for Android Auto, Android Automotive and other media browsers: the signed-in accounts
+ * ([AccountBrowseTree]: a folder per account, or the only account's rows at the root), Radio and the queues.
+ * Playback requests go to [PlaybackController], so the car gets the same queue, crossfade and offline handling as
+ * the app, and a pick plays in its own account (D84).
  */
 @Singleton
 class MediaLibraryTree @Inject constructor(
     @param:ApplicationContext private val context: Context,
-    private val libraryRepository: LibraryRepository,
     private val fmRadio: FmRadio,
     private val downloadManager: TrackDownloadManager,
     private val playbackController: PlaybackController,
-    private val searchRepository: org.tegro.yamp.data.provider.yandex.repository.SearchRepository,
-    private val playlistsRepository: UserPlaylistsRepository,
     private val settingsRepository: org.tegro.yamp.domain.repository.SettingsRepository,
-    private val signedInAccounts: org.tegro.yamp.data.account.SignedInAccounts
+    private val signedInAccounts: org.tegro.yamp.data.account.SignedInAccounts,
+    private val accountContext: AccountContext,
+    private val registry: ProviderRegistry,
+    private val folderPins: FolderPins
 ) {
+    private val accountTree = AccountBrowseTree(
+        accounts = { signedInAccounts.current() },
+        providers = registry::provider,
+        pins = folderPins::of,
+        isDownloaded = { downloadManager.isKnownDownloaded(it.id) },
+        artwork = BrowseArtwork::uriFor,
+        labels = BrowseLabels(
+            wave = context.getString(R.string.auto_my_wave),
+            waveSubtitle = context.getString(R.string.auto_my_wave_subtitle),
+            waveArt = resourceUri(R.drawable.ic_notification),
+            liked = context.getString(R.string.auto_liked),
+            favourites = context.getString(R.string.library_row_favourites),
+            playlists = context.getString(R.string.auto_playlists),
+            albums = context.getString(R.string.auto_albums),
+            folders = context.getString(R.string.library_row_folders),
+            downloaded = context.getString(R.string.auto_downloaded),
+            playAll = context.getString(R.string.auto_play_all)
+        ),
+        player = object : BrowsePlayer {
+            override fun play(account: AccountId, tracks: List<Track>, startId: String?) {
+                // The Yandex account in context plays as its Library does; any other account in its own queue
+                if (account.provider != Provider.JELLYFIN && account == accountContext.current()) {
+                    playbackController.playTrack(startId ?: tracks.first().ref.id, tracks, PlaylistSource.LIBRARY)
+                } else {
+                    playbackController.playInAccount(account, tracks, startId)
+                }
+            }
+
+            override fun hasWave(account: AccountId): Boolean = account.provider == Provider.YANDEX &&
+                (account == contextYandex() || waveQueueOf(account) != null)
+
+            override fun playWave(account: AccountId) {
+                if (account == contextYandex()) playbackController.playMyVibe()
+                else waveQueueOf(account)?.let { playbackController.switchQueue(it, play = true) }
+            }
+        }
+    )
+
+    private fun contextYandex(): AccountId? = accountContext.currentUser()?.accountId()
+
+    private fun waveQueueOf(account: AccountId): Long? =
+        playbackController.queues.value.firstOrNull { it.queue.kind == QueueKind.WAVE && it.queue.account == account.value }?.queue?.id
+
     fun root(): MediaItem = folder(ROOT_ID, context.getString(R.string.app_name), MediaMetadata.MEDIA_TYPE_FOLDER_MIXED)
         .withExtras(Bundle().apply {
             putBoolean(CONTENT_STYLE_SUPPORTED, true)
@@ -45,43 +93,21 @@ class MediaLibraryTree @Inject constructor(
             putInt(CONTENT_STYLE_PLAYABLE_HINT, CONTENT_STYLE_LIST)
         })
 
-    /** Children of [parentId], or null for an unknown node. Reads the cached library when nothing is loaded yet. */
+    /** Children of [parentId], or null for an unknown node. */
     suspend fun children(parentId: String): List<MediaItem>? {
-        if (parentId == LIKED_ID || parentId == DOWNLOADED_ID) libraryRepository.loadCached()
-        if (parentId == PLAYLISTS_ID) playlistsRepository.loadCached()
-        if (parentId.startsWith(PLAYLIST_PREFIX)) {
-            val kind = parentId.removePrefix(PLAYLIST_PREFIX)
-            return playlistTracks(kind)?.map { trackItem("$PLAYLIST_TRACK_PREFIX$kind/", it) }
-        }
+        if (accountTree.owns(parentId)) return accountTree.children(parentId)
         if (parentId.startsWith(QUEUES_ACCOUNT_PREFIX)) {
             val account = parentId.removePrefix(QUEUES_ACCOUNT_PREFIX)
             return queueSummaries().filter { it.queue.account == account }
-                .sortedBy { if (it.queue.kind == org.tegro.yamp.domain.queue.QueueKind.WAVE) 0 else 1 }
+                .sortedBy { if (it.queue.kind == QueueKind.WAVE) 0 else 1 }
                 .map { queueItem(it, null) }
         }
         return when (parentId) {
-            ROOT_ID -> {
-                // My Wave, likes, downloads and playlists are Yandex's: with Jellyfin only, radio and the queues stay
-                val yandex = signedInAccounts.current().any { it.provider == org.tegro.yamp.domain.account.Provider.YANDEX }
-                listOfNotNull(
-                    playable(
-                        WAVE_ID, context.getString(R.string.auto_my_wave), context.getString(R.string.auto_my_wave_subtitle),
-                        artwork = resourceUri(R.drawable.ic_notification), mediaType = MediaMetadata.MEDIA_TYPE_RADIO_STATION
-                    ).takeIf { yandex },
-                    folder(LIKED_ID, context.getString(R.string.auto_liked), MediaMetadata.MEDIA_TYPE_PLAYLIST).takeIf { yandex },
-                    folder(DOWNLOADED_ID, context.getString(R.string.auto_downloaded), MediaMetadata.MEDIA_TYPE_PLAYLIST).takeIf { yandex },
-                    folder(PLAYLISTS_ID, context.getString(R.string.auto_playlists), MediaMetadata.MEDIA_TYPE_FOLDER_PLAYLISTS).takeIf { yandex },
-                    folder(RADIO_ID, context.getString(R.string.auto_radio), MediaMetadata.MEDIA_TYPE_FOLDER_RADIO_STATIONS)
-                        .withExtras(Bundle().apply { putInt(CONTENT_STYLE_PLAYABLE_HINT, CONTENT_STYLE_GRID) }),
-                    folder(QUEUES_ID, context.getString(R.string.queue_switcher_title), MediaMetadata.MEDIA_TYPE_FOLDER_PLAYLISTS)
-                )
-            }
-            LIKED_ID -> liked().map { trackItem(LIKED_PREFIX, it) }
-            DOWNLOADED_ID -> downloaded().map { trackItem(DOWNLOADED_PREFIX, it) }
-            PLAYLISTS_ID -> playlistsRepository.playlists.value.map { playlist ->
-                folder(PLAYLIST_PREFIX + playlist.kindString, playlist.title.orEmpty(), MediaMetadata.MEDIA_TYPE_PLAYLIST)
-                    .withArtwork(playlist.coverUri.toCoverUrl(CoverSize.Medium))
-            }
+            ROOT_ID -> accountTree.top() + listOf(
+                folder(RADIO_ID, context.getString(R.string.auto_radio), MediaMetadata.MEDIA_TYPE_FOLDER_RADIO_STATIONS)
+                    .withExtras(Bundle().apply { putInt(CONTENT_STYLE_PLAYABLE_HINT, CONTENT_STYLE_GRID) }),
+                folder(QUEUES_ID, context.getString(R.string.queue_switcher_title), MediaMetadata.MEDIA_TYPE_FOLDER_PLAYLISTS)
+            )
             // One playable item per queue (docs/phase-1-queues.md §5); the car's own switcher holds no more either.
             // Several accounts (D64): a sub-folder per account when grouped, else the account's name in the subtitle
             QUEUES_ID -> {
@@ -99,7 +125,7 @@ class MediaLibraryTree @Inject constructor(
             RADIO_ID -> fmRadio.stations().map { station ->
                 playable(
                     RADIO_PREFIX + station.id, station.name, station.frequency,
-                    artwork = station.iconRes?.let { resourceUri(it) } ?: station.logoUrl.takeIf { it.isNotEmpty() }?.let(Uri::parse),
+                    artwork = station.iconRes?.let { resourceUri(it) } ?: BrowseArtwork.uriFor(station.logoUrl),
                     mediaType = MediaMetadata.MEDIA_TYPE_RADIO_STATION
                 )
             }
@@ -109,12 +135,8 @@ class MediaLibraryTree @Inject constructor(
 
     suspend fun item(mediaId: String): MediaItem? {
         if (mediaId == ROOT_ID) return root()
+        if (accountTree.owns(mediaId)) return accountTree.item(mediaId)
         val parent = when {
-            mediaId.startsWith(PLAYLIST_TRACK_PREFIX) ->
-                PLAYLIST_PREFIX + mediaId.removePrefix(PLAYLIST_TRACK_PREFIX).substringBefore('/')
-            mediaId.startsWith(PLAYLIST_PREFIX) -> PLAYLISTS_ID
-            mediaId.startsWith(LIKED_PREFIX) -> LIKED_ID
-            mediaId.startsWith(DOWNLOADED_PREFIX) -> DOWNLOADED_ID
             mediaId.startsWith(RADIO_PREFIX) -> RADIO_ID
             mediaId.startsWith(QUEUES_ACCOUNT_PREFIX) -> QUEUES_ID
             mediaId.startsWith(QUEUE_PREFIX) -> queueParent(mediaId.removePrefix(QUEUE_PREFIX).toLongOrNull())
@@ -123,87 +145,45 @@ class MediaLibraryTree @Inject constructor(
         return children(parent)?.firstOrNull { it.mediaId == mediaId }
     }
 
+    /** The car's search (`onSearch`): every account's tracks and albums. */
+    suspend fun search(query: String): List<MediaItem> = accountTree.search(query)
+
     /**
      * Resolves a browse item, or a voice [searchQuery] when [mediaId] is empty, into the action that
      * starts it. The caller runs the action on the following play command, after media3 has moved the
      * service to the foreground (Android 15 denies audio focus otherwise).
      * @return null for an id this tree does not know.
      */
-    suspend fun startAction(mediaId: String, searchQuery: String? = null): (() -> Unit)? {
-        libraryRepository.loadCached()
-        val liked = liked()
-        return when {
-            mediaId.isEmpty() && !searchQuery.isNullOrBlank() -> searchAction(searchQuery.trim())
-            mediaId.isEmpty() || mediaId == WAVE_ID -> ({ playbackController.playMyVibe() })
-            mediaId.startsWith(LIKED_PREFIX) -> queueAction(mediaId.removePrefix(LIKED_PREFIX), liked, liked)
-            mediaId.startsWith(DOWNLOADED_PREFIX) -> queueAction(mediaId.removePrefix(DOWNLOADED_PREFIX), downloaded(), liked)
-            mediaId.startsWith(PLAYLIST_TRACK_PREFIX) -> {
-                val (kind, trackId) = mediaId.removePrefix(PLAYLIST_TRACK_PREFIX).split('/', limit = 2).let { it[0] to it.getOrElse(1) { "" } }
-                queueAction(trackId, playlistTracks(kind).orEmpty(), liked)
+    suspend fun startAction(mediaId: String, searchQuery: String? = null): (() -> Unit)? = when {
+        mediaId.isEmpty() && !searchQuery.isNullOrBlank() -> searchAction(searchQuery.trim())
+        mediaId.isEmpty() -> contextYandex()?.let { { playbackController.playMyVibe() } }
+        accountTree.owns(mediaId) -> accountTree.startAction(mediaId)
+        mediaId.startsWith(RADIO_PREFIX) -> fmRadio.stations()
+            .firstOrNull { it.id == mediaId.removePrefix(RADIO_PREFIX) }
+            ?.let { station -> { playbackController.playRadioStation(station) } }
+        mediaId.startsWith(QUEUE_PREFIX) -> mediaId.removePrefix(QUEUE_PREFIX).toLongOrNull()
+            ?.takeIf { id -> queueSummaries().any { it.queue.id == id } }
+            ?.let { id ->
+                { playbackController.switchQueue(id, play = true) }
             }
-            mediaId.startsWith(RADIO_PREFIX) -> fmRadio.stations()
-                .firstOrNull { it.id == mediaId.removePrefix(RADIO_PREFIX) }
-                ?.let { station -> { playbackController.playRadioStation(station) } }
-            mediaId.startsWith(QUEUE_PREFIX) -> mediaId.removePrefix(QUEUE_PREFIX).toLongOrNull()
-                ?.takeIf { id -> queueSummaries().any { it.queue.id == id } }
-                ?.let { id ->
-                    { playbackController.switchQueue(id, play = true) }
-                }
-            else -> null
-        }
+        else -> null
     }
 
-    /** "Play <station>" picks the station, anything else the top search results; My Wave when nothing matches. */
-    private suspend fun searchAction(query: String): () -> Unit {
+    /** "Play <station>" picks the station, anything else the first account's top search hits; My Wave when nothing matches. */
+    private suspend fun searchAction(query: String): (() -> Unit)? {
         fmRadio.stations().firstOrNull { it.name.contains(query, ignoreCase = true) }?.let { station ->
             return { playbackController.playRadioStation(station) }
         }
         val found = try {
-            searchRepository.searchTracks(query)
+            accountTree.voiceSearch(query)
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
             android.util.Log.w("MediaLibraryTree", "Voice search failed", e)
-            emptyList()
-        }
-        val first = found.firstOrNull() ?: return { playbackController.playMyVibe() }
-        return { playbackController.playTrack(first.idString, found.map { it.toTrack() }, PlaylistSource.SEARCH) }
-    }
-
-    private fun queueAction(trackId: String, playlist: List<Track>, liked: List<Track>): (() -> Unit)? {
-        if (playlist.none { it.idString == trackId }) return null
-        return {
-            playbackController.updateLibrary(liked)
-            playbackController.playTrack(trackId, playlist, PlaylistSource.LIBRARY)
-        }
-    }
-
-    /** Tracks of a playlist (cached per revision); null for an unknown playlist or a failed load. */
-    private suspend fun playlistTracks(kind: String): List<Track>? {
-        playlistsRepository.loadCached()
-        val playlist = playlistsRepository.playlists.value.firstOrNull { it.kindString == kind } ?: return null
-        return try {
-            playlistsRepository.tracks(playlist).map { it.toTrack() }
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            android.util.Log.w("MediaLibraryTree", "Playlist $kind failed to load", e)
             null
         }
+        return found ?: contextYandex()?.let { { playbackController.playMyVibe() } }
     }
-
-    /** The liked tracks as the provider maps them. */
-    private fun liked(): List<Track> = libraryRepository.likedTracks.value.map { it.toTrack() }
-
-    private fun downloaded(): List<Track> = liked().filter { downloadManager.isKnownDownloaded(it.idString) }
-
-    private fun trackItem(prefix: String, track: Track): MediaItem = playable(
-        prefix + track.idString,
-        track.title,
-        track.artists.joinToString(", ") { it.name },
-        artwork = track.coverUri.toCoverUrl(CoverSize.Medium)?.let(Uri::parse),
-        mediaType = MediaMetadata.MEDIA_TYPE_MUSIC
-    )
 
     /** The signed-in accounts' names by key (`AccountId.value`), in the accounts' order. */
     private fun accountNames(): Map<String, String> = signedInAccounts.current().associate { it.id.value to it.displayName }
@@ -224,7 +204,7 @@ class MediaLibraryTree @Inject constructor(
         return playable(
             QUEUE_PREFIX + summary.queue.id, summary.queue.name,
             listOfNotNull(accountName, track.ifBlank { null }).joinToString(" · "),
-            artwork = summary.current?.coverUrl.toCoverUrl(CoverSize.Medium)?.let(Uri::parse),
+            artwork = BrowseArtwork.uriFor(summary.current?.coverUrl.toCoverUrl(CoverSize.Medium)),
             mediaType = MediaMetadata.MEDIA_TYPE_PLAYLIST
         )
     }
@@ -256,9 +236,6 @@ class MediaLibraryTree @Inject constructor(
             )
             .build()
 
-    private fun MediaItem.withArtwork(url: String?): MediaItem =
-        if (url == null) this else buildUpon().setMediaMetadata(mediaMetadata.buildUpon().setArtworkUri(url.toUri()).build()).build()
-
     private fun MediaItem.withExtras(extras: Bundle): MediaItem =
         buildUpon().setMediaMetadata(mediaMetadata.buildUpon().setExtras(extras).build()).build()
 
@@ -266,21 +243,13 @@ class MediaLibraryTree @Inject constructor(
 
     companion object {
         const val ROOT_ID = "root"
-        const val WAVE_ID = "wave"
-        const val LIKED_ID = "liked"
-        const val DOWNLOADED_ID = "downloaded"
         const val RADIO_ID = "radio"
-        const val PLAYLISTS_ID = "playlists"
         const val QUEUES_ID = "queues"
         private const val QUEUE_PREFIX = "queue/"
         /** A sub-folder of "Queues" per account when grouped (D64). */
         private const val QUEUES_ACCOUNT_PREFIX = "queues/"
         /** Android Auto lists are paged at a few hundred items; the user's queues never come near. */
         private const val MAX_QUEUE_ITEMS = 100
-        private const val PLAYLIST_PREFIX = "playlist/"
-        private const val PLAYLIST_TRACK_PREFIX = "pltrack/"
-        private const val LIKED_PREFIX = "liked/"
-        private const val DOWNLOADED_PREFIX = "downloaded/"
         private const val RADIO_PREFIX = "radio/"
 
         // Content style keys understood by Android Auto and Automotive OS

@@ -60,4 +60,19 @@ for t in "${FLAC_TRACKS[@]}"; do
         -metadata comment="CC BY 4.0 — incompetech.com" "$out"
 done
 
+# A hand-named folder tree for folder browsing (Phase 4b): a Cyrillic top folder that matches no tag, a subfolder
+# with two tracks, and a loose track next to it. Copies of the MP3s, re-tagged.
+TREE="Сборники - разное"
+mkdir -p "$MEDIA/$TREE/Дорога"
+tag_copy() { # source title, output path, album, track number
+    [[ -s "$2" ]] && return 0
+    ffmpeg -loglevel error -y -i "$WORK/$1.mp3" -map 0:a -c copy -map_metadata -1 \
+        -metadata title="$1" -metadata artist="$ARTIST" -metadata album_artist="$ARTIST" \
+        -metadata album="$3" -metadata track="$4" -metadata date="$YEAR" \
+        -metadata comment="CC BY 4.0 — incompetech.com" -id3v2_version 3 "$2"
+}
+tag_copy "Sneaky Snitch" "$MEDIA/$TREE/Дорога/01 Sneaky Snitch.mp3" "Дорога" 1
+tag_copy "Wallpaper" "$MEDIA/$TREE/Дорога/02 Wallpaper.mp3" "Дорога" 2
+tag_copy "Carefree" "$MEDIA/$TREE/Carefree (demo).mp3" "$TREE" 1
+
 echo "Test music in $MEDIA ($(du -sh "$MEDIA" | cut -f1))"

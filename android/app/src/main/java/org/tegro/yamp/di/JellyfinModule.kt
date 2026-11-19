@@ -13,4 +13,8 @@ import org.tegro.yamp.data.provider.jellyfin.KeystoreJellyfinAccountStore
 abstract class JellyfinModule {
     @Binds
     abstract fun bindJellyfinAccountStore(store: KeystoreJellyfinAccountStore): JellyfinAccountStore
+
+    /** Pinned folders and the car Library's last tab, per account (Phase 4b). */
+    @Binds
+    abstract fun bindFolderPins(pins: org.tegro.yamp.data.folders.AppFolderPins): org.tegro.yamp.data.folders.FolderPins
 }

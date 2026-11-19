@@ -14,6 +14,7 @@ internal open class FakeJellyfinApi : JellyfinApi {
         sortOrder: String?, filters: String?, searchTerm: String?
     ): ItemsResultDto = ItemsResultDto()
     override suspend fun item(userId: String, itemId: String): BaseItemDto = unused()
+    override suspend fun userViews(userId: String): ItemsResultDto = ItemsResultDto()
     override suspend fun albumArtists(userId: String, searchTerm: String?, sortBy: String?, startIndex: Int?, limit: Int?, fields: String?): ItemsResultDto = ItemsResultDto()
     override suspend fun musicGenres(userId: String, sortBy: String?, startIndex: Int?, limit: Int?): ItemsResultDto = ItemsResultDto()
     override suspend fun playlistItems(playlistId: String, userId: String, startIndex: Int?, limit: Int?, fields: String?): ItemsResultDto =

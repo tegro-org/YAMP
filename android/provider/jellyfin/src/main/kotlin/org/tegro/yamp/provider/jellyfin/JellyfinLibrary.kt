@@ -10,7 +10,9 @@ import kotlinx.serialization.SerializationException
 import kotlinx.serialization.builtins.ListSerializer
 import org.tegro.yamp.domain.media.Album
 import org.tegro.yamp.domain.media.Artist
+import org.tegro.yamp.domain.media.FolderLevel
 import org.tegro.yamp.domain.media.Genre
+import org.tegro.yamp.domain.media.NaturalOrder
 import org.tegro.yamp.domain.media.Playlist
 import org.tegro.yamp.domain.media.Track
 import org.tegro.yamp.domain.provider.ArtistPage
@@ -107,6 +109,57 @@ class JellyfinLibrary(
     suspend fun playlist(itemId: String): Outcome<Playlist> = fetch("playlist:$itemId", ItemWithItemsDto.serializer()) {
         ItemWithItemsDto(head = api.item(userId, itemId), items = api.playlistItems(itemId, userId).items)
     }.map { mappers.playlist(it.head, it.items) }
+
+    /** The albums added last, newest first (Home's "Recently added", gap (e)). */
+    suspend fun recentAlbums(limit: Int): Outcome<List<Album>> = fetch("recent@$limit", ListSerializer(BaseItemDto.serializer())) {
+        api.items(
+            userId, includeItemTypes = ALBUM, recursive = true, sortBy = BY_ADDED, sortOrder = DESCENDING, limit = limit, fields = FIELDS
+        ).items
+    }.map { items -> items.map { mappers.album(it) } }
+
+    /**
+     * The folder tree's top level (Phase 4b): the music library's own folders. With one music library its level is
+     * skipped (the user's layout: one library of ~30 hand-named folders); with several, the libraries are the top.
+     */
+    suspend fun folderRoot(): Outcome<FolderLevel> = fetch("folders:root", ListSerializer(BaseItemDto.serializer())) {
+        val music = api.userViews(userId).items.filter { it.collectionType == MUSIC }
+        music.singleOrNull()?.let { levelItems(it.id) } ?: music
+    }.map(::levelOf)
+
+    /** One folder's subfolders and loose tracks, the whole level (paged from the server), sorted on the device. */
+    suspend fun folderLevel(folderId: String): Outcome<FolderLevel> =
+        fetch("folder:$folderId", ListSerializer(BaseItemDto.serializer())) { levelItems(folderId) }.map(::levelOf)
+
+    /**
+     * Every track under the folder (Play / Add on a folder): one recursive query, ordered by the file tree the way
+     * the level pages show it — subfolders first in natural order, then the loose tracks, each album by disc / track.
+     */
+    suspend fun folderTracks(folderId: String): Outcome<List<Track>> =
+        fetch("folder-tracks:$folderId", ListSerializer(BaseItemDto.serializer())) {
+            collect(TRACKS_PAGE) { start, limit ->
+                api.items(userId, includeItemTypes = AUDIO, parentId = folderId, recursive = true, startIndex = start, limit = limit, fields = PATH)
+            }
+        }.map { items -> items.sortedWith(TREE_ORDER).map(mappers::track) }
+
+    private suspend fun levelItems(parentId: String): List<BaseItemDto> = collect(pageSize) { start, limit ->
+        api.items(userId, parentId = parentId, sortBy = FOLDERS_FIRST, startIndex = start, limit = limit, fields = FOLDER_FIELDS)
+    }
+
+    /** All pages of a list, up to [MAX_ITEMS] items. */
+    private suspend fun collect(page: Int, call: suspend (start: Int, limit: Int) -> ItemsResultDto): List<BaseItemDto> {
+        val all = mutableListOf<BaseItemDto>()
+        while (all.size < MAX_ITEMS) {
+            val result = call(all.size, page)
+            all += result.items
+            if (result.items.isEmpty() || all.size >= result.totalRecordCount) break
+        }
+        return all
+    }
+
+    private fun levelOf(items: List<BaseItemDto>): FolderLevel = FolderLevel(
+        folders = items.filter { it.isFolder == true }.sortedWith(compareBy(NaturalOrder) { it.name.orEmpty() }).map(mappers::folder),
+        tracks = items.filter { it.isFolder != true && it.type == AUDIO }.sortedWith(DISC_ORDER).map(mappers::track)
+    )
 
     /** The user's favourite tracks, newest first (Jellyfin's "Liked" — the page comes in P5). */
     suspend fun likedTracks(): Outcome<List<Track>> = fetch("liked", ListSerializer(BaseItemDto.serializer())) {
@@ -225,6 +278,38 @@ class JellyfinLibrary(
         private const val BY_YEAR = "ProductionYear,SortName"
         private const val BY_ADDED = "DateCreated"
         private const val DESCENDING = "Descending"
+        private const val MUSIC = "music"
+        private const val FOLDERS_FIRST = "IsFolder,SortName"
+        private const val FOLDER_FIELDS = "ChildCount,RecursiveItemCount"
+        private const val PATH = "Path"
+        private const val TRACKS_PAGE = 500
+        private const val MAX_ITEMS = 10_000
+
+        /** A level's loose tracks: disc, track number, then name. */
+        private val DISC_ORDER: Comparator<BaseItemDto> = compareBy<BaseItemDto>({ it.parentIndexNumber ?: 1 }, { it.indexNumber ?: Int.MAX_VALUE })
+            .thenBy(NaturalOrder) { it.name.orEmpty() }
+
+        /**
+         * Tracks of a whole folder by the tree: at every level the subfolders (natural order) before the loose files,
+         * as the level pages list them; inside one folder, [DISC_ORDER] then the file name.
+         */
+        val TREE_ORDER: Comparator<BaseItemDto> = Comparator { a, b ->
+            val da = dirsOf(a.path)
+            val db = dirsOf(b.path)
+            val common = minOf(da.size, db.size)
+            for (k in 0 until common) {
+                val c = NaturalOrder.compare(da[k], db[k])
+                if (c != 0) return@Comparator c
+            }
+            when {
+                // One lies deeper: its subfolder comes before the other's loose files
+                da.size != db.size -> db.size.compareTo(da.size)
+                else -> DISC_ORDER.thenBy(NaturalOrder) { it.path.orEmpty().substringAfterLast('/') }.compare(a, b)
+            }
+        }
+
+        private fun dirsOf(path: String?): List<String> =
+            path.orEmpty().replace('\\', '/').substringBeforeLast('/', "").split('/').filter { it.isNotEmpty() }
         private const val FAVORITES = "IsFavorite"
         private const val UNAUTHORIZED = 401
         private const val FORBIDDEN = 403

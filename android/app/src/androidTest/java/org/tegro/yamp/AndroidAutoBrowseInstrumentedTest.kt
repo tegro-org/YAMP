@@ -59,13 +59,50 @@ class AndroidAutoBrowseInstrumentedTest {
     }
 
     @Test
-    fun rootListsWaveLikedDownloadedAndRadio() {
+    fun rootListsTheAccountsThenRadioAndQueues() {
         val root = call { getLibraryRoot(null) }.value
         assertNotNull(root)
         val children = call { getChildren(root!!.mediaId, 0, 100, null) }.value.orEmpty()
-        assertEquals(listOf("wave", "liked", "downloaded", "playlists", "radio"), children.map { it.mediaId })
-        assertEquals(true, children.first().mediaMetadata.isPlayable)
-        assertTrue(children.drop(1).all { it.mediaMetadata.isBrowsable == true })
+        assertEquals(listOf("radio", "queues"), children.takeLast(2).map { it.mediaId })
+        // The accounts' part (gap (d)): a folder per account, or the only account's rows
+        assertTrue(children.dropLast(2).all { it.mediaId.startsWith("n|") })
+        assertTrue(children.dropLast(2).all { it.mediaMetadata.isBrowsable == true || it.mediaMetadata.isPlayable == true })
+    }
+
+    /** Gap (d): root → (account) → Folders → a folder → "Play all" plays it; needs a signed-in Jellyfin account. */
+    @Test
+    fun aJellyfinFolderBrowsesAndPlaysWhole() {
+        val top = call { getChildren("root", 0, 100, null) }.value.orEmpty()
+        val folders = top.firstOrNull { it.mediaId.startsWith("n|fds|jellyfin:") }?.mediaId
+            ?: top.firstOrNull { it.mediaId.startsWith("n|acc|jellyfin:") }?.let { account ->
+                call { getChildren(account.mediaId, 0, 100, null) }.value.orEmpty().firstOrNull { it.mediaId.startsWith("n|fds|") }?.mediaId
+            }
+        org.junit.Assume.assumeTrue("a Jellyfin account is signed in", folders != null)
+        val level = call { getChildren(folders!!, 0, 500, null) }.value.orEmpty()
+        val folder = level.firstOrNull { it.mediaMetadata.isBrowsable == true }
+        assertNotNull("the library has folders", folder)
+        assertTrue("covers are content URIs", level.mapNotNull { it.mediaMetadata.artworkUri }.all { it.scheme == "content" })
+        val inside = call { getChildren(folder!!.mediaId, 0, 500, null) }.value.orEmpty()
+        // A cover reaches the car through the artwork provider (the account's header added there, never in the URI)
+        (level + inside).firstNotNullOfOrNull { it.mediaMetadata.artworkUri }?.let { art ->
+            val bytes = context.contentResolver.openInputStream(art)!!.use { it.readBytes() }
+            assertNotNull("the cover decodes", android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size))
+        }
+        val playAll = inside.first()
+        assertTrue(playAll.mediaId.startsWith("n|fdall|") && playAll.mediaMetadata.isPlayable == true)
+        ActivityScenario.launch(MainActivity::class.java).use {
+            instrumentation.runOnMainSync {
+                browser.setMediaItem(playAll)
+                browser.prepare()
+                browser.play()
+            }
+            waitUntil(30_000, "the folder plays") {
+                var ok = false
+                instrumentation.runOnMainSync { ok = browser.isPlaying }
+                ok
+            }
+            instrumentation.runOnMainSync { browser.pause() }
+        }
     }
 
     @Test

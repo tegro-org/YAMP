@@ -59,7 +59,40 @@ sealed interface CatalogPage {
     }
 }
 
-enum class BrowseKind { ALBUMS, ARTISTS, PLAYLISTS, GENRES, GENRE_ALBUMS }
+/** A level of an account's folder tree (Phase 4b); [folderId] null = the root ("Folders"). */
+data class FolderPage(
+    val folderId: String?,
+    override val title: String,
+    override val account: AccountId,
+    /** The levels above this one, root first: the breadcrumbs. */
+    val path: List<Crumb> = emptyList(),
+    /** The folder's image (its cache key) as the level above showed it: the head's art. */
+    val cover: String? = null
+) : CatalogPage {
+    override val id: String get() = folderId ?: ROOT
+
+    /** One breadcrumb: a level to jump back to. */
+    data class Crumb(val folderId: String?, val title: String)
+
+    /** The subfolder [folder] opened from this level. */
+    fun child(folderId: String, title: String, cover: String? = null) =
+        FolderPage(folderId, title, account, path + Crumb(this.folderId, this.title), cover)
+
+    /** A folder of this page's server (`jellyfin@<server>:folder:<id>`; the account id starts with the server's). */
+    fun refOf(folderId: String) = MediaRef(JellyfinRefs.PROVIDER + MediaRef.INSTANCE_SEPARATOR + account.id.substringBefore('/'), JellyfinRefs.KIND_FOLDER, folderId)
+
+    /** The level of [crumb] (one of [path]). */
+    fun up(crumb: Crumb): FolderPage {
+        val at = path.indexOf(crumb)
+        return FolderPage(crumb.folderId, crumb.title, account, if (at < 0) emptyList() else path.take(at))
+    }
+
+    companion object {
+        const val ROOT = "folders:root"
+    }
+}
+
+enum class BrowseKind { ALBUMS, ARTISTS, PLAYLISTS, GENRES, GENRE_ALBUMS, FAVOURITES, DOWNLOADED }
 
 /** One row or tile of a [CatalogPage.Browse] list. */
 sealed interface BrowseItem {
@@ -90,6 +123,10 @@ data class CatalogPageState(
     val album: Album? = null,
     val playlist: Playlist? = null,
     val browse: BrowseList? = null,
+    /** A folder level (Phase 4b). */
+    val folder: org.tegro.yamp.domain.media.FolderLevel? = null,
+    /** The tracks of a Favourites / Downloaded list (gap (e)). */
+    val tracks: List<Track>? = null,
     val isLoading: Boolean = true,
     val failed: Boolean = false,
     /** A Jellyfin page shown from the last visit: the server did not answer (canvas `jf-unreachable`). */
@@ -108,11 +145,46 @@ class CatalogViewModel @Inject constructor(
     private val playbackController: PlaybackController,
     private val playRequests: org.tegro.yamp.data.player.PlayRequests,
     private val registry: ProviderRegistry,
-    private val jellyfinAccounts: JellyfinAccountStore
+    private val jellyfinAccounts: JellyfinAccountStore,
+    private val folderPins: org.tegro.yamp.data.folders.FolderPins,
+    private val downloads: org.tegro.yamp.data.network.TrackDownloadManager,
+    private val accountContext: org.tegro.yamp.data.account.AccountContext
 ) : ViewModel() {
 
     private val _stack = MutableStateFlow<List<CatalogPageState>>(emptyList())
     val stack: StateFlow<List<CatalogPageState>> = _stack.asStateFlow()
+
+    /** Pinned folders per account key (Phase 4b): the folder pages put them on top and mark them. */
+    val pins: StateFlow<Map<String, List<org.tegro.yamp.data.folders.PinnedFolder>>> = folderPins.pins
+
+    /**
+     * A breadcrumb (Phase 4b): back to that level — through the stack when it is there, else (a folder opened from
+     * Home's pins) the folder levels on top give way to it.
+     */
+    fun jumpTo(page: FolderPage) {
+        val stack = _stack.value
+        val at = stack.indexOfLast { it.page == page }
+        if (at >= 0) {
+            _stack.value = stack.take(at + 1)
+            return
+        }
+        val keep = stack.dropLastWhile { it.page is FolderPage }
+        _stack.value = keep
+        open(page)
+    }
+
+    /** Play / Shuffle on a folder: all its tracks (subfolders too) as one queue of its account (Phase 4b). */
+    fun playFolder(account: AccountId, folderId: String, shuffle: Boolean) {
+        val provider = registry.provider(account)?.folders ?: return
+        val server = jellyfinAccounts.account(account)?.serverId ?: return
+        viewModelScope.launch {
+            val tracks = (provider.tracks(MediaRef(JellyfinRefs(server).provider, JellyfinRefs.KIND_FOLDER, folderId)) as? Outcome.Ok)?.value
+            if (tracks.isNullOrEmpty()) return@launch
+            val queue = if (shuffle) tracks.shuffled() else tracks
+            playRequests.userStarted()
+            playbackController.playInAccount(account, queue, null)
+        }
+    }
 
     private var retryJob: Job? = null
 
@@ -128,7 +200,7 @@ class CatalogViewModel @Inject constructor(
 
     fun retry() {
         val top = _stack.value.lastOrNull() ?: return
-        replace(top.page) { it.copy(isLoading = it.browse == null && it.album == null && it.artist == null && it.playlist == null, failed = false) }
+        replace(top.page) { it.copy(isLoading = it.browse == null && it.album == null && it.artist == null && it.playlist == null && it.folder == null && it.tracks == null, failed = false) }
         load(top.page)
     }
 
@@ -142,9 +214,11 @@ class CatalogViewModel @Inject constructor(
     fun play(tracks: List<Track>, trackId: String? = null, shuffle: Boolean = false) {
         val queue = if (shuffle) tracks.shuffled() else tracks
         val start = trackId ?: queue.firstOrNull()?.id ?: return
-        // A Jellyfin page plays in its account's own queue (step 23, D84), never in another account's
+        // A Jellyfin page plays in its account's own queue (step 23, D84), never in another account's; so does a page
+        // of a Yandex account out of context (its Library section)
         val account = _stack.value.lastOrNull()?.page?.account
-        if (account != null && tracks.any { it.ref.ref.provider.startsWith(JellyfinRefs.PROVIDER) }) {
+        val otherYandex = account != null && account.provider != Provider.JELLYFIN && account != accountContext.current()
+        if (account != null && (otherYandex || tracks.any { it.ref.ref.provider.startsWith(JellyfinRefs.PROVIDER) })) {
             playRequests.userStarted()
             playbackController.playInAccount(account, queue, start)
             return
@@ -176,7 +250,11 @@ class CatalogViewModel @Inject constructor(
     private fun load(page: CatalogPage) {
         retryJob?.cancel()
         viewModelScope.launch {
-            if (page.account?.provider == Provider.JELLYFIN) loadFromProvider(page) else loadYandex(page)
+            // Browse lists, folders and an account's playlists come through the account's provider, Yandex too (its liked
+            // albums / artists, its playlists)
+            val throughProvider = page is CatalogPage.Browse || page is FolderPage || (page is CatalogPage.Playlist && page.account != null)
+            if (page.account?.provider == Provider.JELLYFIN || throughProvider) loadFromProvider(page)
+            else loadYandex(page)
         }
     }
 
@@ -191,7 +269,7 @@ class CatalogViewModel @Inject constructor(
                     val album = repository.album(page.id).toAlbum()
                     replace(page) { it.copy(album = album, isLoading = false) }
                 }
-                is CatalogPage.Playlist, is CatalogPage.Browse -> replace(page) { it.copy(isLoading = false, failed = true) }
+                is CatalogPage.Playlist, is CatalogPage.Browse, is FolderPage -> replace(page) { it.copy(isLoading = false, failed = true) }
             }
         } catch (e: CancellationException) {
             throw e
@@ -217,7 +295,23 @@ class CatalogViewModel @Inject constructor(
             is CatalogPage.Playlist -> provider.catalog?.playlist(ref(JellyfinRefs.KIND_PLAYLIST)).orMissing().let { o ->
                 o.mapState { p -> { s -> s.copy(playlist = p) } }
             }
-            is CatalogPage.Browse -> browse(page, null).mapState { p -> { s -> s.copy(browse = BrowseList(p.items, p.next)) } }
+            is CatalogPage.Browse -> when (page.kind) {
+                BrowseKind.FAVOURITES, BrowseKind.DOWNLOADED -> provider.library?.likedTracks().orMissing().mapState { liked ->
+                    val shown = if (page.kind == BrowseKind.DOWNLOADED) liked.filter { downloads.isKnownDownloaded(it.ref.id) } else liked
+                    val change: (CatalogPageState) -> CatalogPageState = { s -> s.copy(tracks = shown) }
+                    change
+                }
+                else -> browse(page, null).mapState { p -> { s -> s.copy(browse = BrowseList(p.items, p.next)) } }
+            }
+            is FolderPage -> {
+                val folders = provider.folders
+                val level = when {
+                    folders == null -> null
+                    page.folderId == null -> folders.root()
+                    else -> folders.level(ref(JellyfinRefs.KIND_FOLDER))
+                }
+                level.orMissing().mapState { l -> { s -> s.copy(folder = l) } }
+            }
         }
         val offline = isOffline(page)
         replace(page) { state ->
@@ -247,15 +341,19 @@ class CatalogViewModel @Inject constructor(
             BrowseKind.GENRES -> browse.genres(cursor).pageOf(BrowseItem::OfGenre)
             BrowseKind.GENRE_ALBUMS -> browse.genreAlbums(MediaRef(refProvider(page), JellyfinRefs.KIND_GENRE, page.genreId.orEmpty()), cursor)
                 .pageOf(BrowseItem::OfAlbum)
+            BrowseKind.FAVOURITES, BrowseKind.DOWNLOADED -> Outcome.Ok(Page(emptyList()))
         }
     }
 
     private fun isOffline(page: CatalogPage): Boolean =
         page.account?.let(registry::provider)?.reachable?.value == false
 
-    /** `jellyfin@<server>` of the page's account. */
-    private fun refProvider(page: CatalogPage): String =
-        page.account?.let(jellyfinAccounts::account)?.let { JellyfinRefs(it.serverId).provider }.orEmpty()
+    /** `jellyfin@<server>` of the page's account; `yandex` for a Yandex account's. */
+    private fun refProvider(page: CatalogPage): String = when (page.account?.provider) {
+        Provider.JELLYFIN -> page.account?.let(jellyfinAccounts::account)?.let { JellyfinRefs(it.serverId).provider }.orEmpty()
+        null -> ""
+        else -> MediaRef.PROVIDER_YANDEX
+    }
 
     private fun serverName(account: AccountId): String? = jellyfinAccounts.account(account)?.serverName?.ifBlank { null }
 

@@ -6,10 +6,15 @@ import org.tegro.yamp.data.provider.yandex.repository.SearchRepository
 import org.tegro.yamp.data.provider.yandex.repository.UserPlaylistsRepository
 import org.tegro.yamp.domain.account.AccountId
 import org.tegro.yamp.domain.media.Album
+import org.tegro.yamp.domain.media.Artist
+import org.tegro.yamp.domain.media.Genre
 import org.tegro.yamp.domain.media.Playlist
 import org.tegro.yamp.domain.media.Track
 import org.tegro.yamp.domain.provider.ArtistPage
+import org.tegro.yamp.domain.provider.Browse
+import org.tegro.yamp.domain.provider.BrowseCounts
 import org.tegro.yamp.domain.provider.Catalog
+import org.tegro.yamp.domain.provider.Page
 import org.tegro.yamp.domain.provider.Library
 import org.tegro.yamp.domain.provider.MusicProvider
 import org.tegro.yamp.domain.provider.Outcome
@@ -61,6 +66,32 @@ class YandexProvider(
         }
     }
 
+    /**
+     * The account's liked albums and artists as browse lists (gap (e): Library per account, the car's Albums tab) —
+     * one page each, Yandex answers them whole. Genres: none (Yandex has no library genres).
+     */
+    override val browse: Browse = object : Browse {
+        override suspend fun counts(): Outcome<BrowseCounts> = outcome {
+            val albums = libraryRepository.likedAlbumsOf(account).size
+            val artists = libraryRepository.likedArtistsOf(account).size
+            val playlists = playlistsRepository.playlistsFor(account).size
+            BrowseCounts(albums = albums, artists = artists, genres = 0, playlists = playlists)
+        }
+
+        override suspend fun albums(cursor: Page.Cursor?): Outcome<Page<Album>> =
+            outcome { Page(libraryRepository.likedAlbumsOf(account).mapNotNull { it.toAlbum() }) }
+
+        override suspend fun artists(cursor: Page.Cursor?): Outcome<Page<Artist>> =
+            outcome { Page(libraryRepository.likedArtistsOf(account).mapNotNull { it.toArtist() }) }
+
+        override suspend fun genres(cursor: Page.Cursor?): Outcome<Page<Genre>> = Outcome.Ok(Page(emptyList()))
+
+        override suspend fun playlists(cursor: Page.Cursor?): Outcome<Page<Playlist>> =
+            outcome { Page(playlistsRepository.playlistsFor(account).mapNotNull { it.toPlaylist() }) }
+
+        override suspend fun genreAlbums(genre: MediaRef, cursor: Page.Cursor?): Outcome<Page<Album>> = Outcome.Ok(Page(emptyList()))
+    }
+
     override val catalog: Catalog = object : Catalog {
         override suspend fun album(album: MediaRef): Outcome<Album> = outcome {
             catalogRepository.album(album.id, account).toAlbum() ?: return Outcome.Err(ProviderError.NotFound)
@@ -76,6 +107,14 @@ class YandexProvider(
                 // Compilations the artist is on: "add the artist" with singles and compilations takes them too
                 brief.alsoAlbums.mapNotNull { it.toAlbum()?.copy(kind = org.tegro.yamp.domain.media.AlbumKind.COMPILATION) }
             )
+        }
+
+        /** One of the account's own playlists with its tracks (the Library of an account out of context). */
+        override suspend fun playlist(playlist: MediaRef): Outcome<Playlist> = outcome {
+            val dto = playlistsRepository.playlistsFor(account).firstOrNull { it.toPlaylist()?.ref == playlist }
+                ?: return Outcome.Err(ProviderError.NotFound)
+            val shown = dto.toPlaylist() ?: return Outcome.Err(ProviderError.NotFound)
+            shown.copy(tracks = playlistsRepository.tracks(dto, account).map { it.toTrack() })
         }
     }
 }

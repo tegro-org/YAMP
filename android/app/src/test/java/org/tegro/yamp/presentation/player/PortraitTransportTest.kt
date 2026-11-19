@@ -36,6 +36,21 @@ class PortraitTransportTest {
     }
 
     @Test
+    fun theFold8InnerScreenStandingGetsTheCappedColumnsRow() {
+        // Fold 8 inner portrait ≈ 731×969 dp: wider than the 560 dp column, so the row is the column's 520 dp, as Fold 5
+        val row = minOf(731f, 560f) - 2 * 20f
+        assertEquals(520f, row, 0f)
+        val t = portraitTransport(row)
+        assertEquals(68f, t.skip, 0.01f)
+        assertEquals(96f, t.play, 0.01f)
+        assertEquals(31.2f, t.gap, 0.01f)
+        // The Fold 8 cover screen (≈ 466 dp) is narrower than the cap: its own width minus the sides, base knobs too
+        val cover = portraitTransport(466f - 2 * 20f)
+        assertEquals(68f, cover.skip, 0.01f)
+        assertTrue(cover.total <= 426f)
+    }
+
+    @Test
     fun aVeryNarrowRowScalesTheWholeRowDownButNotBelowSixtyPercent() {
         val t = portraitTransport(220f)
         assertTrue(t.total <= 220f + 0.5f)

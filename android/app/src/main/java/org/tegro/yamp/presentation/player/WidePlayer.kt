@@ -41,6 +41,7 @@ import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.HeartBroken
+import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Layers
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Search
@@ -339,7 +340,9 @@ internal fun WidePlayer(
     /** The ⋮ menu's Dislike (likes by gestures): with Undo, as the cover's hold. */
     onDislikeWithUndo: () -> Unit = onDislike,
     /** Opens with the ⋮ menu down (screenshots). */
-    initialMoreOpen: Boolean = false
+    initialMoreOpen: Boolean = false,
+    /** ⋮ → «Музыка» (the car layout, gap (f)). */
+    onMusic: () -> Unit = {}
 ) {
     var tuneOpen by rememberSaveable { mutableStateOf(initialTuneOpen) }
     if (tuneOpen) androidx.activity.compose.BackHandler { tuneOpen = false }
@@ -431,7 +434,8 @@ internal fun WidePlayer(
                     PlayerMoreButton(
                         items = playerMenuItems(
                             likeGestures = !likeButtons, supportsLikes = track.supportsLikes, isRadio = isRadio,
-                            waveActive = waveActive, canStartRadio = onTrackWave != null && track.supportsLikes, trackWave = trackWaveSeed != null
+                            waveActive = waveActive, canStartRadio = onTrackWave != null && track.supportsLikes, trackWave = trackWaveSeed != null,
+                            music = spec.car
                         ),
                         size = barH,
                         itemHeight = if (spec.car) maxOf(u(64f), MIN_TOP_ROW) else MIN_TOP_ROW,
@@ -450,7 +454,8 @@ internal fun WidePlayer(
                         onQuality = onQuality,
                         onLike = onLike,
                         onDislike = onDislikeWithUndo,
-                        initialOpen = initialMoreOpen
+                        initialOpen = initialMoreOpen,
+                        onMusic = onMusic
                     )
                 }
                 val dropdown: @Composable () -> Unit = {
@@ -862,13 +867,14 @@ private fun NextOne(next: Track, s: Float, spec: WideSpec, modifier: Modifier, o
 }
 
 /** What the player's ⋮ menu offers (user, 2026-11-18), in this order. */
-internal enum class PlayerMenuItem { TUNE, BACK_TO_WAVE, START_RADIO, SEARCH, SLEEP, ADD_TO_PLAYLIST, QUALITY, LIKE, DISLIKE }
+internal enum class PlayerMenuItem { TUNE, BACK_TO_WAVE, START_RADIO, SEARCH, SLEEP, ADD_TO_PLAYLIST, QUALITY, LIKE, DISLIKE, MUSIC }
 
 /**
  * The ⋮ menu of every player layout (canvas `pl-player-more`, `pl-land-more`, `plc-more`): "Tune the wave" on My Wave
  * (with "Back to My Wave" on a wave by a track), "Start radio" by the current track on another Yandex queue (none on
  * Jellyfin, D54), Search, the sleep timer; for a track "Add to playlist…" and its quality; and only with likes by
- * gestures Like / Dislike as a fallback, for a service that has likes. Pure; unit-tested.
+ * gestures Like / Dislike as a fallback, for a service that has likes. In the car layout ([music]) «Музыка» comes last:
+ * the car Library of the active queue's account (gap (f), canvas `ca-entry-*`). Pure; unit-tested.
  */
 @Suppress("LongParameterList")
 internal fun playerMenuItems(
@@ -877,7 +883,8 @@ internal fun playerMenuItems(
     isRadio: Boolean,
     waveActive: Boolean,
     canStartRadio: Boolean,
-    trackWave: Boolean
+    trackWave: Boolean,
+    music: Boolean = false
 ): List<PlayerMenuItem> = buildList {
     when {
         waveActive -> {
@@ -896,6 +903,7 @@ internal fun playerMenuItems(
             add(PlayerMenuItem.DISLIKE)
         }
     }
+    if (music) add(PlayerMenuItem.MUSIC)
 }
 
 /** The ⋮ of the top row and its menu; the sleep timer opens a second level in the same menu. */
@@ -920,7 +928,8 @@ internal fun PlayerMoreButton(
     onQuality: () -> Unit,
     onLike: () -> Unit,
     onDislike: () -> Unit,
-    initialOpen: Boolean
+    initialOpen: Boolean,
+    onMusic: () -> Unit = {}
 ) {
     var expanded by remember { mutableStateOf(initialOpen) }
     var sleepLevel by remember { mutableStateOf(false) }
@@ -982,6 +991,7 @@ internal fun PlayerMoreButton(
                             if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder
                         ) { close(); onLike() }
                         PlayerMenuItem.DISLIKE -> row(stringResource(R.string.cd_ne_nravitsya), Icons.Rounded.HeartBroken) { close(); onDislike() }
+                        PlayerMenuItem.MUSIC -> row(stringResource(R.string.player_menu_music), Icons.Rounded.LibraryMusic) { close(); onMusic() }
                     }
                 }
             }

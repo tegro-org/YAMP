@@ -104,10 +104,29 @@ fun CatalogPageScreen(
     isPlaying: Boolean,
     likedTrackIds: Set<String>,
     contentBottom: Dp,
-    actions: CatalogActions
+    actions: CatalogActions,
+    /** Pinned folders per account key (Phase 4b). */
+    folderPins: Map<String, List<org.tegro.yamp.data.folders.PinnedFolder>> = emptyMap(),
+    accountTags: List<org.tegro.yamp.presentation.account.AccountTag> = emptyList(),
+    folderActions: org.tegro.yamp.presentation.folders.FolderActions? = null
 ) {
     if (state.page is CatalogPage.Browse) {
-        BrowsePageScreen(state, contentBottom, actions)
+        BrowsePageScreen(state, contentBottom, actions, currentTrackId, isPlaying)
+        return
+    }
+    if (state.page is FolderPage && folderActions != null) {
+        val landscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        org.tegro.yamp.presentation.folders.FolderPageScreen(
+            state = state,
+            pins = folderPins[state.page.account.value].orEmpty(),
+            accountTag = accountTags.firstOrNull { it.key == state.page.account.value },
+            contentBottom = contentBottom,
+            actions = actions,
+            folderActions = folderActions,
+            currentTrackId = currentTrackId,
+            isPlaying = isPlaying,
+            landscape = landscape
+        )
         return
     }
     val back = rememberPredictiveBack(enabled = true, onBack = actions.onBack)

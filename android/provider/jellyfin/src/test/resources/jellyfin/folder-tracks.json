@@ -1,0 +1,134 @@
+{
+  "Items": [
+    {
+      "Name": "Carefree",
+      "ServerId": "0123456789abcdef0123456789abcdef",
+      "Id": "0000000000000000000000000000b003",
+      "HasLyrics": false,
+      "Container": "mp3",
+      "PremiereDate": "2008-01-01T00:00:00.0000000Z",
+      "Path": "/media/Сборники - разное/Carefree (demo).mp3",
+      "ChannelId": null,
+      "RunTimeTicks": 2051395920,
+      "ProductionYear": 2008,
+      "IndexNumber": 1,
+      "IsFolder": false,
+      "Type": "Audio",
+      "UserData": {
+        "PlaybackPositionTicks": 0,
+        "PlayCount": 0,
+        "IsFavorite": false,
+        "Played": false,
+        "ItemId": "0000000000000000000000000000b003"
+      },
+      "Artists": [
+        "Kevin MacLeod"
+      ],
+      "ArtistItems": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000b002"
+        }
+      ],
+      "Album": "Сборники - разное",
+      "AlbumArtist": "Kevin MacLeod",
+      "AlbumArtists": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000b002"
+        }
+      ],
+      "ImageTags": {},
+      "LocationType": "FileSystem",
+      "MediaType": "Audio"
+    },
+    {
+      "Name": "Sneaky Snitch",
+      "ServerId": "0123456789abcdef0123456789abcdef",
+      "Id": "0000000000000000000000000000b006",
+      "HasLyrics": false,
+      "Container": "mp3",
+      "PremiereDate": "2008-01-01T00:00:00.0000000Z",
+      "Path": "/media/Сборники - разное/Дорога/01 Sneaky Snitch.mp3",
+      "ChannelId": null,
+      "RunTimeTicks": 1366204080,
+      "ProductionYear": 2008,
+      "IndexNumber": 1,
+      "IsFolder": false,
+      "Type": "Audio",
+      "UserData": {
+        "PlaybackPositionTicks": 0,
+        "PlayCount": 0,
+        "IsFavorite": false,
+        "Played": false,
+        "ItemId": "0000000000000000000000000000b006"
+      },
+      "Artists": [
+        "Kevin MacLeod"
+      ],
+      "ArtistItems": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000b002"
+        }
+      ],
+      "Album": "Дорога",
+      "AlbumId": "0000000000000000000000000000b001",
+      "AlbumArtist": "Kevin MacLeod",
+      "AlbumArtists": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000b002"
+        }
+      ],
+      "ImageTags": {},
+      "LocationType": "FileSystem",
+      "MediaType": "Audio"
+    },
+    {
+      "Name": "Wallpaper",
+      "ServerId": "0123456789abcdef0123456789abcdef",
+      "Id": "0000000000000000000000000000b007",
+      "HasLyrics": false,
+      "Container": "mp3",
+      "PremiereDate": "2008-01-01T00:00:00.0000000Z",
+      "Path": "/media/Сборники - разное/Дорога/02 Wallpaper.mp3",
+      "ChannelId": null,
+      "RunTimeTicks": 2200555100,
+      "ProductionYear": 2008,
+      "IndexNumber": 2,
+      "IsFolder": false,
+      "Type": "Audio",
+      "UserData": {
+        "PlaybackPositionTicks": 0,
+        "PlayCount": 0,
+        "IsFavorite": false,
+        "Played": false,
+        "ItemId": "0000000000000000000000000000b007"
+      },
+      "Artists": [
+        "Kevin MacLeod"
+      ],
+      "ArtistItems": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000b002"
+        }
+      ],
+      "Album": "Дорога",
+      "AlbumId": "0000000000000000000000000000b001",
+      "AlbumArtist": "Kevin MacLeod",
+      "AlbumArtists": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000b002"
+        }
+      ],
+      "ImageTags": {},
+      "LocationType": "FileSystem",
+      "MediaType": "Audio"
+    }
+  ],
+  "TotalRecordCount": 3,
+  "StartIndex": 0
+}

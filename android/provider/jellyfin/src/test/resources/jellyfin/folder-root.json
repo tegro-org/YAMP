@@ -1,0 +1,52 @@
+{
+  "Items": [
+    {
+      "Name": "Kevin MacLeod",
+      "ServerId": "0123456789abcdef0123456789abcdef",
+      "Id": "0000000000000000000000000000b002",
+      "PremiereDate": "1972-09-28T00:00:00.0000000Z",
+      "ChannelId": null,
+      "RunTimeTicks": 0,
+      "ProductionYear": 1972,
+      "IsFolder": true,
+      "Type": "MusicArtist",
+      "UserData": {
+        "PlaybackPositionTicks": 0,
+        "PlayCount": 0,
+        "IsFavorite": false,
+        "Played": false,
+        "ItemId": "0000000000000000000000000000b002"
+      },
+      "RecursiveItemCount": 6,
+      "ChildCount": 2,
+      "ImageTags": {
+        "Primary": "0000000000000000000000000000b004"
+      },
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown"
+    },
+    {
+      "Name": "Сборники - разное",
+      "ServerId": "0123456789abcdef0123456789abcdef",
+      "Id": "0000000000000000000000000000b005",
+      "ChannelId": null,
+      "RunTimeTicks": 0,
+      "IsFolder": true,
+      "Type": "MusicArtist",
+      "UserData": {
+        "PlaybackPositionTicks": 0,
+        "PlayCount": 0,
+        "IsFavorite": false,
+        "Played": false,
+        "ItemId": "0000000000000000000000000000b005"
+      },
+      "RecursiveItemCount": 3,
+      "ChildCount": 2,
+      "ImageTags": {},
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown"
+    }
+  ],
+  "TotalRecordCount": 2,
+  "StartIndex": 0
+}

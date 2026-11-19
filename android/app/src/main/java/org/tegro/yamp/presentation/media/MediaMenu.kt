@@ -27,6 +27,9 @@ import androidx.compose.material.icons.rounded.RadioButtonChecked
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material.icons.rounded.Sensors
 import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.material.icons.rounded.Shuffle
+import androidx.compose.material.icons.rounded.PushPin
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
@@ -153,6 +156,10 @@ fun MediaMenuHost(
                         switcher?.open(QueueSwitcherRequest.StartRadio(RadioSeed(target.ref, target.title)))
                         onDismiss()
                     }
+                    MediaMenuRow.PIN, MediaMenuRow.UNPIN -> {
+                        vm.togglePin(target)
+                        onDismiss()
+                    }
                     MediaMenuRow.ADD_TO_PLAYLIST -> {
                         if (target.isArtist) vm.chooseArtist(target, MediaAction.ADD_TO_PLAYLIST)
                         else {
@@ -164,7 +171,7 @@ fun MediaMenuHost(
                         val action = row.action()
                         if (target.isArtist) vm.chooseArtist(target, action)
                         else {
-                            if (action != MediaAction.ADD_TO_QUEUE && action != MediaAction.PLAY_NOW) say(resources.getString(R.string.media_loading))
+                            if (action != MediaAction.ADD_TO_QUEUE && action != MediaAction.PLAY_NOW && action != MediaAction.SHUFFLE) say(resources.getString(R.string.media_loading))
                             vm.albumAction(target, action, onAddTo, onDone, onFailed)
                             onDismiss()
                         }
@@ -200,11 +207,12 @@ private fun android.content.res.Resources.getQuantityTextOrPlural(count: Int): S
     return getString(res, count)
 }
 
-private fun MediaMenuRow.action(): MediaAction = when (this) {
+internal fun MediaMenuRow.action(): MediaAction = when (this) {
     MediaMenuRow.PLAY_NOW -> MediaAction.PLAY_NOW
+    MediaMenuRow.SHUFFLE -> MediaAction.SHUFFLE
     MediaMenuRow.PLAY_NEXT -> MediaAction.PLAY_NEXT
     MediaMenuRow.ADD_TO_END -> MediaAction.ADD_TO_END
-    MediaMenuRow.ADD_TO_QUEUE, MediaMenuRow.START_RADIO -> MediaAction.ADD_TO_QUEUE
+    MediaMenuRow.ADD_TO_QUEUE, MediaMenuRow.START_RADIO, MediaMenuRow.PIN, MediaMenuRow.UNPIN -> MediaAction.ADD_TO_QUEUE
     MediaMenuRow.ADD_TO_PLAYLIST -> MediaAction.ADD_TO_PLAYLIST
 }
 
@@ -232,7 +240,9 @@ internal fun MediaMenuSheet(target: MediaTarget, rows: List<MediaMenuRow>, onDis
 internal fun MediaMenuContent(target: MediaTarget, rows: List<MediaMenuRow>, onRow: (MediaMenuRow) -> Unit) {
     Column(Modifier.fillMaxWidth().padding(bottom = 28.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 8.dp)) {
-            Cover(
+            if (target.isFolder) {
+                org.tegro.yamp.presentation.folders.FolderArt(target.title, target.cover, 56.dp, radius = 12.dp)
+            } else Cover(
                 uri = target.cover,
                 placeholder = if (target.isArtist) Icons.Rounded.Person else Icons.Rounded.Album,
                 shape = if (target.isArtist) CircleShape else RoundedCornerShape(12.dp),
@@ -261,6 +271,9 @@ internal fun MediaMenuContent(target: MediaTarget, rows: List<MediaMenuRow>, onR
                 MediaMenuRow.ADD_TO_QUEUE -> MenuRow(Icons.Rounded.Layers, stringResource(R.string.track_menu_add_to_queue)) { onRow(row) }
                 MediaMenuRow.ADD_TO_PLAYLIST -> MenuRow(Icons.AutoMirrored.Rounded.PlaylistAdd, stringResource(R.string.track_context_menu_dobavit_v_pleylist)) { onRow(row) }
                 MediaMenuRow.START_RADIO -> MenuRow(Icons.Rounded.Sensors, stringResource(R.string.radio_start)) { onRow(row) }
+                MediaMenuRow.SHUFFLE -> MenuRow(Icons.Rounded.Shuffle, stringResource(R.string.media_shuffle)) { onRow(row) }
+                MediaMenuRow.PIN -> MenuRow(Icons.Rounded.PushPin, stringResource(R.string.folders_pin)) { onRow(row) }
+                MediaMenuRow.UNPIN -> MenuRow(Icons.Outlined.PushPin, stringResource(R.string.folders_unpin)) { onRow(row) }
             }
         }
         if (target.isArtist) {
@@ -323,7 +336,7 @@ internal fun ArtistAddDialog(state: ArtistDialogState, onConfirm: (ArtistChoice,
             Text(
                 stringResource(
                     when (state.action) {
-                        MediaAction.PLAY_NOW -> R.string.media_target_play
+                        MediaAction.PLAY_NOW, MediaAction.SHUFFLE -> R.string.media_target_play
                         MediaAction.PLAY_NEXT -> R.string.media_target_next
                         MediaAction.ADD_TO_END -> R.string.media_target_end
                         MediaAction.ADD_TO_QUEUE -> R.string.media_target_queue
