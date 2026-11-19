@@ -49,6 +49,12 @@ class JellyfinClients @Inject constructor(
         }
     }
 
+    /**
+     * The client a download fetches a file through (gap b): the shared base without the HTTP cache (a whole file does
+     * not belong there) and with redirects off — the auth header goes on that one request and never to another host.
+     */
+    val downloads: OkHttpClient by lazy { shared.newBuilder().followRedirects(false).followSslRedirects(false).build() }
+
     /** The sign-in flow over unauthenticated clients; plain http only to a local test server, and only in debug builds. */
     fun signIn(): JellyfinSignIn = JellyfinSignIn(
         api = { url -> JellyfinApiFactory.create(shared, url, info) { null } },

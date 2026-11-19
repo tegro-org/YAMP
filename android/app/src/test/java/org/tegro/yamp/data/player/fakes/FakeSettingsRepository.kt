@@ -70,4 +70,8 @@ class FakeSettingsRepository : SettingsRepository {
     override suspend fun setLikeGestures(enabled: Boolean) { likeGestures.value = enabled }
     override suspend fun setGroupQueuesByAccount(enabled: Boolean) { groupQueuesByAccount.value = enabled }
     override suspend fun setListeningHistory(enabled: Boolean) { listeningHistory.value = enabled }
+    override val accountAutoDownloads = MutableStateFlow<Map<String, Boolean>>(emptyMap())
+    override suspend fun setAccountAutoDownload(account: String, enabled: Boolean) {
+        accountAutoDownloads.value = accountAutoDownloads.value + (SettingsRepository.accountAutoDownloadKey(account) to enabled)
+    }
 }

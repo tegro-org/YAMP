@@ -41,6 +41,16 @@ jobs:
             android/*.gradle*
             android/**/gradle-wrapper.properties
             android/gradle/libs.versions.toml
+      # Robolectric downloads its Android runtimes (android-all-instrumented, SDK 28 and 35) from Maven Central at
+      # test time into ~/.m2. A Maven Central hiccup failed every Robolectric class at once in the v0.3.0 and v0.5.1
+      # release runs (re-runs passed); keeping the jars in the Actions cache takes Maven Central out of that path.
+      - name: Cache Robolectric runtimes
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-${{ hashFiles('android/gradle/libs.versions.toml') }}-sdk28-35
+          restore-keys: |
+            robolectric-
       - run: chmod +x gradlew
       # verifyRoborazziDebug runs all unit tests and compares the screens with app/src/test/screenshots
       - run: ./gradlew verifyRoborazziDebug lintDebug :core:domain:test :provider:jellyfin:test --no-daemon

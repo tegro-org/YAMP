@@ -126,6 +126,17 @@ class SettingsRepositoryImpl @Inject constructor(
         context.dataStore.edit { prefs -> prefs[key] = compatible }
     }
 
+    override val accountAutoDownloads: Flow<Map<String, Boolean>> = context.dataStore.data.map { prefs ->
+        prefs.asMap().entries
+            .filter { (key, value) -> key.name.startsWith("autodl|") && value is Boolean }
+            .associate { (key, value) -> key.name to (value as Boolean) }
+    }
+
+    override suspend fun setAccountAutoDownload(account: String, enabled: Boolean) {
+        val key = booleanPreferencesKey(SettingsRepository.accountAutoDownloadKey(account))
+        context.dataStore.edit { prefs -> prefs[key] = enabled }
+    }
+
     override val streamCacheMb: Flow<Int> = context.dataStore.data.map { prefs ->
         prefs[STREAM_CACHE_MB_KEY] ?: SettingsRepository.DEFAULT_STREAM_CACHE_MB
     }

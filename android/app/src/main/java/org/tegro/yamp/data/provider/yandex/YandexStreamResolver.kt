@@ -62,7 +62,8 @@ class YandexStreamResolver internal constructor(
             ?: return streamCache.completeStreamFor(org.tegro.yamp.data.player.StreamCache.keyPrefix(account?.value, id))
                 ?.let { Outcome.Ok(it) }
                 ?: Outcome.Err(ProviderError.Unavailable("no stream link"))
-        return Outcome.Ok(stream(id, url))
+        // Kept with the cache entry: once all its bytes are on disk it plays offline, also after a restart
+        return Outcome.Ok(stream(id, url).also { streamCache.remember(it) })
     }
 
     override fun invalidate(track: TrackRef) = links.evictUrl(track.id, account)

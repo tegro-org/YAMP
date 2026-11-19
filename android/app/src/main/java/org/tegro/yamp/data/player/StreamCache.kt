@@ -12,6 +12,7 @@ import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.CacheEvictor
 import androidx.media3.datasource.cache.CacheSpan
 import androidx.media3.datasource.cache.ContentMetadata
+import androidx.media3.datasource.cache.ContentMetadataMutations
 import androidx.media3.datasource.cache.SimpleCache
 import org.tegro.yamp.domain.provider.ResolvedStream
 import java.io.File
@@ -32,6 +33,12 @@ import java.util.concurrent.ConcurrentHashMap
 fun interface CachedStreams {
     /** A stream of a track whose bytes are all on disk; [keyPrefix] is [StreamCache.keyPrefix]. */
     fun completeStreamFor(keyPrefix: String): ResolvedStream?
+
+    /**
+     * Keeps what plays [stream] with its cache entry, so a track whose bytes all end up on disk plays with no network,
+     * even after a restart. No-op where nothing is cached.
+     */
+    fun remember(stream: ResolvedStream) = Unit
 }
 
 @androidx.annotation.OptIn(UnstableApi::class)
@@ -53,8 +60,26 @@ class StreamCache internal constructor(
     /** The last stream seen for a key: a track whose bytes are all on disk plays from it with no fresh link. */
     private val streams = ConcurrentHashMap<String, ResolvedStream>()
 
-    fun remember(stream: ResolvedStream) {
-        stream.cacheKey?.let { streams[it] = stream }
+    /** Told the key each time a track is handed out from disk with no link (the journal's `CACHE offline start`). */
+    @Volatile
+    var onOfflineStart: ((key: String) -> Unit)? = null
+
+    /**
+     * Also written into the entry's own metadata in the cache's database, so it outlives the process and goes with the
+     * entry when it is evicted or cleared (the metadata of a key is dropped with its last byte). Headers are not kept:
+     * they may carry a token, and a stream that needs them is rebuilt by its resolver.
+     */
+    override fun remember(stream: ResolvedStream) {
+        val key = stream.cacheKey ?: return
+        if (stream.localFile) return
+        streams[key] = stream
+        if (!enabled || stream.headers.isNotEmpty()) return
+        runCatching {
+            cache.applyContentMetadataMutations(
+                key,
+                ContentMetadataMutations().set(META_STREAM, StoredStream.encode(stream))
+            )
+        }
     }
 
     /** Bytes kept on disk now. */
@@ -70,8 +95,29 @@ class StreamCache internal constructor(
      * A stream for a track whose bytes are all on disk, for when no fresh link can be had (offline): its key is
      * what finds the bytes, so the old link is never fetched. [keyPrefix] is "account|track|".
      */
-    override fun completeStreamFor(keyPrefix: String): ResolvedStream? =
-        streams.entries.firstOrNull { it.key.startsWith(keyPrefix) && isComplete(it.key) }?.value
+    override fun completeStreamFor(keyPrefix: String): ResolvedStream? {
+        if (!enabled) return null
+        val found = streams.entries.firstOrNull { it.key.startsWith(keyPrefix) && isComplete(it.key) }?.value
+            ?: run {
+                // After a restart: what was kept with the entry in the cache's database
+                val keys = runCatching { cache.keys.filter { it.startsWith(keyPrefix) } }.getOrDefault(emptyList())
+                keys.firstNotNullOfOrNull { key ->
+                    if (!isComplete(key)) return@firstNotNullOfOrNull null
+                    val stored = runCatching { cache.getContentMetadata(key).get(META_STREAM, null as String?) }.getOrNull()
+                    stored?.let { StoredStream.decode(it, key) }?.also { streams[key] = it }
+                }
+            }
+        found?.cacheKey?.let { key -> onOfflineStart?.invoke(key) }
+        return found
+    }
+
+    /** Every entry of [account] goes (sign-out): its bytes and what was kept with them. */
+    fun removeAccount(account: String) {
+        val prefix = "$account|"
+        streams.keys.removeIf { it.startsWith(prefix) }
+        runCatching { cache.keys.filter { it.startsWith(prefix) } }.getOrDefault(emptyList())
+            .forEach { runCatching { cache.removeResource(it) } }
+    }
 
     /**
      * What is on disk of a track, whatever link it came by ([keyPrefix] = "account|track|"): all of it, its start
@@ -206,6 +252,9 @@ class StreamCache internal constructor(
 
         /** About 15 s of a 256 kbps stream: enough on disk for a skip to the track to start at once. */
         const val START_BYTES = 512L * 1024L
+
+        /** The metadata name under which the stream of an entry is kept (a JSON string). */
+        internal const val META_STREAM = "yamp-stream"
 
         private fun String?.isNetwork(): Boolean = this == "http" || this == "https"
     }

@@ -11,7 +11,6 @@ import org.tegro.yamp.domain.media.Track
 import org.tegro.yamp.data.network.TrackDownloadManager
 import org.tegro.yamp.data.provider.yandex.repository.LibraryRepository
 import org.tegro.yamp.data.repository.RadioRepository
-import org.tegro.yamp.domain.repository.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -20,7 +19,6 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -37,8 +35,7 @@ class TrackReactions @Inject constructor(
     private val radioRepository: RadioRepository,
     private val playbackController: PlaybackController,
     private val downloadManager: TrackDownloadManager,
-    private val downloadScheduler: DownloadScheduler,
-    private val settingsRepository: SettingsRepository
+    private val downloadScheduler: DownloadScheduler
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -57,7 +54,7 @@ class TrackReactions @Inject constructor(
     fun isLiked(track: Track): Boolean =
         if (track.isRadio) stationId(track) in favoriteStationIds.value else track.idString in likedTrackIds.value
 
-    /** The heart: like / unlike a track (a new like is downloaded when auto-download is on), favourite a station. */
+    /** The heart: like / unlike a track (a new like is downloaded when its account's auto-download is on), favourite a station. */
     fun toggleLike(track: Track) {
         if (track.isRadio) {
             scope.launch { radioRepository.toggleFavorite(stationId(track)) }
@@ -69,7 +66,7 @@ class TrackReactions @Inject constructor(
             if (!ok) return@setLiked
             scope.launch {
                 if (!like) downloadManager.removeTrack(trackId)
-                else if (settingsRepository.autoDownloadLikedTracks.first()) downloadScheduler.downloadTrack(trackId)
+                else downloadScheduler.downloadTrack(trackId, auto = true)
             }
         }
     }
@@ -100,9 +97,7 @@ class TrackReactions @Inject constructor(
         libraryRepository.undoDislike(dislike.track.toYandexTrack(), dislike.wasLiked)
         playbackController.undoDislike(dislike.queue)
         if (dislike.wasLiked) {
-            scope.launch {
-                if (settingsRepository.autoDownloadLikedTracks.first()) downloadScheduler.downloadTrack(dislike.track.idString)
-            }
+            scope.launch { downloadScheduler.downloadTrack(dislike.track.idString, auto = true) }
         }
     }
 

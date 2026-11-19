@@ -59,7 +59,6 @@ import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.DirectionsCar
-import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Equalizer
 import androidx.compose.material.icons.rounded.RecordVoiceOver
 import androidx.compose.material.icons.rounded.GraphicEq
@@ -525,6 +524,15 @@ private fun ColumnScope.PlaybackPage(state: SettingsUiState, actions: SettingsAc
         if (state.powerampEqualizer) {
             SettingsRow(icon = Icons.Rounded.Equalizer, title = stringResource(R.string.settings_poweramp_eq), subtitle = stringResource(R.string.settings_poweramp_eq_hint), onClick = actions.onOpenPowerampEqualizer)
         }
+        if (state.audioRouterInstalled) {
+            SettingsRow(
+                icon = Icons.Rounded.Equalizer,
+                title = stringResource(R.string.settings_audio_router),
+                onClick = null,
+                subtitle = stringResource(if (state.audioRouterActive) R.string.settings_audio_router_active else R.string.settings_audio_router_hint),
+                chevron = false
+            )
+        }
         SwitchRow(Icons.AutoMirrored.Rounded.VolumeUp, stringResource(R.string.settings_normalize), stringResource(R.string.settings_normalize_hint), state.normalizeVolume, actions.onNormalizeVolumeChange)
         if (state.equalizerAvailable) {
             SettingsRow(icon = Icons.Rounded.Equalizer, title = stringResource(R.string.settings_equalizer), subtitle = stringResource(R.string.settings_equalizer_hint), onClick = actions.onOpenEqualizer)
@@ -559,7 +567,6 @@ private fun ColumnScope.PlaybackPage(state: SettingsUiState, actions: SettingsAc
         StreamCacheRows(state.streamCacheMb, actions.onStreamCacheChange, state.streamCacheUsedBytes, actions.onClearStreamCache)
     }
     SettingsGroup(stringResource(R.string.settings_group_downloads)) {
-        SwitchRow(Icons.Rounded.Download, stringResource(R.string.settings_auto_download), stringResource(R.string.settings_auto_download_hint), state.autoDownload, actions.onAutoDownloadChange)
         SettingsRow(icon = Icons.Rounded.CloudDownload, title = stringResource(R.string.settings_download_all), onClick = actions.onDownloadAll)
         SettingsRow(
             icon = Icons.Rounded.UploadFile,

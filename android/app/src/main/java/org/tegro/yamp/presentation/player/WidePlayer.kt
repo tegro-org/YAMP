@@ -214,9 +214,9 @@ internal const val CLOCK_INSET = 20f
  * - the cover + next block spans the full height: from [WideSpec.top] (the ⋮ · queue row's top padding) down to the
  *   same margin at the bottom; the cover is square and takes what the next block leaves;
  * - the far side keeps at least [WideSpec.pad] (the progress bar's edge padding) as its padding;
- * - a taller screen: the controls take all that is left and the block ends at that minimum padding;
+ * - a taller screen (w/h < [TALLER_RATIO]): the controls take all that is left and the block ends at that minimum padding;
  * - a wider screen: the controls stop at their share of the width ([WideSpec.driverW] of [WideSpec.baseW]) and the
- *   block is centred in the space beside them;
+ *   block is centred in the space beside them (if that share leaves spare width);
  * - the clock has one fixed place on every screen: [CLOCK_INSET] inside the minimum right padding and the top padding —
  *   inside the cover's corner when the cover reaches that padding (taller screens), wherever it falls otherwise.
  * Pure; unit-tested.
@@ -232,6 +232,13 @@ internal data class WideGeometry(
     val clockEnd: Float,
     val clockTop: Float
 )
+
+/**
+ * Below this width/height the wide player counts as "taller" (user, 2026-11-19): after a full-height cover block the
+ * controls would keep only about a third of the width, so they take all that is left instead of a capped share.
+ * 16:10 (1.6) is taller, 16:9 (1.78) is wide. Layout units keep the screen's aspect ratio, so the ratio is the same.
+ */
+internal const val TALLER_RATIO = 1.66f
 
 /** The gap between the cover and the next block, in layout units. */
 internal const val NEXT_BLOCK_GAP = 22f
@@ -254,8 +261,10 @@ internal fun wideGeometryOf(spec: WideSpec, widthU: Float, heightU: Float, nextT
     val card = if (nextThree && !isRadio) ((cover - 2 * NEXT_CARD_GAP) / 3f).coerceAtLeast(0f) else 0f
     val cap = spec.driverW / spec.baseW * widthU
     val fit = widthU - 2 * edge - gapMin - cover
-    // A spare of less than two minimum gaps is not worth centring: it goes to the controls
-    val centred = fit - cap >= 2 * gapMin
+    // Taller screens (w/h below TALLER_RATIO, e.g. 16:10, 4:3, a foldable's inner screen): the controls take what is
+    // left and the block ends at the minimum padding. Wider ones (16:9 and up): the controls stop at their share and
+    // the block is centred beside them — when the spare is worth it (two minimum gaps or more; less goes to the controls)
+    val centred = widthU / heightU >= TALLER_RATIO && fit - cap >= 2 * gapMin
     val controlsW = if (centred) cap else fit
     val areaStart = edge + controlsW
     val areaEnd = widthU - edge

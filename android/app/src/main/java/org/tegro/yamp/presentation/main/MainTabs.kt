@@ -294,7 +294,6 @@ internal fun LibraryTab(
             onClearReserve = settingsVm::clearReserve,
             onStreamCacheChange = settingsVm::setStreamCacheMb,
             onClearStreamCache = settingsVm::clearStreamCache,
-            onAutoDownloadChange = settingsVm::setAutoDownload,
             onDownloadAll = { viewModel.downloadAllLikedTracks() },
             onUpgradeDownloads = settingsVm::upgradeDownloads,
             onDownloadsOnCardChange = settingsVm::setDownloadsOnCard,

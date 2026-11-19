@@ -60,6 +60,13 @@ class TrackDownloadManager @Inject constructor(
     @Volatile
     private var savedQualities: Map<String, TrackPreloadManager.StreamQuality> = emptyMap()
 
+    /**
+     * The accounts a downloaded Jellyfin track was saved for (gap b), from "<id>.owner" beside the internal files
+     * wherever the track itself is; a Yandex download has none (its owners are the accounts that like it).
+     */
+    @Volatile
+    private var savedOwners: Map<String, Set<String>> = emptyMap()
+
     init {
         // Remove leftover temp files from a download the previous process did not finish.
         tracksDir.listFiles()?.filter { it.extension == "tmp" }?.forEach { it.delete() }
@@ -81,6 +88,9 @@ class TrackDownloadManager @Inject constructor(
                 file.nameWithoutExtension to TrackPreloadManager.StreamQuality(codec, kbps.trim().toInt())
             }.getOrNull()
         }.toMap()
+        savedOwners = internal.filter { it.extension == OWNER_EXTENSION }.associate { file ->
+            file.nameWithoutExtension to runCatching { file.readLines().filter { it.isNotBlank() }.toSet() }.getOrDefault(emptySet())
+        }
         _downloadedTrackIds.value = files.map { it.nameWithoutExtension }.toSet()
         _cacheSizeBytes.value = files.sumOf { it.length() }
     }
@@ -111,6 +121,40 @@ class TrackDownloadManager @Inject constructor(
     /** Codec and bitrate a downloaded file was saved in; null for files from before 1.6 (the best MP3 then). */
     fun downloadedQuality(trackId: String): TrackPreloadManager.StreamQuality? = savedQualities[trackId]
 
+    /** The accounts [trackId] was downloaded for (Jellyfin); empty for a Yandex download. From memory. */
+    fun ownersOf(trackId: String): Set<String> = savedOwners[trackId].orEmpty()
+
+    /** [account] wants the already downloaded [trackId] too: it stays while either account is signed in. */
+    suspend fun addOwner(trackId: String, account: AccountId) = withContext(Dispatchers.IO) {
+        if (account.value in ownersOf(trackId)) return@withContext
+        writeOwners(trackId, ownersOf(trackId) + account.value)
+        updateCacheStats()
+    }
+
+    /**
+     * Sign-out (D62, gap b): [account] leaves every Jellyfin download's owners; a track nobody else wants goes.
+     * Returns the ids removed.
+     */
+    suspend fun releaseOwner(account: AccountId): List<String> = withContext(Dispatchers.IO) {
+        val removed = mutableListOf<String>()
+        for ((trackId, owners) in savedOwners) {
+            if (account.value !in owners) continue
+            val left = owners - account.value
+            if (left.isEmpty()) {
+                removeTrack(trackId)
+                removed += trackId
+            } else {
+                writeOwners(trackId, left)
+            }
+        }
+        updateCacheStats()
+        removed
+    }
+
+    private fun writeOwners(trackId: String, owners: Set<String>) {
+        File(tracksDir, "$trackId.$OWNER_EXTENSION").writeText(owners.joinToString("\n"))
+    }
+
     /**
      * Saves the track for offline listening. With [replace] an existing copy is swapped for the new one
      * only once the new file is complete (a better quality), so the track stays playable meanwhile.
@@ -122,24 +166,39 @@ class TrackDownloadManager @Inject constructor(
         quality: TrackPreloadManager.StreamQuality? = null,
         replace: Boolean = false,
         /** The account the link was resolved under: its client fetches the file. */
-        account: AccountId? = null
+        account: AccountId? = null,
+        /**
+         * Headers for this URL alone (Jellyfin's auth, gap b): the file is then fetched through [http] with redirects
+         * off, so they never reach another host.
+         */
+        headers: Map<String, String> = emptyMap(),
+        http: OkHttpClient? = null,
+        /** The account a Jellyfin download is saved for: it goes when the last of its owners signs out. */
+        owner: AccountId? = null
     ): Boolean {
         // One download per track: several jobs may want it at once (all liked, the like just given, a playlist,
         // the quality upgrade), and they would write the same temporary file together. The others wait and
         // find the finished file.
         // The locks stay in the map: dropping one while a job is about to take it would let two in again
-        return trackLocks.getOrPut(trackId) { Mutex() }.withLock { downloadNow(trackId, url, quality, replace, account) }
+        return trackLocks.getOrPut(trackId) { Mutex() }.withLock {
+            val fetch = Fetch(url, quality, account, headers, http)
+            downloadNow(trackId, fetch, replace).also { ok -> if (ok && owner != null) addOwner(trackId, owner) }
+        }
     }
 
     private val trackLocks = java.util.concurrent.ConcurrentHashMap<String, Mutex>()
 
-    private suspend fun downloadNow(
-        trackId: String,
-        url: String,
-        quality: TrackPreloadManager.StreamQuality?,
-        replace: Boolean,
-        account: AccountId?
-    ): Boolean = withContext(Dispatchers.IO) {
+    private class Fetch(
+        val url: String,
+        val quality: TrackPreloadManager.StreamQuality?,
+        val account: AccountId?,
+        val headers: Map<String, String>,
+        val http: OkHttpClient?
+    )
+
+    private suspend fun downloadNow(trackId: String, fetch: Fetch, replace: Boolean): Boolean = withContext(Dispatchers.IO) {
+        val url = fetch.url
+        var quality = fetch.quality
         if (!replace && isTrackDownloaded(trackId)) return@withContext true
 
         val toCard = downloadsToCard()
@@ -155,11 +214,19 @@ class TrackDownloadManager @Inject constructor(
         val cleanUrl = if (encrawKey != null) url.substringBefore("#encraw_key=") else url
 
         try {
-            val request = Request.Builder().url(cleanUrl).build()
-            val http = if (account != null && clients != null) clients.http(account) else okHttpClient
+            val request = Request.Builder().url(cleanUrl).apply { fetch.headers.forEach { (name, value) -> header(name, value) } }.build()
+            val http = when {
+                fetch.headers.isNotEmpty() -> (fetch.http ?: okHttpClient).newBuilder().followRedirects(false).followSslRedirects(false).build()
+                fetch.account != null && clients != null -> clients.http(fetch.account)
+                else -> okHttpClient
+            }
             val isSuccess = http.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return@use false
                 val body = response.body
+                // A file sent as it is says what it is: a FLAC one must not play in compatible sound (silent)
+                if (quality == null && body.contentType()?.subtype?.contains("flac", ignoreCase = true) == true) {
+                    quality = TrackPreloadManager.StreamQuality("flac", 0)
+                }
 
                 FileOutputStream(tempFile).use { fos ->
                     val rawStream = body.byteStream()
@@ -186,7 +253,8 @@ class TrackDownloadManager @Inject constructor(
                 tempFile.delete()
             }
             val qualityFile = File(dir, "$trackId.quality")
-            if (quality != null) qualityFile.writeText("${quality.codec}:${quality.bitrateKbps}") else qualityFile.delete()
+            val saved = quality
+            if (saved != null) qualityFile.writeText("${saved.codec}:${saved.bitrateKbps}") else qualityFile.delete()
             // A replaced copy in the other place goes, so a track is never kept twice
             removeOtherCopy(trackId, keep = file)
             updateCacheStats()
@@ -205,6 +273,7 @@ class TrackDownloadManager @Inject constructor(
         var removed = false
         for (dir in listOfNotNull(tracksDir, cardDir())) {
             File(dir, "$trackId.quality").delete()
+            File(dir, "$trackId.$OWNER_EXTENSION").delete()
             for (file in listOf(internalFile(trackId).takeIf { dir == tracksDir }, cardFile(dir, trackId).takeIf { dir != tracksDir })) {
                 if (file != null && file.exists()) removed = file.delete() || removed
             }
@@ -275,6 +344,10 @@ class TrackDownloadManager @Inject constructor(
         }
         updateCacheStats()
         true
+    }
+
+    private companion object {
+        const val OWNER_EXTENSION = "owner"
     }
 }
 

@@ -203,7 +203,8 @@ class PlaybackControllerTest {
         clients: org.tegro.yamp.data.network.YandexClients = FixedYandexClients(api),
         journal: PlaybackJournal = PlaybackJournal(now = { 0L }),
         jellyfin: org.tegro.yamp.data.provider.jellyfin.JellyfinAccountStore? = null,
-        otherStreams: (org.tegro.yamp.domain.account.AccountId) -> org.tegro.yamp.domain.provider.StreamResolver? = { null }
+        otherStreams: (org.tegro.yamp.domain.account.AccountId) -> org.tegro.yamp.domain.provider.StreamResolver? = { null },
+        audioRouter: AudioRouterWatch = AudioRouterWatch.None
     ): PlaybackController {
         val legacyImport = LegacySessionImport(store, cacheManager, RoomQueueStore(db.queueDao(), db.dao()), QueueTrackBridge(db.dao(), json))
         val controller = PlaybackController(
@@ -216,7 +217,8 @@ class PlaybackControllerTest {
             org.tegro.yamp.data.provider.StreamResolvers { account ->
                 account?.let(otherStreams) ?: org.tegro.yamp.data.provider.yandex.YandexStreamResolver(resolver, dispatchers, { null }, account)
             },
-            nextFetch
+            nextFetch,
+            audioRouter
         )
         controllers += controller
         await { controller.awaitRestoredSession() }
@@ -346,6 +348,26 @@ class PlaybackControllerTest {
         controller.enqueueNext(track("3"))
         controller.settle()
         assertEquals("the Jellyfin queue took no Yandex track", listOf("j1", "j2"), controller.activeQueue.value!!.tracks.map { it.ref.id })
+    }
+
+    /** The connection goes: Robolectric's network loses its internet capability. */
+    private fun goOffline() {
+        val connectivity = context.getSystemService(ConnectivityManager::class.java)
+        shadowOf(connectivity).setNetworkCapabilities(connectivity.activeNetwork, ShadowNetworkCapabilities.newInstance())
+    }
+
+    @Test
+    fun offlineAJellyfinTrackAllInTheDiskCachePlaysAndOneNotThereIsPassedOver() {
+        // gap (b): with no connection, a fully cached Jellyfin stream plays by its key; a track not on the device is skipped
+        val (controller, home, jellyfinTracks) = jellyfinSetup("controller_jellyfin_offline")
+        nextFetch.cached["j2"] = org.tegro.yamp.data.player.StreamCache.CachedState.COMPLETE
+        goOffline()
+
+        controller.playInAccount(home.id, jellyfinTracks, "j1")
+        controller.settle()
+
+        assertEquals("http://10.0.2.2:8096/Audio/j2/universal", engine.played.lastOrNull()?.url)
+        assertTrue("j1 is not on the device: never handed to the engine", engine.played.none { it.url?.endsWith("/j1/universal") == true })
     }
 
     @Test
@@ -1511,4 +1533,24 @@ class PlaybackControllerTest {
     }
 
     // endregion
+
+    @Test
+    fun whileTheAudioRouterRoutesTransitionsAreHardCuts() {
+        val routed = kotlinx.coroutines.flow.MutableStateFlow(false)
+        val router = object : AudioRouterWatch {
+            override val installed = true
+            override val active = routed
+        }
+        val journal = PlaybackJournal(now = { 0L })
+        controller(journal = journal, audioRouter = router)
+        await { }
+        assertEquals("the user's crossfade applies", 3_000L, engine.crossfadeMs)
+        routed.value = true
+        await { }
+        assertEquals("hard cuts while routed", 0L, engine.crossfadeMs)
+        assertTrue(journal.state.value.events.any { it.kind == PlaybackJournal.Kind.ROUTER && it.detail == "active → hard cuts" })
+        routed.value = false
+        await { }
+        assertEquals("back to the user's crossfade", 3_000L, engine.crossfadeMs)
+    }
 }

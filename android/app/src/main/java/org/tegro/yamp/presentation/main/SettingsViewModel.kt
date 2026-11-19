@@ -44,7 +44,8 @@ class SettingsViewModel @Inject constructor(
     private val streamCache: org.tegro.yamp.data.player.StreamCache,
     @param:dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
     qualityStore: org.tegro.yamp.data.player.AccountQualityStore,
-    private val accountContext: org.tegro.yamp.data.account.AccountContext
+    private val accountContext: org.tegro.yamp.data.account.AccountContext,
+    private val audioRouter: org.tegro.yamp.data.player.AudioRouterWatch
 ) : ViewModel() {
 
     /** The quality the playing account gets on the network in use: its own choice, else the global one (summary line). */
@@ -61,7 +62,7 @@ class SettingsViewModel @Inject constructor(
         val carLayout: Boolean = false, val nextThree: Boolean = false, val likeGestures: Boolean = false
     )
     private data class Scale(val auto: Boolean, val manual: Float, val animations: AnimationMode)
-    private data class Library(val reserveMb: Int, val reserveUsed: Long, val autoDownload: Boolean, val cacheBytes: Long, val journal: PlaybackJournal.Snapshot = PlaybackJournal.Snapshot(), val diagnosticLog: Boolean = false, val groupQueues: Boolean = true, val streamCacheMb: Int = SettingsRepository.DEFAULT_STREAM_CACHE_MB, val streamCacheUsed: Long = 0L)
+    private data class Library(val reserveMb: Int, val reserveUsed: Long, val cacheBytes: Long, val journal: PlaybackJournal.Snapshot = PlaybackJournal.Snapshot(), val diagnosticLog: Boolean = false, val groupQueues: Boolean = true, val streamCacheMb: Int = SettingsRepository.DEFAULT_STREAM_CACHE_MB, val streamCacheUsed: Long = 0L)
 
     private val sound: Flow<Sound> = combine(
         combine(effectiveCompatible, settings.crossfadeSeconds, settings.normalizeVolume) { c, f, n -> Sound(c, f, n, StartMusic.OFF, false, false) },
@@ -87,8 +88,8 @@ class SettingsViewModel @Inject constructor(
     private val streamCacheTick = kotlinx.coroutines.flow.MutableStateFlow(0)
 
     private val library: Flow<Library> = combine(
-        combine(settings.roadReserveMb, roadReserve.usedBytes, settings.autoDownloadLikedTracks, downloadManager.cacheSizeBytes) { mb, used, auto, cache ->
-            Library(mb, used, auto, cache)
+        combine(settings.roadReserveMb, roadReserve.usedBytes, downloadManager.cacheSizeBytes) { mb, used, cache ->
+            Library(mb, used, cache)
         },
         journal.state,
         settings.diagnosticLog,
@@ -108,6 +109,8 @@ class SettingsViewModel @Inject constructor(
             transitionFadeThenRise = s.fadeThenRise,
             equalizerAvailable = equalizer.isAvailable(),
             powerampEqualizer = equalizer.powerampEqualizerInstalled(),
+            audioRouterInstalled = audioRouter.installed,
+            audioRouterActive = audioRouter.active.value,
             startMusic = s.startMusic,
             bluetoothAutoplay = s.bluetooth,
             skipExplicit = s.explicit,
@@ -116,7 +119,6 @@ class SettingsViewModel @Inject constructor(
             reserveUsedBytes = lib.reserveUsed,
             streamCacheMb = lib.streamCacheMb,
             streamCacheUsedBytes = lib.streamCacheUsed,
-            autoDownload = lib.autoDownload,
             cacheSizeBytes = lib.cacheBytes,
             journal = lib.journal,
             diagnosticLog = lib.diagnosticLog,
@@ -191,13 +193,6 @@ class SettingsViewModel @Inject constructor(
 
     fun clearReserve() {
         viewModelScope.launch { roadReserve.clear() }
-    }
-
-    fun setAutoDownload(enabled: Boolean) {
-        viewModelScope.launch {
-            settings.setAutoDownloadLikedTracks(enabled)
-            if (enabled) downloadScheduler.downloadAllLiked()
-        }
     }
 
     fun upgradeDownloads() {

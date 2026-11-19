@@ -180,7 +180,7 @@ class PromoScreenshots {
     fun settings() = shoot("settings") {
         org.tegro.yamp.presentation.main.components.SettingsSheet(
             state = org.tegro.yamp.presentation.main.components.SettingsUiState(
-                accountName = "Алексей", hasPlus = true, crossfadeSeconds = 3, autoDownload = true, cacheSizeBytes = 1_288_000_000L
+                accountName = "Алексей", hasPlus = true, crossfadeSeconds = 3, cacheSizeBytes = 1_288_000_000L
             ),
             actions = org.tegro.yamp.presentation.main.components.SettingsActions(),
             onDismiss = {}

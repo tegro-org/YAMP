@@ -26,8 +26,24 @@ class AccountViewModel @Inject constructor(
     private val qualityStore: org.tegro.yamp.data.player.AccountQualityStore,
     private val soundMode: org.tegro.yamp.data.player.SoundMode,
     private val playbackController: org.tegro.yamp.data.player.PlaybackController,
-    private val accountContextRef: org.tegro.yamp.data.account.AccountContext
+    private val accountContextRef: org.tegro.yamp.data.account.AccountContext,
+    private val settings: org.tegro.yamp.domain.repository.SettingsRepository,
+    private val downloadScheduler: org.tegro.yamp.data.download.DownloadScheduler
 ) : ViewModel() {
+
+    /** Auto-download per account; an account without its own choice keeps the former global switch. */
+    val autoDownloads: StateFlow<Map<String, Boolean>> =
+        settings.accountAutoDownloads.stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+    val globalAutoDownload: StateFlow<Boolean> =
+        settings.autoDownloadLikedTracks.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    /** Saves [account]'s auto-download; turned on, its liked tracks not on the device yet start downloading. */
+    fun setAutoDownload(account: String, enabled: Boolean) {
+        viewModelScope.launch {
+            settings.setAccountAutoDownload(account, enabled)
+            if (enabled) downloadScheduler.downloadAllLiked(auto = true)
+        }
+    }
 
     /** Quality per account (canvas `qa-*`): every stored choice; an account without one follows [globalCompatible]. */
     val qualityChoices: StateFlow<Map<String, Boolean>> = qualityStore.choices

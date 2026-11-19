@@ -144,6 +144,10 @@ class MainViewModel @Inject constructor(
 
         viewModelScope.launch { session.refreshProfileIfIncomplete() }
 
+        // Once per start: favourites set on a Jellyfin server (YAMP cannot set them) and likes from other devices
+        // arrive for the accounts with auto-download on; nothing runs for the others
+        viewModelScope.launch { downloadScheduler.downloadAllLiked(auto = true) }
+
         // Cached library instantly, then exactly one network sync per authorization
         viewModelScope.launch {
             session.loadCached()

@@ -144,6 +144,8 @@ internal fun AccountHost(
     val qualityChoices by accountVm.qualityChoices.collectAsStateWithLifecycle()
     val globalCompatible by accountVm.globalCompatible.collectAsStateWithLifecycle()
     val nowMetered by accountVm.nowMetered.collectAsStateWithLifecycle()
+    val autoDownloads by accountVm.autoDownloads.collectAsStateWithLifecycle()
+    val globalAutoDownload by accountVm.globalAutoDownload.collectAsStateWithLifecycle()
     val context = androidx.compose.ui.platform.LocalContext.current
     var jellyfinSignIn by remember { mutableStateOf(false) }
     val qualityUi = org.tegro.yamp.presentation.account.AccountQualityUi(
@@ -158,7 +160,10 @@ internal fun AccountHost(
                         .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                 )
             }
-        }
+        },
+        autoDownloads = autoDownloads,
+        globalAuto = globalAutoDownload,
+        onSetAuto = accountVm::setAutoDownload
     )
     qualitySheet?.let { (key, name, jellyfin) ->
         val big = with(androidx.compose.ui.platform.LocalDensity.current) {

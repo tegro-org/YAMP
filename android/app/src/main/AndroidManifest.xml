@@ -23,6 +23,8 @@
         </intent>
         <!-- Poweramp Equalizer: a hint for its per-app settings, and a way to open it, in Settings → Playback -->
         <package android:name="com.maxmpz.equalizer" />
+        <!-- MonJaro Audio Router: while it routes to a USB amplifier, transitions fall back to hard cuts -->
+        <package android:name="com.usbswitch" />
     </queries>
 
     <application

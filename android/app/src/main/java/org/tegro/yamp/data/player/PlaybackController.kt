@@ -10,6 +10,7 @@ import org.tegro.yamp.domain.account.AccountId
 import org.tegro.yamp.domain.account.accountId
 import org.tegro.yamp.domain.model.WaveTuning
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import org.tegro.yamp.utils.prefetchCovers
 import org.tegro.yamp.utils.CoverSize
 import org.tegro.yamp.data.provider.yandex.reserve.RoadReserve
@@ -121,7 +122,9 @@ class PlaybackController @Inject internal constructor(
     /** Streams are resolved here, never in the engine (D74): it plays what it is handed. */
     private val streams: org.tegro.yamp.data.provider.StreamResolvers,
     /** The next track's whole file is fetched to disk ahead of time (D86). */
-    private val nextFetch: NextTrackFetch
+    private val nextFetch: NextTrackFetch,
+    /** MonJaro Audio Router: while it routes to USB, transitions are hard cuts (it rewrites player volume). */
+    private val audioRouter: AudioRouterWatch = AudioRouterWatch.None
 ) {
     /** The account context's API (the active queue's account, D56): My Wave and its tuning. */
     private val api: YandexMusicApi get() = clients.api(contextAccount)
@@ -410,7 +413,12 @@ class PlaybackController @Inject internal constructor(
         playerRepository.playbackErrorEvent.onEach { onPlaybackFailure(it) }.launchIn(scope)
         // A player failed on a stream (a standby, a fading tail): its link is spent, the next start asks afresh
         playerRepository.staleStreamEvent.onEach { streams.forAccount(playbackAccount).invalidate(refOf(it)) }.launchIn(scope)
-        settingsRepository.crossfadeSeconds
+        // The router rewrites every routed player's volume every 2.5 s: crossfades and fades can't work while it routes
+        audioRouter.active
+            .drop(1)
+            .onEach { journal.record(PlaybackJournal.Kind.ROUTER, null, if (it) "active → hard cuts" else "inactive → transitions as set") }
+            .launchIn(scope)
+        combine(settingsRepository.crossfadeSeconds, audioRouter.active) { seconds, routed -> if (routed) 0 else seconds }
             .onEach { playerRepository.setCrossfadeDuration(it * 1000L) }
             .launchIn(scope)
         settingsRepository.transitionFadeThenRise
@@ -1745,7 +1753,8 @@ class PlaybackController @Inject internal constructor(
         }
 
         val ref = track.ref
-        val downloaded = preloadManager.hasPlayableCopy(trackId)
+        // Offline, a stream all in the disk cache plays like a copy: the resolver hands it by its key (gap b)
+        val downloaded = preloadManager.hasPlayableCopy(trackId) || isOffline() && fullyCached(trackId)
         if (downloaded) {
             publishQuality(trackId)
             streamingTrackId = null
@@ -2051,7 +2060,14 @@ class PlaybackController @Inject internal constructor(
 
     private fun currentLink(): LinkState = if (isOffline()) LinkState.NONE else link.state
 
-    private fun isOnDevice(trackId: String): Boolean = preloadManager.hasPlayableCopy(trackId) || reserve.has(trackId)
+    private fun isOnDevice(trackId: String): Boolean = preloadManager.hasPlayableCopy(trackId) || reserve.has(trackId) || fullyCached(trackId)
+
+    /**
+     * Every byte of a Jellyfin track's stream is in the disk cache: it plays with no connection (gap b) — its
+     * resolver rebuilds the stream by its key. A Yandex one needs the signed link seen earlier, which a restart loses.
+     */
+    private fun fullyCached(trackId: String): Boolean = playbackAccount?.provider == org.tegro.yamp.domain.account.Provider.JELLYFIN &&
+        nextFetch.cachedState(playbackAccount?.value, trackId) == StreamCache.CachedState.COMPLETE
 
     /**
      * No connection and the queue has nothing more on the device: the rest of the reserve (what has not
@@ -2149,6 +2165,7 @@ class PlaybackController @Inject internal constructor(
             val stream = when {
                 // The resolver hands the downloaded copy first
                 preloadManager.hasPlayableCopy(nextId) -> streams.forAccount(playbackAccount).resolve(ref).getOrNull()
+                currentLink() == LinkState.NONE && fullyCached(nextId) -> streams.forAccount(playbackAccount).resolve(ref).getOrNull()
                 RoadPlan.originFor(currentLink(), link.mayTryStream(), reserve.has(nextId)) == TrackOrigin.COPY -> copyStream(nextId)
                 currentLink() == LinkState.NONE -> null
                 else -> streams.forAccount(playbackAccount).resolve(ref).getOrNull()?.let { stream ->

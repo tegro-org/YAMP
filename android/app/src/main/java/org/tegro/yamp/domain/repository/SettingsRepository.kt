@@ -4,6 +4,7 @@ import org.tegro.yamp.domain.model.StartPage
 import org.tegro.yamp.domain.model.StartMusic
 import org.tegro.yamp.domain.model.AnimationMode
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 
 interface SettingsRepository {
     /**
@@ -53,6 +54,18 @@ interface SettingsRepository {
      */
     val accountQualities: Flow<Map<String, Boolean>> get() = kotlinx.coroutines.flow.flowOf(emptyMap())
     suspend fun setAccountQuality(account: String, metered: Boolean, compatible: Boolean) {}
+
+    /**
+     * Auto-download of liked tracks (Jellyfin: favourites) per account (Settings → Accounts → the account), keyed by
+     * [accountAutoDownloadKey]. An account without a choice keeps the former global [autoDownloadLikedTracks] value,
+     * so every account starts where the single switch was.
+     */
+    val accountAutoDownloads: Flow<Map<String, Boolean>> get() = kotlinx.coroutines.flow.flowOf(emptyMap())
+    suspend fun setAccountAutoDownload(account: String, enabled: Boolean) {}
+
+    /** Whether [account]'s liked tracks download by themselves: its own choice, else the former global switch. */
+    suspend fun autoDownloadFor(account: String): Boolean =
+        accountAutoDownloads.first()[accountAutoDownloadKey(account)] ?: autoDownloadLikedTracks.first()
 
     /** What plays by itself when the app starts. */
     val startMusic: Flow<StartMusic>
@@ -153,6 +166,9 @@ interface SettingsRepository {
     companion object {
         /** The key of one per-account quality choice: the account id and the kind of network. */
         fun accountQualityKey(account: String, metered: Boolean) = "quality|$account|" + if (metered) "metered" else "unmetered"
+
+        /** The key of one account's auto-download choice. */
+        fun accountAutoDownloadKey(account: String) = "autodl|$account"
 
         const val DEFAULT_CROSSFADE_SECONDS = 3
         const val MAX_CROSSFADE_SECONDS = 12

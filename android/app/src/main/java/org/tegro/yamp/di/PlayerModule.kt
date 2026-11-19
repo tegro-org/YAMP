@@ -101,9 +101,13 @@ object PlayerModule {
     @Singleton
     fun provideStreamCache(
         @ApplicationContext context: Context,
-        settings: org.tegro.yamp.domain.repository.SettingsRepository
+        settings: org.tegro.yamp.domain.repository.SettingsRepository,
+        journal: org.tegro.yamp.data.player.PlaybackJournal
     ): StreamCache {
         val cache = StreamCache.create(context)
+        cache.onOfflineStart = { key ->
+            journal.record(org.tegro.yamp.data.player.PlaybackJournal.Kind.CACHE, detail = "offline start, track ${key.split('|').getOrNull(1) ?: "?"}")
+        }
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             settings.streamCacheMb.collect { cache.maxBytes = StreamCache.bytesOf(it) }
         }
@@ -151,4 +155,9 @@ object PlayerModule {
 
     @Provides
     fun provideSessionPlayers(engine: org.tegro.yamp.data.repository.PlayerRepositoryImpl): org.tegro.yamp.data.player.SessionPlayers = engine
+
+    /** MonJaro Audio Router awareness (hard cuts while it routes to USB). */
+    @Provides
+    @Singleton
+    fun provideAudioRouterWatch(detector: org.tegro.yamp.data.player.AudioRouterDetector): org.tegro.yamp.data.player.AudioRouterWatch = detector
 }

@@ -53,6 +53,9 @@
     <string name="settings_duck_announcements">Не останавливать при подсказках</string>
     <string name="settings_poweramp_eq">Poweramp Equalizer</string>
     <string name="settings_poweramp_eq_hint">Known Players → YAMP: «Затухание» выкл. — оно забирало звук и ставило YAMP на паузу на магнитолах; «Без DVC» вкл. — громкость YAMP работает, кроссфейд, затухания и переключения чистые. Остальные два параметра оставьте как есть. Нажмите, чтобы открыть</string>
+    <string name="settings_audio_router">MonJaro Audio Router</string>
+    <string name="settings_audio_router_hint">Пока включён его режим «ЗВУК НА USB», он каждые несколько секунд перезаписывает громкость плееров — кроссфейд и затухания работать не могут. При подключённом USB-усилителе YAMP сам переключается на резкую смену треков</string>
+    <string name="settings_audio_router_active">Подключён USB-выход звука: треки сейчас сменяются резко (без кроссфейда и затуханий) — роутер перезаписывает громкость плеера, пока ведёт звук на USB</string>
     <string name="settings_resume_quiet">Продолжать, если ничего не играет</string>
     <string name="settings_resume_quiet_hint">Когда другое приложение забирает звук, но ничего не играет (так делает эквалайзер на головном устройстве), музыка продолжится через мгновение. Только если она играла, никогда с паузы</string>
     <string name="settings_duck_announcements_hint">Когда говорит навигатор или радар-детектор, музыка становится тише, а не встаёт на паузу. Телефонный звонок по-прежнему ставит паузу</string>
@@ -212,6 +215,9 @@
     <string name="quality_original_note">Файл как на сервере: перемотка работает, сервер не перекодирует.</string>
     <string name="quality_now_metered">Сейчас: лимитная</string>
     <string name="quality_now_unmetered">Сейчас: безлимитная</string>
+    <string name="account_auto_download_liked">Скачивать «Мне нравится»</string>
+    <string name="account_auto_download_favourites">Скачивать избранное</string>
+    <string name="account_auto_download_hint">Новые сохраняются для прослушивания офлайн.</string>
     <string name="quality_next_track">Смена сети действует со следующего трека.</string>
     <string name="quality_car_title">Wi-Fi в машине как лимитная сеть</string>
     <string name="quality_car_text">Головное устройство видит 4G-роутер в машине как обычный Wi-Fi. Отметьте эту сеть как лимитную один раз — и YAMP будет брать «лимитное» качество в машине, а другое дома.</string>
@@ -221,7 +227,7 @@
     <string name="quality_short_original">оригинал</string>
     <string name="quality_short_converted">MP3 320</string>
     <string name="quality_per_account">Качество выбирается для каждого аккаунта: Настройки → Аккаунты → аккаунт.</string>
-    <string name="quality_tap_account">Нажмите на аккаунт, чтобы выбрать его качество.</string>
+    <string name="quality_tap_account">Нажмите на аккаунт: качество и автоскачивание.</string>
     <string name="wide_menu_more">Ещё</string>
     <string name="wide_menu_quality">Качество · %1$s</string>
     <string name="wide_menu_quality_unknown">Качество</string>

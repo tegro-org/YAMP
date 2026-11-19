@@ -79,7 +79,6 @@ class CarLayoutTest {
     @Test
     fun aTallerScreenGivesTheControlsTheRestAndAWideOneCentresTheBlock() {
         // A 4:3 unit (1024×768): no spare width — the block ends at the minimum far padding, the controls take the rest.
-        // (1280×800 still has a little spare width once the whole layout scales to the screen's width: centred.)
         val tall = WideSpec.Car.let { spec -> val s = spec.scaleFor(1024f, 768f); wideGeometryOf(spec, 1024f / s, 768f / s, nextThree = true, isRadio = false) to 1024f / s }
         assertEquals(tall.second - WideSpec.Car.pad, tall.first.coverX + tall.first.cover, 0.5f)
         assertTrue(tall.first.controlsW < WideSpec.Car.driverW / WideSpec.Car.baseW * tall.second)
@@ -92,6 +91,44 @@ class CarLayoutTest {
         val areaStart = spec.pad + wide.controlsW
         val areaEnd = w - spec.pad
         assertEquals((areaStart + areaEnd) / 2f, wide.coverX + wide.cover / 2f, 0.5f)
+    }
+
+    /** Layout units of a [w]×[h] dp screen, and its geometry. */
+    private fun geometry(spec: WideSpec, w: Float, h: Float, three: Boolean = true): Pair<Float, org.tegro.yamp.presentation.player.WideGeometry> {
+        val s = spec.scaleFor(w, h)
+        return (w / s) to wideGeometryOf(spec, w / s, h / s, nextThree = three, isRadio = false)
+    }
+
+    private fun isTaller(spec: WideSpec, w: Float, h: Float, three: Boolean = true): Boolean {
+        val (wu, g) = geometry(spec, w, h, three)
+        return kotlin.math.abs(wu - spec.pad - (g.coverX + g.cover)) < 0.5f
+    }
+
+    @Test
+    fun belowTheTallerRatioTheBlockEndsAtTheFarPadding() {
+        val car = WideSpec.Car
+        val phone = WideSpec.Phone
+        // 16:10 and 4:3 are taller (w/h < 1.66): the block ends at the minimum far padding, the controls take the rest
+        for ((w, h) in listOf(1280f to 800f, 1920f to 1200f, 1024f to 768f)) {
+            assertTrue("taller $w×$h", isTaller(car, w, h, three = true))
+            assertTrue("taller $w×$h, one next", isTaller(car, w, h, three = false))
+        }
+        // Foldables on their side: Fold 5 inner ≈ 830×690 dp, Fold 8 inner 2448×1848 px @404 ppi ≈ 969×731 dp
+        assertTrue("Fold 5 inner", isTaller(phone, 830f, 690f))
+        assertTrue("Fold 8 inner", isTaller(phone, 969f, 731f))
+        assertTrue("Fold 8 inner, one next", isTaller(phone, 969f, 731f, three = false))
+        // The head unit (1760×720 at the auto scale ≈ 1173×480 dp) and wider: centred beside the capped controls
+        for ((w, h) in listOf(1173f to 480f, 1760f to 720f, 2400f to 720f)) {
+            val (wu, g) = geometry(car, w, h)
+            assertEquals("capped $w×$h", car.driverW / car.baseW * wu, g.controlsW, 0.5f)
+            assertEquals("centred $w×$h", (car.pad + g.controlsW + wu - car.pad) / 2f, g.coverX + g.cover / 2f, 0.5f)
+        }
+        // Every result keeps the full height and the minimum far padding
+        for ((w, h) in listOf(1280f to 800f, 1920f to 1200f, 969f to 731f, 466f to 737f, 2340f / 2.625f to 1080f / 2.625f)) {
+            val spec = if (w > 1000f) car else phone
+            val (wu, g) = geometry(spec, w, h)
+            assertTrue("inside $w×$h", g.coverX + g.cover <= wu - spec.pad + 0.01f && g.coverTop >= spec.top)
+        }
     }
 
     @Test

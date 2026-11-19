@@ -265,8 +265,6 @@
     <string name="settings_crossfade">Кроссфейд</string>
     <string name="settings_crossfade_off">Выкл.</string>
     <string name="settings_crossfade_seconds">%1$d с</string>
-    <string name="settings_auto_download">Автоскачивание</string>
-    <string name="settings_auto_download_hint">Сохранять «Мне нравится» офлайн</string>
     <string name="settings_download_all">Скачать всю коллекцию</string>
     <string name="settings_storage">Хранилище</string>
     <string name="settings_storage_value">Скачано %1$s</string>
@@ -371,6 +369,9 @@
     <string name="settings_duck_announcements">Keep playing under announcements</string>
     <string name="settings_poweramp_eq">Poweramp Equalizer</string>
     <string name="settings_poweramp_eq_hint">Known Players → YAMP: «Затухание» (Fade) off — it took the sound focus and paused YAMP on head units; «Без DVC» on — YAMP\'s own volume works, so crossfades, fades and skips are clean. Leave the other two options as they are. Tap to open it</string>
+    <string name="settings_audio_router">MonJaro Audio Router</string>
+    <string name="settings_audio_router_hint">While its «ЗВУК НА USB» routing is on, it overrides each player\'s volume every few seconds, so crossfades and fades can\'t work. With a USB amplifier connected YAMP switches to hard cuts by itself</string>
+    <string name="settings_audio_router_active">A USB audio output is connected: tracks change with hard cuts now (no crossfade or fades), because the router overrides the player volume while it routes to USB</string>
     <string name="settings_resume_quiet">Resume when nothing else plays</string>
     <string name="settings_resume_quiet_hint">When another app takes the sound but nothing plays (an equalizer on a head unit does that), the music goes on a moment later. Only if it was playing, never from a pause</string>
     <string name="settings_duck_announcements_hint">A navigator or a radar detector speaking makes the music quieter instead of pausing it. A phone call still pauses</string>
@@ -669,6 +670,9 @@
     <string name="quality_original_note">The file as it is on the server: seekable, no work for the server.</string>
     <string name="quality_now_metered">Now: metered</string>
     <string name="quality_now_unmetered">Now: unmetered</string>
+    <string name="account_auto_download_liked">Auto-download liked</string>
+    <string name="account_auto_download_favourites">Auto-download favourites</string>
+    <string name="account_auto_download_hint">New ones are saved for offline listening.</string>
     <string name="quality_next_track">A network change applies from the next track.</string>
     <string name="quality_car_title">Car Wi-Fi as metered</string>
     <string name="quality_car_text">The head unit sees the car’s 4G router as ordinary Wi-Fi. Mark that network as metered once, and YAMP uses the “Metered” quality in the car and the other one at home.</string>
@@ -678,7 +682,7 @@
     <string name="quality_short_original">original</string>
     <string name="quality_short_converted">MP3 320</string>
     <string name="quality_per_account">Quality is chosen per account: Settings → Accounts → the account.</string>
-    <string name="quality_tap_account">Tap an account for its quality.</string>
+    <string name="quality_tap_account">Tap an account for its quality and auto-download.</string>
     <string name="wide_menu_more">More</string>
     <string name="wide_menu_quality">Quality · %1$s</string>
     <string name="wide_menu_quality_unknown">Quality</string>

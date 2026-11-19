@@ -50,10 +50,17 @@ class DownloadScheduler @Inject constructor(
         .getWorkInfosForUniqueWorkFlow(UPGRADE_WORK)
         .map { infos -> infos.any { it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED } }
 
-    suspend fun downloadAllLiked() {
+    /**
+     * "Download all collection" (the user's button): every account's liked tracks / favourites. With [auto] (a new
+     * like, a likes sync, an account's switch turned on) only the accounts whose auto-download is on take part.
+     */
+    suspend fun downloadAllLiked(auto: Boolean = false) {
         val request = OneTimeWorkRequestBuilder<LikedTracksDownloadWorker>()
             .setConstraints(constraints())
-            .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+            .setInputData(workDataOf(LikedTracksDownloadWorker.KEY_AUTO to auto))
+            // Expedited work posts its notification before it knows there is anything to do (API < 31): an automatic
+            // run, often with nothing to fetch, stays ordinary and goes foreground only when it has tracks
+            .apply { if (!auto) setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST) }
             .build()
         workManager.enqueueUniqueWork(ALL_WORK, ExistingWorkPolicy.KEEP, request)
     }
@@ -67,10 +74,11 @@ class DownloadScheduler @Inject constructor(
         workManager.enqueueUniqueWork(UPGRADE_WORK, ExistingWorkPolicy.KEEP, request)
     }
 
-    suspend fun downloadTrack(trackId: String) {
+    /** One liked track; with [auto] (a new like) only when its account's auto-download is on. */
+    suspend fun downloadTrack(trackId: String, auto: Boolean = false) {
         val request = OneTimeWorkRequestBuilder<LikedTracksDownloadWorker>()
             .setConstraints(constraints())
-            .setInputData(workDataOf(LikedTracksDownloadWorker.KEY_TRACK_ID to trackId))
+            .setInputData(workDataOf(LikedTracksDownloadWorker.KEY_TRACK_ID to trackId, LikedTracksDownloadWorker.KEY_AUTO to auto))
             .build()
         workManager.enqueueUniqueWork("$TRACK_WORK_PREFIX$trackId", ExistingWorkPolicy.KEEP, request)
     }

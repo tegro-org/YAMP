@@ -357,7 +357,7 @@ class ScreenshotTest {
 
     private val settingsState = org.tegro.yamp.presentation.main.components.SettingsUiState(
         accountName = "Тестовый Аккаунт", hasPlus = true, crashReports = 0,
-        crossfadeSeconds = 3, reserveMb = 100, reserveUsedBytes = 64L * 1024 * 1024, autoDownload = true, cacheSizeBytes = 1_288_000_000L,
+        crossfadeSeconds = 3, reserveMb = 100, reserveUsedBytes = 64L * 1024 * 1024, cacheSizeBytes = 1_288_000_000L,
         equalizerAvailable = true,
         storage = org.tegro.yamp.data.download.StorageStatus(cardAvailable = true, onCard = false, cardFreeBytes = 21_400_000_000L)
     )

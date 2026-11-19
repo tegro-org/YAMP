@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DirectionsCar
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.NetworkCell
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Wifi
@@ -47,6 +48,7 @@ import org.tegro.yamp.presentation.hifi.AppDialog
 import org.tegro.yamp.presentation.hifi.HiFi
 import org.tegro.yamp.presentation.hifi.HiFiDialogDefaults
 import org.tegro.yamp.presentation.hifi.HiFiSegmented
+import org.tegro.yamp.presentation.hifi.HiFiSwitch
 import org.tegro.yamp.presentation.hifi.MetalPillButton
 
 /**
@@ -60,8 +62,15 @@ class AccountQualityUi(
     val global: Boolean,
     val nowMetered: Boolean,
     val onSet: (account: String, metered: Boolean, compatible: Boolean) -> Unit,
-    val onOpenWifi: () -> Unit
+    val onOpenWifi: () -> Unit,
+    /** Auto-download per account, keyed by [SettingsRepository.accountAutoDownloadKey]; without a choice [globalAuto]. */
+    val autoDownloads: Map<String, Boolean> = emptyMap(),
+    val globalAuto: Boolean = false,
+    val onSetAuto: (account: String, enabled: Boolean) -> Unit = { _, _ -> }
 ) {
+    /** Whether [account]'s liked tracks (Jellyfin: favourites) download by themselves. */
+    fun autoDownload(account: String): Boolean = autoDownloads[SettingsRepository.accountAutoDownloadKey(account)] ?: globalAuto
+
     /** [account]'s "compatible" for [metered] networks as it applies: its own choice, else the global one. */
     fun compatible(account: String, metered: Boolean): Boolean =
         choices[SettingsRepository.accountQualityKey(account, metered)] ?: global
@@ -160,7 +169,39 @@ fun AccountQualityContent(account: String, jellyfin: Boolean, quality: AccountQu
             lineHeight = if (big) 22.sp else 16.sp, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
         )
     }
+    AutoDownloadRow(jellyfin, quality.autoDownload(account), big) { quality.onSetAuto(account, it) }
     CarWifiHint(quality.onOpenWifi, big)
+}
+
+/** The account's own auto-download: its new likes (Jellyfin: favourites) are saved for offline listening. */
+@Composable
+private fun AutoDownloadRow(jellyfin: Boolean, checked: Boolean, big: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        Modifier
+            .padding(top = if (big) 14.dp else 10.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(Color.White.copy(alpha = 0.05f))
+            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(18.dp))
+            .clickable { onChange(!checked) }
+            .padding(horizontal = if (big) 22.dp else 16.dp, vertical = if (big) 18.dp else 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(Icons.Default.Download, null, tint = HiFi.TextSecondary, modifier = Modifier.size(if (big) 26.dp else 20.dp))
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                stringResource(if (jellyfin) R.string.account_auto_download_favourites else R.string.account_auto_download_liked),
+                color = Color.White, fontSize = if (big) 21.sp else 15.sp, fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                stringResource(R.string.account_auto_download_hint), color = HiFi.TextTertiary,
+                fontSize = if (big) 16.sp else 12.sp, lineHeight = if (big) 22.sp else 16.sp
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        HiFiSwitch(checked = checked, onCheckedChange = onChange)
+    }
 }
 
 @Composable

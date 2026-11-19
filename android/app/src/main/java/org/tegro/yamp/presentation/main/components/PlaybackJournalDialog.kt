@@ -121,6 +121,7 @@ internal fun eventText(e: PlaybackJournal.Event): String {
         PlaybackJournal.Kind.QUALITY -> "quality ${detail.orEmpty()}"
         PlaybackJournal.Kind.FADE -> "fade ${detail.orEmpty()}"
         PlaybackJournal.Kind.JUMP -> "jump ${detail.orEmpty()}"
+        PlaybackJournal.Kind.ROUTER -> "router ${detail.orEmpty()}"
     }
     return listOfNotNull(body, title).joinToString(" ")
 }

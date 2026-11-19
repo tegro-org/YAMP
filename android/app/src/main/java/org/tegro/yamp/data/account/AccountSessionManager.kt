@@ -21,12 +21,10 @@ import org.tegro.yamp.data.player.PlaybackController
 import org.tegro.yamp.data.provider.yandex.repository.LibraryRepository
 import org.tegro.yamp.data.provider.yandex.repository.UserPlaylistsRepository
 import org.tegro.yamp.domain.repository.AuthRepository
-import org.tegro.yamp.domain.repository.SettingsRepository
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -41,7 +39,6 @@ import javax.inject.Singleton
 class AccountSessionManager @Inject constructor(
     private val clients: YandexClients,
     private val authRepository: AuthRepository,
-    private val settingsRepository: SettingsRepository,
     private val playbackController: PlaybackController,
     private val libraryRepository: LibraryRepository,
     private val playlistsRepository: UserPlaylistsRepository,
@@ -49,7 +46,8 @@ class AccountSessionManager @Inject constructor(
     private val downloadManager: TrackDownloadManager,
     private val downloadScheduler: DownloadScheduler,
     private val httpClient: dagger.Lazy<okhttp3.OkHttpClient>,
-    private val accountKeys: AccountKeyMigration
+    private val accountKeys: AccountKeyMigration,
+    private val streamCache: org.tegro.yamp.data.player.StreamCache
 ) {
     /** The account context's API; calls name their own account from Phase 2a step 4 on. */
     private val api: YandexMusicApi get() = clients.current()
@@ -107,11 +105,11 @@ class AccountSessionManager @Inject constructor(
         playbackController.primeWave()
     }
 
-    /** Likes only (pull-to-refresh); new likes are downloaded when auto-download is on. */
+    /** Likes only (pull-to-refresh); new likes are downloaded when the account's auto-download is on. */
     suspend fun syncLikes() {
         libraryRepository.loadCached()
         val changed = libraryRepository.syncLikes()
-        if (changed && settingsRepository.autoDownloadLikedTracks.first()) downloadScheduler.downloadAllLiked()
+        if (changed) downloadScheduler.downloadAllLiked(auto = true)
     }
 
     /** Refreshes account subscription status (hasPlus) and profile info from the server. */
@@ -227,6 +225,8 @@ class AccountSessionManager @Inject constructor(
                 authRepository.rememberRemovedAccount(id.value, account.displayName.ifBlank { account.login })
                 if (!keepCredentials) {
                     SignOutPlan.downloadsToRemove(cacheManager.loadLikedTracks(id.value).map { it.idString }, kept).forEach { downloadManager.removeTrack(it) }
+                    // Its streams on disk and the links kept with them go too
+                    streamCache.removeAccount(id.value)
                 }
                 // Only this account's rows: the shared ones hold the hidden queues' track details
                 cacheManager.clearUserCache(id.value)

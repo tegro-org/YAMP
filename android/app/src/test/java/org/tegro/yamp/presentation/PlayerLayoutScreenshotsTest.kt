@@ -230,6 +230,22 @@ class PlayerLayoutScreenshotsTest {
         snap("player_fold_inner_land")
     }
 
+    /** Galaxy Z Fold 8, the cover screen (1248×1972 px @428 ppi ≈ 466×737 dp, passport-like): the portrait player. */
+    @Test
+    @Config(qualifiers = "w466dp-h737dp-port-xxhdpi")
+    fun fold8CoverScreen() {
+        show { Phone(nextThree = true) }
+        snap("player_fold8_cover_next3")
+    }
+
+    /** Galaxy Z Fold 8, the inner screen on its side (2448×1848 px, 4:3 @404 ppi ≈ 969×731 dp): the taller branch. */
+    @Test
+    @Config(qualifiers = "w969dp-h731dp-land-xxhdpi")
+    fun fold8InnerScreenLandscape() {
+        show { Phone(nextThree = true) }
+        snap("player_fold8_inner_land_next3")
+    }
+
     /** Z Fold 5 cover screen on its side (2316×904 px, ~926×362 dp): the single «Далее» card never clips its title. */
     @Test
     @Config(qualifiers = "w926dp-h362dp-land-400dpi")

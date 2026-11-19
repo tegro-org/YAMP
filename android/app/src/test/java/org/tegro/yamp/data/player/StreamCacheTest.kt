@@ -116,6 +116,56 @@ class StreamCacheTest {
     }
 
     @Test
+    fun aFullyCachedTrackPlaysOfflineAfterARestart() = runBlocking {
+        val data = bytes(200_000, 9)
+        val uri = "https://cdn.example/a.mp3?sign=abc"
+        val first = cache()
+        val kept = ResolvedStream(
+            uri, quality = org.tegro.yamp.domain.provider.StreamQuality("mp3", 320),
+            decryption = org.tegro.yamp.domain.provider.Decryption("encraw"), cacheKey = "yandex:1|5|mp3-320", durationMs = 1234L
+        )
+        assertEquals(NextTrackFetch.Outcome.WRITTEN, fetch(NextTrackCacher(first, this, Dispatchers.IO, server(uri to data)), "5", kept).outcome)
+        first.cache.release()
+        caches.remove(first)
+
+        // A new process: nothing in memory, only the cache's own database
+        val second = cache()
+        var journaled: String? = null
+        second.onOfflineStart = { journaled = it }
+        assertEquals(kept, second.completeStreamFor("yandex:1|5|"))
+        assertEquals("yandex:1|5|mp3-320", journaled)
+        assertArrayEquals(data, read(second.wrap(noNetwork), "https://cdn.example/a.mp3?sign=new", "yandex:1|5|mp3-320"))
+    }
+
+    @Test
+    fun aStreamThatNeedsHeadersIsNotKeptOnDisk() = runBlocking {
+        val uri = "https://jf.example/Audio/7/universal"
+        val first = cache()
+        val withAuth = ResolvedStream(uri, headers = mapOf("Authorization" to "secret"), cacheKey = "jf:1|7|direct")
+        fetch(NextTrackCacher(first, this, Dispatchers.IO, server(uri to bytes(50_000, 3))), "7", withAuth)
+        first.cache.release()
+        caches.remove(first)
+
+        assertEquals(null, cache().completeStreamFor("jf:1|7|"))
+    }
+
+    @Test
+    fun signingOutRemovesOnlyThatAccountsStreams() = runBlocking {
+        val streamCache = cache()
+        val a = "https://cdn.example/a.mp3"
+        val b = "https://cdn.example/b.mp3"
+        val cacher = NextTrackCacher(streamCache, this, Dispatchers.IO, server(a to bytes(50_000, 1), b to bytes(50_000, 2)))
+        fetch(cacher, "1", stream(a, "yandex:1|1|mp3"))
+        fetch(cacher, "2", stream(b, "yandex:2|2|mp3"))
+
+        streamCache.removeAccount("yandex:1")
+
+        assertFalse(streamCache.isComplete("yandex:1|1|mp3"))
+        assertEquals(null, streamCache.completeStreamFor("yandex:1|1|"))
+        assertTrue(streamCache.isComplete("yandex:2|2|mp3"))
+    }
+
+    @Test
     fun aTrackAlreadyOnDiskIsNotWrittenAgain() = runBlocking {
         val uri = "https://cdn.example/t.mp3"
         val streamCache = cache()

@@ -35,7 +35,13 @@ class JellyfinStreamResolver(
     private val accountKey: String,
     private val info: JellyfinClientInfo,
     private val token: () -> String?,
-    private val profile: suspend () -> JellyfinStreamProfile
+    private val profile: suspend () -> JellyfinStreamProfile,
+    /** The track's downloaded copy (a file URI) this account may play; null: none, or not playable now. */
+    private val localCopy: suspend (itemId: String) -> String? = { null },
+    /** Every byte of the stream under this cache key is on disk (D86). */
+    private val isComplete: (cacheKey: String) -> Boolean = { false },
+    /** A connection is there; without one only what is on the device plays. */
+    private val online: () -> Boolean = { true }
 ) : StreamResolver {
 
     /** Links handed out, by track ref: a universal URL does not expire, so it stays until [invalidate]. */
@@ -43,12 +49,34 @@ class JellyfinStreamResolver(
 
     override fun cached(track: TrackRef): ResolvedStream? = links[track.value]
 
+    /**
+     * Order (gap b): the downloaded copy, then the network stream — which the disk cache serves whole when all of it
+     * is there. Offline, a stream plays only when it is all on disk: the one of the account's quality now, else its
+     * MP3 (a FLAC stream is never the fallback of a compatible-sound account: it would play silent).
+     */
     override suspend fun resolve(track: TrackRef, prefs: StreamPrefs): Outcome<ResolvedStream> {
+        localCopy(track.id)?.let { return Outcome.Ok(ResolvedStream(it, localFile = true)) }
         val auth = token()?.takeIf { it.isNotEmpty() } ?: return Outcome.Err(ProviderError.Unauthorized)
         val mode = profile()
         val stream = stream(track.id, mode, prefs, auth)
+        if (!online()) {
+            val onDisk = listOf(stream, stream(track.id, mode.copy(lossless = false), prefs, auth))
+                .firstOrNull { it.cacheKey?.let(isComplete) == true }
+                ?: return Outcome.Err(ProviderError.Unavailable("offline, not on the device"))
+            links[track.value] = onDisk
+            return Outcome.Ok(onDisk)
+        }
         links[track.value] = stream
         return Outcome.Ok(stream)
+    }
+
+    /**
+     * What a download fetches (gap b): the account's quality now through the universal endpoint — the file as it is
+     * when the device plays it (a static stream with its length), else the server's MP3. Never the local copy.
+     */
+    suspend fun downloadStream(track: TrackRef): Outcome<ResolvedStream> {
+        val auth = token()?.takeIf { it.isNotEmpty() } ?: return Outcome.Err(ProviderError.Unauthorized)
+        return Outcome.Ok(stream(track.id, profile(), StreamPrefs(), auth))
     }
 
     override fun invalidate(track: TrackRef) {

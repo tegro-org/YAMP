@@ -63,7 +63,9 @@ class PlaybackJournal(
         /** A smooth pause / play / seek from the crossfade length; [Event.detail] is "pause|play|seek N ms". */
         FADE,
         /** The playing track's position jumped to its start with nobody asking (a stream that broke off); [Event.detail]. */
-        JUMP
+        JUMP,
+        /** MonJaro Audio Router (`com.usbswitch`) took over or released the media output; [Event.detail]. */
+        ROUTER
     }
 
     data class Event(val atMs: Long, val kind: Kind, val title: String? = null, val detail: String? = null, val valueMs: Long = 0L)

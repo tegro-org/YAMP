@@ -156,7 +156,11 @@ class FakePlayerRepository(private val context: Context) : PlayerRepository, org
         calls += Call("setDucked")
     }
 
+    /** The last crossfade length the controller set, in ms (−1: never set). */
+    var crossfadeMs = -1L
+
     override fun setCrossfadeDuration(durationMs: Long) {
+        crossfadeMs = durationMs
         calls += Call("setCrossfadeDuration")
     }
 

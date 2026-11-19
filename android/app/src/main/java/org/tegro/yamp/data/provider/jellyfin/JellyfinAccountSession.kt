@@ -6,6 +6,7 @@ import org.tegro.yamp.data.player.PlaybackController
 import org.tegro.yamp.domain.account.AccountId
 import org.tegro.yamp.domain.repository.AuthRepository
 import org.tegro.yamp.provider.jellyfin.SignedIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -28,8 +29,13 @@ class JellyfinAccountSession @Inject constructor(
     private val authRepository: AuthRepository,
     private val playbackController: PlaybackController,
     private val registry: ProviderRegistry,
-    private val databases: JellyfinDatabases
+    private val databases: JellyfinDatabases,
+    private val downloads: org.tegro.yamp.data.network.TrackDownloadManager,
+    private val streamCache: org.tegro.yamp.data.player.StreamCache
 ) {
+    /** Removing a signed-out account's downloads touches the disk: off the caller's thread. */
+    private val io = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
+
     fun add(signedIn: SignedIn): JellyfinAdded {
         val account = JellyfinAccount(
             serverUrl = signedIn.serverUrl,
@@ -51,7 +57,7 @@ class JellyfinAccountSession @Inject constructor(
     /**
      * Sign-out (D62): the account's queues stay, hidden under "Removed accounts" with its name; when one of them is
      * active, playback leaves it for a staying account (Yandex first, else another Jellyfin one). The token, the HTTP
-     * cache and its database go.
+     * cache and its database go, and its downloads no other signed-in account of the same server saved (gap b).
      */
     fun signOut(id: AccountId) {
         val account = store.account(id) ?: return
@@ -61,5 +67,9 @@ class JellyfinAccountSession @Inject constructor(
         registry.forget(id)
         clients.forget(id)
         databases.delete(id)
+        io.launch {
+            downloads.releaseOwner(id)
+            streamCache.removeAccount(id.value)
+        }
     }
 }

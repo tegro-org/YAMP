@@ -46,6 +46,10 @@ data class SettingsUiState(
     val equalizerAvailable: Boolean = false,
     /** Poweramp Equalizer is installed: Settings → Playback shows how to set it for a clean crossfade. */
     val powerampEqualizer: Boolean = false,
+    /** MonJaro Audio Router is installed: Settings → Playback explains its effect on transitions. */
+    val audioRouterInstalled: Boolean = false,
+    /** …and a USB output is connected, so it may be routing: transitions are hard cuts now. */
+    val audioRouterActive: Boolean = false,
     val startMusic: StartMusic = StartMusic.OFF,
     val bluetoothAutoplay: Boolean = false,
     val skipExplicit: Boolean = false,
@@ -54,7 +58,6 @@ data class SettingsUiState(
     val reserveUsedBytes: Long = 0L,
     val streamCacheMb: Int = SettingsRepository.DEFAULT_STREAM_CACHE_MB,
     val streamCacheUsedBytes: Long = 0L,
-    val autoDownload: Boolean = false,
     val cacheSizeBytes: Long = 0L,
     val storage: StorageStatus = StorageStatus(),
     val startPage: StartPage = StartPage.WAVE,
@@ -99,7 +102,6 @@ data class SettingsActions(
     val onClearReserve: () -> Unit = {},
     val onStreamCacheChange: (Int) -> Unit = {},
     val onClearStreamCache: () -> Unit = {},
-    val onAutoDownloadChange: (Boolean) -> Unit = {},
     val onDownloadAll: () -> Unit = {},
     val onUpgradeDownloads: () -> Unit = {},
     val onDownloadsOnCardChange: (Boolean) -> Unit = {},

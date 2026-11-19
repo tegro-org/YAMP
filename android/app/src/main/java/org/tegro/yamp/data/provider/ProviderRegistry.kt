@@ -50,11 +50,14 @@ class ProviderRegistry @Inject constructor(
     private val jellyfinClients: JellyfinClients,
     private val jellyfinDatabases: JellyfinDatabases,
     private val soundMode: org.tegro.yamp.data.player.SoundMode,
-    private val fixedOutput: org.tegro.yamp.data.player.FixedOutputRate
+    private val fixedOutput: org.tegro.yamp.data.player.FixedOutputRate,
+    /** Downloaded copies and fully cached streams (gap b); null in tests that only browse. */
+    private val onDevice: org.tegro.yamp.data.provider.jellyfin.JellyfinOnDevice? = null
 ) : StreamResolvers {
 
     private val resolvers = ConcurrentHashMap<String, StreamResolver>()
     private val providers = ConcurrentHashMap<String, MusicProvider>()
+    private val jellyfinStreams = ConcurrentHashMap<String, JellyfinStreamResolver>()
     private val contextResolver: StreamResolver by lazy { yandexStreams.forAccount(null) }
 
     override fun forAccount(account: AccountId?): StreamResolver = when {
@@ -79,6 +82,13 @@ class ProviderRegistry @Inject constructor(
     fun forget(account: AccountId) {
         providers.remove(account.value)
         resolvers.remove(account.value)
+        jellyfinStreams.remove(account.value)
+    }
+
+    /** A signed-in Jellyfin account's streams, for downloads (gap b); null when it is not signed in. */
+    fun jellyfinStreams(account: AccountId): JellyfinStreamResolver? {
+        if (jellyfinProvider(account) == null) return null
+        return jellyfinStreams[account.value]
     }
 
     private fun jellyfinProvider(account: AccountId): MusicProvider? {
@@ -96,8 +106,11 @@ class ProviderRegistry @Inject constructor(
                     info = jellyfinClients.info,
                     token = { jellyfinAccounts.token(account) },
                     // The account's quality for the network in use (Original / Converted MP3 320); never more than the mixer plays (D79)
-                    profile = { JellyfinStreamProfile(lossless = !soundMode.isCompatible(account), maxSampleRateHz = fixedOutput.mixerRateHz) }
-                )
+                    profile = { JellyfinStreamProfile(lossless = !soundMode.isCompatible(account), maxSampleRateHz = fixedOutput.mixerRateHz) },
+                    localCopy = { itemId -> onDevice?.copyFor(account, itemId) },
+                    isComplete = { key -> onDevice?.isComplete(key) == true },
+                    online = { onDevice?.online() ?: true }
+                ).also { jellyfinStreams[account.value] = it }
             )
         }
     }
