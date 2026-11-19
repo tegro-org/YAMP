@@ -709,12 +709,39 @@ check incl. folders. (a) watch only; (h) Phase 7 later.
       Likely cause found (2026-11-19, code reading): the stall watchdog (`PlaybackController` ~:456-466, `LINK_STALL_MS`
       6 s) treats buffering after a seek as a stall → `onStreamStalled` → `playCopy` at the position (= "START cut <pos>").
       Fix when it recurs: count stalls by bytes, not by the buffering state; `seekable()` only after prepare.
-- [ ] (b) **Jellyfin downloads and offline playback** of a fully cached Jellyfin track. *Done when* a downloaded or
+- [x] (b) **Jellyfin downloads and offline playback** of a fully cached Jellyfin track. *Done when* a downloaded or
       fully cached Jellyfin track plays in airplane mode.
-- [ ] (c) **Wide-layout "taller" threshold:** taller when the controls would get **less than 1/3 of the width** after the full-height cover block (≈ **width/height < 1.66**; geometric form preferred — it includes the next block and paddings). 16:10 = 1.6 is taller, with the
+      *As built:* "Download all collection" (and auto-download's runs) also saves each signed-in Jellyfin account's
+      server favourites — there is no in-app Jellyfin like and no per-track Download for Yandex either. The file is
+      the universal stream at the account's quality *at download time* (Original: the file as it is, capped to the
+      mixer rate; Converted: MP3 320); a FLAC file is marked by its Content-Type, so compatible sound skips it as for
+      Yandex. Fetched through `JellyfinClients.downloads` (no HTTP cache, redirects off) with the auth header on that
+      request only. Each download records its accounts (`<id>.owner`); a copy plays for any account of the same
+      server; sign-out drops the account and removes what nobody else saved. Resolver order: copy → (offline) the
+      stream all in the disk cache, the account's quality else its MP3 → network. The controller treats a fully
+      cached Jellyfin track as on the device offline (start, next, skip-to-on-device). **Left for (e):** a Jellyfin
+      "Downloaded" list / favourites row in Library (no UI shows Jellyfin favourites yet).
+      *Offline cache info (2026-11-19):* a fully cached track of any account plays offline after a restart too.
+      `StreamCache.remember` keeps the stream (link, quality, decryption scheme, length — never headers) in the
+      entry's own metadata in the cache database (`StoredStream`); it goes with the entry on eviction/clear, and
+      sign-out (Yandex and Jellyfin) removes the account's entries. Yandex: resolve remembers every fresh link,
+      offline falls back to the kept one; Jellyfin rebuilds its stream offline as before. Journal: `CACHE offline
+      start`. Tests in `StreamCacheTest`. Device smoke b126 (2026-11-19): offline after a restart, a fully cached
+      Jellyfin track (5556) and a cached Yandex wave track (5554) play; a downloaded Jellyfin favourite plays.
+      *Auto-download per account (2026-11-19, b126–b128):* the global switch left Settings → Downloads; each
+      account's sheet (Settings → Accounts → the account) has «Auto-download liked» / «favourites» (Jellyfin),
+      key `autodl|<account>`; without a choice an account keeps the old global value. Automatic runs (a new like,
+      a likes sync, the switch turned on, once per app start) carry `KEY_AUTO` and cover only accounts with it on;
+      "Download all collection" still covers all. Automatic runs are not expedited (no empty notification on API
+      < 31). The start run is how server-set Jellyfin favourites arrive. Test `AutoDownloadPerAccountTest`.
+- [x] (c) **Wide-layout "taller" threshold:** taller when the controls would get **less than 1/3 of the width** after the full-height cover block (≈ **width/height < 1.66**; geometric form preferred — it includes the next block and paddings). 16:10 = 1.6 is taller, with the
       block at the right padding; 16:9 = 1.78 is wide, with the block centred. Apply it in `wideGeometryOf`.
       *Done when* tests pass at 1280×800 and 1920×1200 (taller) and at 1760×720 and 2340×1080 (wide), and the
       clock never crosses the cover edge on the taller ones.
+      *Done 2026-11-19:* `TALLER_RATIO = 1.66` in `wideGeometryOf` (plus the old "spare ≥ 2 gaps" rule for centring),
+      the same in the canvas `plWideLayout()`; `CarLayoutTest.belowTheTallerRatioTheBlockEndsAtTheFarPadding` covers
+      1280×800, 1920×1200, 4:3, Fold 5/8 inner (taller) and 1760×720 / 2400×720 (wide). Golden re-recorded:
+      `player_car_1280x800` (the block now ends at the right padding).
 - [ ] (d) **Android Auto browse tree with Jellyfin accounts:** verify on the unit or the emulator, and fix what's
       missing. *Done when* the Jellyfin queues are browsable and playable from Android Auto.
 - [ ] (e) **Home Jellyfin sections and merged Library rows** with service badges. Canvas first. *Done when* the
@@ -725,8 +752,15 @@ check incl. folders. (a) watch only; (h) Phase 7 later.
       in the same canvas round as (e) and (f). *Done when* a folder can be browsed and played from the phone and the car.
 - [ ] (f) **Car long press on album tiles.** This needs a car album view; canvas first. *Done when* a car album
       tile opens the album menu with car-sized rows.
-- [ ] **Audio Router (com.usbswitch) awareness:** while its USB routing is active it overwrites per-player volume every 2.5 s — detect it (its AudioPolicy / package running + routed) and fall back to hard cuts (no crossfade/fades), with a hint; until then the user sets crossfade 0 when routing to USB.
-- [ ] **CI: cache the Robolectric runtime downloads** (`~/.m2/repository/org/robolectric`, android-all-instrumented jars) in `ci.yml` and `release.yml` — Maven Central hiccups failed the v0.3.0 and v0.5.1 release test steps (re-run passed). Done when a run with a cold Maven Central still passes from the cache.
+- [x] **Audio Router (com.usbswitch) awareness:** while its USB routing is active it overwrites per-player volume every 2.5 s — detect it (its AudioPolicy / package running + routed) and fall back to hard cuts (no crossfade/fades), with a hint; until then the user sets crossfade 0 when routing to USB.
+      *Done 2026-11-19 (heuristic):* `AudioRouterWatch` — active = the package is installed **and** a USB audio
+      output is connected (its AudioPolicy and volume writes are invisible to a normal app; Android 9 has no device in
+      `AudioPlaybackConfiguration`). While active the crossfade length is forced to 0 (hard cuts, no smooth fades),
+      journal `ROUTER active → hard cuts` / `inactive → transitions as set`; Settings → Playback shows a hint row when
+      the router is installed. False positive: a USB amp plugged in with the router's USB switch off. Check on the unit.
+- [x] **CI: cache the Robolectric runtime downloads** (`~/.m2/repository/org/robolectric`, android-all-instrumented jars) in `ci.yml` and `release.yml` — Maven Central hiccups failed the v0.3.0 and v0.5.1 release test steps (re-run passed). Done when a run with a cold Maven Central still passes from the cache.
+      *Done 2026-11-19:* `actions/cache@v4` on `~/.m2/repository/org/robolectric`, key = libs.versions.toml hash +
+      SDK 28/35; `robolectric.offline` not set (a cold cache must still download). To confirm on the next CI runs.
 - [ ] (g) **Foldable shape classes in the tests:**
       - the Fold 5 cover and inner screens;
       - Galaxy Z Fold 8 (specs from the user, 2026-11-18): **cover** 5.5", 1248×1972 px, 428 ppi (≈ 466×737 dp
@@ -734,4 +768,6 @@ check incl. folders. (a) watch only; (h) Phase 7 later.
         w/h 1.32 → the "taller" branch; also portrait 731×969 dp).
 
       Add the Fold 8 numbers once confirmed. *Done when* geometry tests and goldens cover them.
+      *2026-11-19:* geometry tests cover Fold 5 and Fold 8; new goldens `player_fold8_cover_next3`,
+      `player_fold8_inner_land_next3`. Fold 8 inner portrait (731×969) has no golden yet.
 - [ ] (h) **Not in this milestone (user, 2026-11-19):** **Phase 7 export/import:** design doc first. *Done when* the doc is approved.
