@@ -1,20 +1,21 @@
-# HANDOFF — 2026-11-18
+# HANDOFF — 2026-11-19
 
 ## State
 
-- **Release:** `v0.5.1` is everything on `feature/album-artist-menu`, fast-forwarded into `main`:
-  - Phase 3 and 3b: providers, disk stream cache, early preload, Next states;
-  - Phase 4: Jellyfin;
-  - first start, Jellyfin-only mode, the album/artist menu, smooth fades, Fade then rise, pop-free handovers;
-  - quality per account, Jellyfin playlists;
-  - the new player.
+- **Release:** `v0.6.0` is the gap milestone on `fix/gaps-after-0.5.1`, fast-forwarded into `main`:
+  - Phase 4b: Jellyfin folders (browse, pins, play a folder; phone, landscape, car);
+  - Home Jellyfin sections, Library per account with «Скачанное» (D89);
+  - the car library (⋮ → «Музыка», last), car album page and car "Add to queue…";
+  - Android Auto with a folder per account, search across accounts, covers through a local provider;
+  - offline playback of fully cached tracks, Jellyfin downloads, auto-download per account;
+  - the "taller" threshold (w/h < 1.66), Fold 8 goldens, Audio Router hard cuts, CI Robolectric cache.
 
-  Notes: `tasks/release-notes-v0.5.1.md`. Before it: `v0.3.0` (new app id `org.tegro.music.yamp`), `v0.2.1`.
+  Notes: `tasks/release-notes-v0.6.0.md`. Before it: `v0.5.1`, `v0.3.0` (new app id `org.tegro.music.yamp`).
 - **Branches:**
   - `main` is the release;
   - `debug/radio-probe`, a debug rotor probe, is pushed;
   - the feature branches since v0.3.0 are merged by fast-forward.
-- **Last debug build: b122.** Debug builds use the local counter `dist/.build-number`; never share two APKs with the
+- **Last debug build: b132.** Debug builds use the local counter `dist/.build-number`; never share two APKs with the
   same number.
 - **Player structure, the same on every layout:**
   - **Top row:** `⋮ · queue ▾`, at the hand-side edge in wide layouts, always top-left in portrait. Everything
@@ -22,7 +23,7 @@
     quality, and likes when gestures are on.
   - **Wide layouts** (phone landscape and «Крупные кнопки» on the head unit) use `wideGeometryOf`:
     - the cover and next block runs full height;
-    - it's centred on wide screens and sits at the right padding on taller ones;
+    - it's centred when w/h ≥ 1.66 and sits at the right padding on taller screens (16:10, 4:3);
     - the controls block is centred vertically;
     - the clock has one fixed position, over the cover.
   - **Portrait:** centred labels with dislike and like at the sides; "Next tracks 3" uses the landscape cards.
@@ -35,8 +36,8 @@
   - a phone: 2340×1080;
   - a Galaxy Z Fold 5: cover 904×2316, inner 2176×1812.
   - AVDs: `emulator-5554` is the head unit at 1920×720 with the user's three Yandex accounts and the Jellyfin dev
-    account; never sign accounts out there, use debug Hide. `emulator-5556` is Android 14, a clean phone that is
-    often out of storage.
+    account; never sign accounts out there, use debug Hide. `emulator-5556` (`Pixel_6_API_34`) is Android 14,
+    wiped on 2026-11-19 with a 16 GB data partition, signed in to the Jellyfin dev account only.
 - **Poweramp Equalizer** (README section): Known Players → YAMP → Затухание (Fade) **off**, Без DVC **on**.
 - **YAMP Diag** (`android/diag`, built with `-Pyamp.diag` / `scripts/build-diag.sh`, never in CI or a release):
   - collects `dumpsys` audio/flinger/media_session, logcat, dropbox crash/ANR records and YAMP's journal over the
@@ -52,24 +53,19 @@
 ## Known issues
 
 - **Rotor feedback 400** for every station. YAMP also never reports plays to Yandex. Fix both together.
-- **Jellyfin downloads** and offline playback of a fully cached Jellyfin track aren't built yet.
 - **Android Auto with Jellyfin accounts** is built and checked with a media browser on the emulator (gap (d), b132);
   not yet in a real car or the DHU.
 - **A seek in a Yandex track** was once logged as `START cut … <pos>`, a restart at the seek position instead of a
-  plain seek.
-- **Wide layout:** the "taller" branch starts at about 4:3. 16:10 still centres the block; see gap (c).
+  plain seek. Postponed — watch (todo (a)).
+- **Audio Router detection** is a guess (router installed + USB audio output); a USB amp with the router's routing
+  off also gets hard cuts. Needs a check on the head unit.
+- **Car filter** opens while driving (no parked signal on a plain Android head unit; GPS speed is the option).
 
 ## Next steps (the user sets the pace)
 
-See "Next: gaps after v0.5.1" in `tasks/todo.md`:
-- (a) the Yandex seek;
-- (b) Jellyfin downloads and offline playback;
-- (c) the taller threshold (controls < 1/3 of the width ≈ `w/h < 1.66`);
-- (d) Android Auto with Jellyfin;
-- (e) Home Jellyfin sections and merged Library rows, canvas first;
-- (f) the car album long press, canvas first;
-- (g) foldable shape classes;
-- (h) Phase 7 export/import, design doc first.
+- The user tests b132/v0.6.0: Library with several accounts, the car album page, Android Auto in the car, Audio Router.
+- Watch: (a) the Yandex seek restart.
+- Later, not in this milestone: (h) Phase 7 export/import, design doc first.
 
 ## Notes
 
@@ -87,5 +83,5 @@ See "Next: gaps after v0.5.1" in `tasks/todo.md`:
 - **References:** user setup in `kb/environment.md`; the upstream clone for reading is
   `~/Projects/Github/YandexMusicLite`.
 
-- Audio Router (`com.usbswitch`, MonJaro USB amplifier / passenger headphones): no focus or effects; while its USB
-  routing is on it overrides per-player volume every 2.5 s — crossfade/fades break; set crossfade 0 then (todo).
+- Audio Router (`com.usbswitch`, USB amplifier / passenger headphones): no focus or effects; while its USB routing
+  is on it overrides per-player volume every 2.5 s, so YAMP switches to hard cuts (`ROUTER active → hard cuts`).
