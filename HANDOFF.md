@@ -53,7 +53,8 @@
 
 - **Rotor feedback 400** for every station. YAMP also never reports plays to Yandex. Fix both together.
 - **Jellyfin downloads** and offline playback of a fully cached Jellyfin track aren't built yet.
-- **Android Auto with Jellyfin accounts** hasn't been verified on a device.
+- **Android Auto with Jellyfin accounts** is built and checked with a media browser on the emulator (gap (d), b132);
+  not yet in a real car or the DHU.
 - **A seek in a Yandex track** was once logged as `START cut … <pos>`, a restart at the seek position instead of a
   plain seek.
 - **Wide layout:** the "taller" branch starts at about 4:3. 16:10 still centres the block; see gap (c).

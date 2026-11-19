@@ -742,16 +742,29 @@ check incl. folders. (a) watch only; (h) Phase 7 later.
       the same in the canvas `plWideLayout()`; `CarLayoutTest.belowTheTallerRatioTheBlockEndsAtTheFarPadding` covers
       1280×800, 1920×1200, 4:3, Fold 5/8 inner (taller) and 1760×720 / 2400×720 (wide). Golden re-recorded:
       `player_car_1280x800` (the block now ends at the right padding).
-- [ ] (d) **Android Auto browse tree with Jellyfin accounts:** verify on the unit or the emulator, and fix what's
+- [x] (d) **Android Auto browse tree with Jellyfin accounts:** verify on the unit or the emulator, and fix what's
       missing. *Done when* the Jellyfin queues are browsable and playable from Android Auto.
-- [ ] (e) **Home Jellyfin sections and merged Library rows** with service badges. Canvas first. *Done when* the
+      *Done 2026-11-19 (b132):* the tree knew only the Yandex account in context (no Jellyfin, no search). Now
+      `AccountBrowseTree`: a folder per signed-in account (none with one account), Jellyfin Favourites · Playlists ·
+      Albums · Folders (recursive, "Play all", a folder playable whole) · Downloaded; Yandex My Wave · Liked ·
+      Playlists · Albums · Downloaded; picks play in the item's account (D84); `onSearch` covers every account; covers
+      as `content://…artwork/<sha256>` (`ArtworkProvider`, header added on fetch). `AccountBrowseTreeTest`; on 5556
+      `AndroidAutoBrowseInstrumentedTest` browses root → Folders → a folder → Play all (plays). No DHU installed:
+      real Android Auto is for the user.
+- [x] (e) **Home Jellyfin sections and merged Library rows** with service badges. Canvas first. *Done when* the
       boards are approved and built, and Yandex-only Home stays pixel-identical.
-- [ ] **Phase 4b — Jellyfin folder browsing (added to this milestone, user 2026-11-19):** per `docs/multi-source-player.md`
+      *Built 2026-11-19:* Home groups per Jellyfin account (Home scrolls); Library one section per account with
+      Downloaded (D89, revises D33); see `docs/phase-4b-folders.md`.
+- [x] **Phase 4b — Jellyfin folder browsing (added to this milestone, user 2026-11-19):** per `docs/multi-source-player.md`
       §Phase 4b — the folder tree opened at the library root, tap = open, play = the whole folder, filter on every level,
       pinned folders on top, breadcrumbs. Canvas: refresh the existing `pf-*` boards to the new player/hand-side style,
       in the same canvas round as (e) and (f). *Done when* a folder can be browsed and played from the phone and the car.
-- [ ] (f) **Car long press on album tiles.** This needs a car album view; canvas first. *Done when* a car album
+      *Built 2026-11-19:* `docs/phase-4b-folders.md` (folder API, pins, phone / landscape / car).
+- [x] (f) **Car long press on album tiles.** This needs a car album view; canvas first. *Done when* a car album
       tile opens the album menu with car-sized rows.
+      *Built 2026-11-19:* car ⋮ → «Музыка» → car Library; album menu and car "Add to queue…" (`docs/phase-4b-folders.md`).
+      - [x] Car album page (`ca-album-*`): a tile tap opens it (a hold still opens the menu); tracks, Play · Shuffle ·
+        Play next · Add to end · Add to queue… · Start radio (Yandex). *Built 2026-11-19.*
 - [x] **Audio Router (com.usbswitch) awareness:** while its USB routing is active it overwrites per-player volume every 2.5 s — detect it (its AudioPolicy / package running + routed) and fall back to hard cuts (no crossfade/fades), with a hint; until then the user sets crossfade 0 when routing to USB.
       *Done 2026-11-19 (heuristic):* `AudioRouterWatch` — active = the package is installed **and** a USB audio
       output is connected (its AudioPolicy and volume writes are invisible to a normal app; Android 9 has no device in
@@ -761,7 +774,7 @@ check incl. folders. (a) watch only; (h) Phase 7 later.
 - [x] **CI: cache the Robolectric runtime downloads** (`~/.m2/repository/org/robolectric`, android-all-instrumented jars) in `ci.yml` and `release.yml` — Maven Central hiccups failed the v0.3.0 and v0.5.1 release test steps (re-run passed). Done when a run with a cold Maven Central still passes from the cache.
       *Done 2026-11-19:* `actions/cache@v4` on `~/.m2/repository/org/robolectric`, key = libs.versions.toml hash +
       SDK 28/35; `robolectric.offline` not set (a cold cache must still download). To confirm on the next CI runs.
-- [ ] (g) **Foldable shape classes in the tests:**
+- [x] (g) **Foldable shape classes in the tests:**
       - the Fold 5 cover and inner screens;
       - Galaxy Z Fold 8 (specs from the user, 2026-11-18): **cover** 5.5", 1248×1972 px, 428 ppi (≈ 466×737 dp
         portrait, w/h 0.63 — passport-like); **inner** 7.6", 2448×1848 px, 4:3, 404 ppi (≈ 969×731 dp landscape,
@@ -770,4 +783,6 @@ check incl. folders. (a) watch only; (h) Phase 7 later.
       Add the Fold 8 numbers once confirmed. *Done when* geometry tests and goldens cover them.
       *2026-11-19:* geometry tests cover Fold 5 and Fold 8; new goldens `player_fold8_cover_next3`,
       `player_fold8_inner_land_next3`. Fold 8 inner portrait (731×969) has no golden yet.
+      *Done 2026-11-19:* golden `player_fold8_inner_port_next3` (731×969 dp, the 560 dp column centred);
+      `PortraitTransportTest.theFold8InnerScreenStandingGetsTheCappedColumnsRow`.
 - [ ] (h) **Not in this milestone (user, 2026-11-19):** **Phase 7 export/import:** design doc first. *Done when* the doc is approved.
