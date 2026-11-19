@@ -20,7 +20,7 @@ function AmUseWords() {
     playNow: t('Play now', 'Слушать сейчас'), playNowSub: t('Replaces the current queue', 'Заменит текущую очередь'),
     playNext: t('Play next', 'Играть следующим'), addEnd: t('Add to end of queue', 'Добавить в конец очереди'),
     addTo: t('Add to queue…', 'Добавить в очередь…'), radio: t('Start radio', 'Запустить радио'),
-    addPlaylist: t('Add to playlist…', 'Добавить в плейлист…'),
+    addPlaylist: t('Add to playlist…', 'Добавить в плейлист…'), shuffle: t('Shuffle', 'Перемешать'),
     album: t('Album', 'Альбом'), artist: t('Artist', 'Исполнитель'),
     asksFirst: t('Adding an artist asks first: all albums or the popular tracks.', 'Перед добавлением исполнителя спросим: все альбомы или популярное.'),
     noRadio: t('Playlists and radio for Jellyfin come later (Phases 5–6).', 'Плейлисты и радио для Jellyfin появятся позже (этапы 5–6).'),
@@ -29,7 +29,9 @@ function AmUseWords() {
 
 // ── The menu (phone sheet content or car panel content) ─────────────────────
 // `kind` album | artist, `provider` yandex | jellyfin, `big` = car sizes (large targets).
-function AmMenu({ kind = 'album', provider = 'yandex', title, sub, hue, big, badge }) {
+// Folder use (folders.jsx): `cover` replaces the cover, `shuffle` adds Shuffle after Play now, `extra` = rows
+// [icon, label] after the queue actions, `note` overrides the footnote (null = none).
+function AmMenu({ kind = 'album', provider = 'yandex', title, sub, hue, big, badge, cover: coverNode, shuffle, extra, note: noteText }) {
   const w = AmUseWords();
   const rowH = big ? 84 : 56, icon = big ? 34 : 24, font = big ? 25 : 17, cover = big ? 84 : 56;
   const Row = ({ icon: name, label, note }) => (
@@ -44,7 +46,7 @@ function AmMenu({ kind = 'album', provider = 'yandex', title, sub, hue, big, bad
   return (
     <div style={{ padding: big ? '22px 32px 0' : '18px 24px 0' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: big ? 20 : 14, marginBottom: big ? 12 : 8 }}>
-        <Cover size={cover} hue={hue} radius={kind === 'artist' ? cover / 2 : big ? 16 : 12} glyph={kind === 'artist' ? 'person' : undefined} />
+        {coverNode || <Cover size={cover} hue={hue} radius={kind === 'artist' ? cover / 2 : big ? 16 : 12} glyph={kind === 'artist' ? 'person' : undefined} />}
         <div style={{ minWidth: 0 }}>
           <div className="hf-ellipsis" style={big ? { fontSize: 30, lineHeight: '36px', fontWeight: 800 } : HFType.dialogTitle}>{title}</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
@@ -54,14 +56,16 @@ function AmMenu({ kind = 'album', provider = 'yandex', title, sub, hue, big, bad
         </div>
       </div>
       <Row icon="play_arrow" label={w.playNow} note={w.playNowSub} />
+      {shuffle && <Row icon="shuffle" label={w.shuffle} />}
       <Row icon="skip_next" label={w.playNext} />
       <Row icon="playlist_play" label={w.addEnd} />
       <Row icon="stacks" label={w.addTo} />
       {provider === 'yandex' && <Row icon="playlist_add" label={w.addPlaylist} />}
       {provider === 'yandex' && <Row icon="sensors" label={w.radio} />}
-      {(kind === 'artist' || provider === 'jellyfin') && (
+      {(extra || []).map(([icon, label]) => <Row key={icon} icon={icon} label={label} />)}
+      {noteText !== null && (noteText || kind === 'artist' || provider === 'jellyfin') && (
         <div style={{ fontSize: big ? 17 : 13, lineHeight: big ? '22px' : '17px', color: HF.text3, marginTop: big ? 10 : 6 }}>
-          {kind === 'artist' ? w.asksFirst : w.noRadio}
+          {noteText || (kind === 'artist' ? w.asksFirst : w.noRadio)}
         </div>
       )}
     </div>

@@ -47,6 +47,8 @@
   <script src="yamp/quality.jsx" type="text/babel"></script>
   <script src="yamp/player.jsx" type="text/babel"></script>
   <script src="yamp/home.jsx" type="text/babel"></script>
+  <script src="yamp/homejf.jsx" type="text/babel"></script>
+  <script src="yamp/carbrowse.jsx" type="text/babel"></script>
   <script src="yamp/mix.jsx" type="text/babel"></script>
 </head>
 <body>
@@ -119,20 +121,25 @@
         ...optional('historySections'),
         ...optional('radioSections'),
         { id: 'folders-phone', title: '6 · Folder browser — phone (Phase 4b)',
-          subtitle: 'The physical folder tree of the Jellyfin library, opened directly at the library root. Row tap = open, play button = play the whole folder. Filter on every level; pinned folders on top; breadcrumbs jump to any level.',
+          subtitle: 'Library → a Jellyfin account → Folders opens the physical folder tree directly at the library root (refreshed 2026-11-19 to the new player style). Row tap = open; the play button = play the whole folder (recursive, album order). A filter field on every level (this level only); pinned folders on top of their level; breadcrumbs jump to any level, long paths collapse to “…”. Hold a folder (or ⋮ on its level) = the album menu’s look: Play now · Shuffle · Play next · Add to end · Add to queue… · Pin. Folders without art get a drawn placeholder with the name’s monogram.',
           boards: [
-            { id: 'pf-root', label: 'Folders · library root (natural sort, Latin then Cyrillic)', ...sz(P), el: <PhoneFolders /> },
-            { id: 'pf-filter', label: 'Folders · filter “мел”', ...sz(P), el: <PhoneFolders filter="мел" /> },
-            { id: 'pf-level', label: 'Inside a folder · actions + subfolders', ...sz(P), el: <PhoneFolderLevel /> },
-            { id: 'pf-album', label: 'Album folder · tracks', ...sz(P), el: <PhoneFolderAlbum /> },
-            { id: 'pf-menu', label: 'Folder · hold / ⋯ menu', ...sz(P), el: <PhoneFolderMenu /> },
+            { id: 'pf-root', label: 'Folders · library root · the account under the title · filter · pinned on top · all folders (natural sort, Latin then Cyrillic) · art or placeholder', ...sz(P), el: <PhoneFolders /> },
+            { id: 'pf-filter', label: 'Folders · filter “мел” · matches highlighted, pinned still on top', ...sz(P), el: <PhoneFolders filter="мел" /> },
+            { id: 'pf-level', label: 'Inside a folder · breadcrumbs + ⋮ · Play / Shuffle · filter · subfolders (pinned first), then the loose tracks', ...sz(P), el: <PhoneFolderLevel /> },
+            { id: 'pf-album', label: 'Album folder (has art) · collapsed breadcrumbs · tracks by number', ...sz(P), el: <PhoneFolderAlbum /> },
+            { id: 'pf-menu', label: 'Hold a folder · the album menu’s look: Play now · Shuffle · Play next · Add to end · Add to queue… · Pin to the top', ...sz(P), el: <PhoneFolderMenu /> },
+            { id: 'pf-land', label: 'Folders · phone landscape (960×540 dp at 2×) · account and filter in the title row · pinned in a column of their own, all folders in two columns · tabs + mini player in one bottom row', ...sz(FRAMES.land), el: <PhoneFoldersLand /> },
+            { id: 'pf-covers', label: 'Folder art · the placeholder for folders without art (sizes in use, monogram rule)', w: 980, h: 520, el: <FdCovers /> },
           ] },
-        { id: 'folders-car', title: '7 · Folder browser — head unit 1760×720 (Phase 4b)',
-          subtitle: 'Tap budget (D12): a pinned or recent folder plays in 1 tap from car home (its play button); any folder in ≤ 3 taps (Folders → folder → play). Big tiles, tile tap = open. The A–Z rail lists only the letters present, Latin and Cyrillic.',
+        { id: 'folders-car', title: '7 · Car Library — folders and albums, head unit 1760×720 (Phase 4b, (f))',
+          subtitle: 'One way in from the player: ⋮ → “Library” (the last item) opens the car Library of the active queue’s account on the tab used last — Jellyfin: Folders · Albums · Playlists · Favourites; Yandex: Albums · Playlists · Liked. Back or the now-playing capsule returns to the player. Wheel side: back, tabs, Filter (only when parked), the A–Z rail (letters present, Latin then Cyrillic); far side: the account chip (▾ = another account) and the capsule. Tile tap = open; a folder’s knob = play it (1 tap); hold a tile = the album / folder menu in car sizes on the wheel side. Mirrors for the right-hand wheel. Alternatives not drawn: a Library button in the player’s top row (takes the queue dropdown’s room); separate ⋮ items Albums / Folders; a swipe from the far edge (not discoverable). Tap budget: any folder plays in ≤ 3 taps (⋮ → Library → its knob) when Folders was the last tab.',
           boards: [
             { id: 'cf-home', label: 'Car home · pinned and recent folders (1 tap to play)', ...sz(H), el: <CarHomeFolders /> },
-            { id: 'cf-root', label: 'Folders · library root as tiles + A–Z rail', ...sz(H), el: <CarFolders /> },
-            { id: 'cf-level', label: 'Inside a folder · big actions + album tiles', ...sz(H), el: <CarFolderLevel /> },
+            { id: 'cf-root', label: 'Car Library · Folders tab (Jellyfin) · pinned first (pin mark), A–Z rail on the wheel side, placeholders where no art · left-hand', ...sz(H), el: <CarFolders /> },
+            { id: 'cf-root-r', label: 'Car Library · Folders tab · right-hand, mirrored', ...sz(H), el: <CarFolders side="right" /> },
+            { id: 'cf-level', label: 'Inside a folder · breadcrumbs in the top row; the folder’s head and big actions on the wheel side, subfolders on the far side · left-hand', ...sz(H), el: <CarFolderLevel /> },
+            { id: 'cf-level-r', label: 'Inside a folder · right-hand, mirrored', ...sz(H), el: <CarFolderLevel side="right" /> },
+            { id: 'cf-menu', label: 'Hold a folder tile → the folder menu, car sizes, wheel side (Unpin since it is pinned)', ...sz(H), el: <CarFolderMenu /> },
           ] },
         { id: 'split', title: '8 · Head unit in split screen (1 : 2)',
           subtitle: 'With the navigator beside it the unit gives YAMP either the wide pane (about 1173×720) or the slim pane (about 587×720, one column). Exact pane sizes still to be measured on the unit.',
@@ -151,19 +158,30 @@
           ] },
         // Sections defined in their own files (yamp/<name>.jsx → <name>Sections()).
         ...signin.slice(0, 1), ...optional('searchSections'), ...optional('homeSections'), ...optional('mixSections'), ...signin.slice(1),
-      ], mergeExtras(optionalMap('jellyfinBoards'), optionalMap('albumMenuBoards'), optionalMap('welcomeBoards'), optionalMap('qualityBoards'), optionalMap('playerBoards'))).map(supersede);
+      ], mergeExtras(optionalMap('jellyfinBoards'), optionalMap('albumMenuBoards'), optionalMap('welcomeBoards'), optionalMap('qualityBoards'), optionalMap('playerBoards'), optionalMap('homeJfBoards'), optionalMap('carBrowseBoards'))).map(supersede);
     }
     // Boards of the old car mode (a car home with a tile/buttons bar, the slim split pane, car tiles) that the new
     // player replaces (player.jsx, plc-unit-1760). Kept for history, marked on the label and with a ribbon.
     const SUPERSEDED = new Set(['cf-home', 'mx-car-home', 'mx-car-mixes', 'amc-album-menu', 'wl-jf-car', 'hm-nav',
       'sn-car', 'nbs-slim-failed', 'sn-queues', 'acc-sn-grouped', 'acc-sn-flat', 'sn-folders']);
-    function supersede(section) {
-      return { ...section, boards: section.boards.map((b) => !SUPERSEDED.has(b.id) ? b : {
-        ...b, label: 'SUPERSEDED by the new player — see plc-unit-1760 · ' + b.label,
+    // Library boards replaced by the per-account Library (homejf.jsx, user 2026-11-19): [replacement, rejected?].
+    const LIB_REPLACED = { 'hm-lib-a': ['hj-lib-a'], 'hm-lib-b': ['hj-lib-b'], 'hm-lib-c': ['hj-lib'], 'hm-lib-liked-c': ['hj-lib'],
+      'hj-lib-c': ['hj-lib', true], 'hj-lib-albums-c': ['hj-lib', true] };
+    function ribbon(b, en, ru, color) {
+      return { ...b, label: en + ' · ' + b.label,
         el: <div style={{ position: 'relative', width: '100%', height: '100%' }}>{b.el}
           <div style={{ position: 'absolute', inset: 0, background: 'rgba(5,6,10,0.45)' }} />
-          <div style={{ position: 'absolute', left: 0, right: 0, top: 0, padding: '10px 16px', background: '#B3261E', color: '#fff', font: '700 18px Roboto', textAlign: 'center' }}>
-            Superseded by the new player — see plc-unit-1760 / Заменено новым плеером</div></div> }) };
+          <div style={{ position: 'absolute', left: 0, right: 0, top: 0, padding: '10px 16px', background: color, color: '#fff', font: '700 18px Roboto', textAlign: 'center' }}>
+            {en} / {ru}</div></div> };
+    }
+    function supersede(section) {
+      return { ...section, boards: section.boards.map((b) => {
+        if (SUPERSEDED.has(b.id)) return ribbon(b, 'SUPERSEDED by the new player — see plc-unit-1760', 'Заменено новым плеером', '#B3261E');
+        const r = LIB_REPLACED[b.id];
+        if (!r) return b;
+        return r[1] ? ribbon(b, `REJECTED — per-account sections chosen, see ${r[0]}`, 'Отклонено — выбраны разделы по аккаунтам', '#6B4A12')
+          : ribbon(b, `SUPERSEDED by the per-account Library — see ${r[0]}`, 'Заменено библиотекой по аккаунтам', '#B3261E');
+      }) };
     }
     // Variants defined in another file join an existing section right after a given board (Phase 4, jellyfin.jsx):
     // { sectionId: [{ after: boardId, boards: [...] }] }. An unknown section or board appends at the end.

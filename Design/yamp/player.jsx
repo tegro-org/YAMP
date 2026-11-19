@@ -171,16 +171,26 @@ function PlTabBar({ active = 'home', mark }) {
 // As built (My Wave), with the queue dropdown at the top and without the "Player" link; the two tap targets that
 // open the player are outlined.
 function PlMainScreen() {
-  const t = useT();
   return (
     <Frame kind="phone" tint="#2C4FA8" glowY="26%">
+      <PlMainContent notes />
+      <PlTabBar mark />
+    </Frame>
+  );
+}
+// The main screen's content without the tab bar; `notes` = the tap targets and caption chips of pl-main.
+// Reused by homejf.jsx (Home with Jellyfin sections below the hero).
+function PlMainContent({ notes }) {
+  const t = useT();
+  return (
+    <React.Fragment>
       <div style={{ position: 'absolute', left: 20, top: 22 }}><LargeTitle>{t('My Wave', 'Моя волна')}</LargeTitle></div>
       <div style={{ position: 'absolute', right: 20, top: 18, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
         <PlDropdown />
         <GlassPill icon="tune" height={36}>{t('Tune the wave', 'Настроить волну')}</GlassPill>
       </div>
       <div style={{ position: 'absolute', left: 0, right: 0, top: 176, display: 'flex', justifyContent: 'center' }}><SpectrumRing size={290} knob={164} /></div>
-      <PlTarget left={56} top={168} width={300} height={306} radius={150} />
+      {notes && <PlTarget left={56} top={168} width={300} height={306} radius={150} />}
       <div style={{ position: 'absolute', left: 20, right: 20, top: 488, display: 'flex', alignItems: 'center', gap: 12 }}>
         <GlassCircle icon="heart_broken" size={48} />
         <div style={{ flex: 1, textAlign: 'center', minWidth: 0 }}>
@@ -189,7 +199,7 @@ function PlMainScreen() {
         </div>
         <GlassCircle icon="favorite" size={48} color={HF.love} />
       </div>
-      <PlTarget left={82} top={482} width={248} height={62} radius={18} />
+      {notes && <PlTarget left={82} top={482} width={248} height={62} radius={18} />}
       <SectionCaps style={{ position: 'absolute', left: 20, right: 12, top: 566 }}>{t('Next in the wave', 'Дальше в волне')}</SectionCaps>
       <div style={{ position: 'absolute', left: 20, top: 604, display: 'flex', gap: 12 }}>
         {[['A very long song title', 'Artist with a long name', 'rose'], [t('Third song', 'Третья песня'), t('Artist', 'Исполнитель'), 'green']].map(([a, b, hue]) => (
@@ -199,10 +209,9 @@ function PlMainScreen() {
           </div>
         ))}
       </div>
-      <PlNote style={{ position: 'absolute', left: 20, top: 78 }}>{t('Tap = player', 'Нажатие = плеер')}</PlNote>
-      <PlNote icon="arrow_downward" style={{ position: 'absolute', right: 20, bottom: 96 }}>{t('"In car" tab → "Player"', 'Вкладка «В авто» → «Плеер»')}</PlNote>
-      <PlTabBar mark />
-    </Frame>
+      {notes && <PlNote style={{ position: 'absolute', left: 20, top: 78 }}>{t('Tap = player', 'Нажатие = плеер')}</PlNote>}
+      {notes && <PlNote icon="arrow_downward" style={{ position: 'absolute', right: 20, bottom: 96 }}>{t('"In car" tab → "Player"', 'Вкладка «В авто» → «Плеер»')}</PlNote>}
+    </React.Fragment>
   );
 }
 
@@ -212,7 +221,8 @@ function PlMainScreen() {
 // The ⋮ menu — the only control on the top row besides the queue dropdown (2026-11-18). Order: (1) "Tune the wave"
 // on My Wave / "Start radio" on other Yandex queues / nothing on Jellyfin, (2) Search, (3) Sleep timer, (4) Add to
 // playlist…, (5) Quality · <format>, (6) Like / Dislike only with like gestures on. `big` = the car's sizes.
-function PlMoreMenu({ gestures, slot = 'wave', big, style }) {
+// `browse` (carbrowse.jsx, (f)): "Library" last (user 2026-11-19) — the car's one entry to albums, folders and playlists.
+function PlMoreMenu({ gestures, slot = 'wave', big, browse, style }) {
   const t = useT();
   const items = [
     ...(slot === 'wave' ? [['tune', t('Tune the wave', 'Настроить волну')]] : []),
@@ -222,13 +232,15 @@ function PlMoreMenu({ gestures, slot = 'wave', big, style }) {
     ['playlist_add', t('Add to playlist…', 'Добавить в плейлист…')],
     ['graphic_eq', t('Quality · MP3 320 kbps', 'Качество · MP3 320 кбит/с')],
     ...(gestures ? [['favorite', t('Like', 'Нравится')], ['heart_broken', t('Dislike', 'Не нравится')]] : []),
+    ...(browse ? [['library_music', t('Library', 'Музыка')]] : []),
   ];
   return (
     <div style={{ position: 'absolute', width: big ? 400 : 270, borderRadius: big ? 24 : 18, background: HF.sheet, border: `1px solid ${HF.hairline}`,
       boxShadow: '0 12px 40px rgba(0,0,0,0.55)', padding: big ? '8px 0' : '6px 0', zIndex: 5, ...style }}>
       {items.map(([icon, text]) => (
-        <div key={icon} style={{ display: 'flex', alignItems: 'center', gap: big ? 18 : 14, height: big ? 64 : 48, padding: big ? '0 22px' : '0 16px' }}>
-          <Icon name={icon} size={big ? 28 : 22} color={icon === 'favorite' ? HF.love : HF.text2} />
+        <div key={icon} style={{ display: 'flex', alignItems: 'center', gap: big ? 18 : 14, height: big ? 64 : 48, padding: big ? '0 22px' : '0 16px',
+          ...(icon === 'library_music' ? { background: 'rgba(10,108,255,0.16)', boxShadow: `inset 3px 0 0 ${HF.accent}`, borderTop: `1px solid ${HF.hairline}` } : {}) }}>
+          <Icon name={icon} size={big ? 28 : 22} color={icon === 'favorite' ? HF.love : icon === 'library_music' ? '#fff' : HF.text2} />
           <div className="hf-ellipsis" style={{ fontSize: big ? 20 : 15, fontWeight: 600 }}>{text}</div>
         </div>
       ))}
@@ -408,8 +420,9 @@ function plWideLayout({ W, H, next = 3, big }) {
   // Taller screens (rule 3): no spare width — the controls take all that is left and the cover block ends exactly at
   // the minimum right padding. Wide screens (rule 4): the controls stop at their cap and the cover block is centred in
   // the space beside them. A spare of less than two minimum gaps is not worth centring and goes to the controls too.
+  // Taller = width/height below 1.66 (user, 2026-11-19; the app's TALLER_RATIO): 16:10 and 4:3 are taller, 16:9 is wide.
   const cap = Math.round(share * W), fit = W - 2 * edge - gapMin - cover;
-  const centred = fit - cap >= 2 * gapMin;
+  const centred = W / H >= 1.66 && fit - cap >= 2 * gapMin;
   const controlsW = centred ? cap : fit;
   const areaLeft = edge + controlsW, areaRight = W - edge;
   const coverLeft = centred ? Math.round((areaLeft + areaRight - cover) / 2) : areaRight - cover;
@@ -509,7 +522,7 @@ function PlPhoneLandscapeBody({ next, W, H, slot = 'wave', menu, side = 'left' }
 // every board that drew the old car screen now shows the new player: `queueName`/`queueLead` (the dropdown),
 // `track` [title, artist, hue], `nextState`, `played`/`buffered`, `weak`, `dim`.
 function PlCarBody({ side = 'left', w = FRAMES.head.w, h = 720, likes = 'buttons', burst, toast, drag, queueName, queueLead, track, nextState,
-  played = 0.34, buffered = 0.6, weak, dim, next = 3, slot = 'wave', menu }) {
+  played = 0.34, buffered = 0.6, weak, dim, next = 3, slot = 'wave', menu, browse }) {
   const [nowTitle, nowArtist, nowHue] = track || ['Wish You Were Here', 'Pink Floyd', 'amber'];
   const t = useT();
   const H = h;
@@ -531,7 +544,7 @@ function PlCarBody({ side = 'left', w = FRAMES.head.w, h = 720, likes = 'buttons
       <PlTopRow big menuOpen={menu} queueName={queueName} queueLead={queueLead} reverse={side !== 'left'}
         extra={weak ? <GlassPill icon="wifi_off" height={60} style={{ fontSize: 20, flexShrink: 0 }}>{t('Weak signal · downloaded', 'Слабая связь · скачанное')}</GlassPill> : null}
         style={{ top: 26, width: driverW, justifyContent: side === 'left' ? 'flex-start' : 'flex-start', ...(side === 'left' ? { left: 48 } : { right: 48 }) }} />
-      {menu && <PlMoreMenu big slot={slot} gestures={likes === 'gestures'} style={{ top: 100, ...(side === 'left' ? { left: 48 } : { right: 48 }) }} />}
+      {menu && <PlMoreMenu big slot={slot} browse={browse} gestures={likes === 'gestures'} style={{ top: 100, ...(side === 'left' ? { left: 48 } : { right: 48 }) }} />}
       {/* wheel side, bottom: labels centred between dislike / like, progress, transport with the ring */}
       <div style={{ position: 'absolute', top: controlsTop, width: driverW, ...at(48, driverW) }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
@@ -753,4 +766,4 @@ function playerBoards() {
 function t2(en, ru) { return <PlT en={en} ru={ru} />; }
 function PlT({ en, ru }) { const t = useT(); return t(en, ru); }
 
-Object.assign(window, { playerBoards, PlMainScreen, PlPhonePlayer, PlPhoneQueueOpen, PlPhoneLandscape, PlCarPlayer, PlCarQueueOpen, PlSettings });
+Object.assign(window, { playerBoards, PlMainScreen, PlMainContent, PlTabBar, PlDropdown, PlMoreMenu, PlNote, PlPhonePlayer, PlPhoneQueueOpen, PlPhoneLandscape, PlCarPlayer, PlCarQueueOpen, PlSettings });
