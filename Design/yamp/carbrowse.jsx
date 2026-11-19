@@ -172,6 +172,86 @@ function CbAddToQueue({ provider = 'yandex', title, artist }) {
   );
 }
 
+// The car album page (tap on an album tile; a hold still opens the quick menu): breadcrumbs Albums › title in the top
+// row, back returns to the grid. Wheel side: cover, title, artist · year · tracks, then the big actions (Play,
+// Shuffle, Play next, Add to end, Add to queue…, Start radio — Yandex only). Far side: the tracks in 88 dp rows; a
+// tap plays the album from that track (in the album's account's queue, D84). Mirrors for the right-hand wheel.
+const CB_ALBUM = {
+  yandex: { title: 'Дикие травы', artist: 'Мельница', year: 2009, hue: 'green', min: 52,
+    tracks: [...AM_ALBUM_TRACKS, ['Дорога сна', '4:12'], ['Сонг', '3:46'], ['Невеста Полоза', '5:03'], ['Белая кошка', '3:28'], ['Ночная кобыла', '4:20'], ['Прощание', '4:31']] },
+  jellyfin: { title: 'Night Drive', artist: 'Lumen Lane', year: 2021, hue: 'violet', min: 44,
+    tracks: [['Headlights', '3:58'], ['Night Drive', '4:21'], ['Tunnel Lights', '3:40'], ['Exit 14', '4:02'], ['Sodium Glow', '5:11'], ['Overpass', '3:33'],
+      ['Rearview', '4:09'], ['Empty Lanes', '3:47'], ['Dashboard Blue', '4:15'], ['Last Station', '3:52'], ['Home by Dawn', '5:06']] },
+};
+function CbTrackRow({ n, title, time, playing, pressed }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 22, height: 88, padding: '0 24px', borderRadius: 22,
+      background: playing ? 'rgba(255,255,255,0.10)' : 'transparent', boxShadow: pressed ? `0 0 0 3px ${HF.accent}` : 'none',
+      borderBottom: playing || pressed ? 'none' : `1px solid ${HF.hairline}` }}>
+      <div style={{ width: 40, textAlign: 'center', fontSize: 22, fontWeight: 700, color: HF.text3 }}>
+        {playing ? <Icon name="graphic_eq" size={30} color={HF.accent} /> : n}
+      </div>
+      <div className="hf-ellipsis" style={{ flex: 1, fontSize: 25, fontWeight: playing ? 800 : 600 }}>{title}</div>
+      <div style={{ fontSize: 20, color: HF.text2 }}>{time}</div>
+    </div>
+  );
+}
+function CbAlbumPage({ side = 'left', provider = 'yandex', pressed = 2 }) {
+  const t = useT(); const w = AmUseWords();
+  const a = CB_ALBUM[provider];
+  const n = a.tracks.length;
+  const colW = CB.w - 2 * CB.pad - 40 - CB_ALBUM_LIST_W;
+  const at = (left, width) => (side === 'left' ? { left } : { left: CB.w - left - width });
+  const big = { fontSize: 21, whiteSpace: 'nowrap', padding: '0 16px' };
+  const buttons = [
+    ['play_arrow', t('Play', 'Слушать'), true], ['shuffle', w.shuffle], ['skip_next', w.playNext], ['playlist_play', t('Add to end', 'В конец')],
+    ['stacks', w.addTo], ...(provider === 'yandex' ? [['sensors', w.radio]] : []),
+  ];
+  return (
+    <CbShell side={side} crumbs={[t('Albums', 'Альбомы'), a.title]} provider={provider} gridLeft={CB.pad + colW + 40}
+      tint={provider === 'jellyfin' ? '#3B3355' : '#2E4A3A'} overlay={
+      <div style={{ position: 'absolute', top: CB.top, width: colW, ...at(CB.pad, colW) }}>
+        <div style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
+          <Cover size={200} hue={a.hue} radius={28} />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 34, lineHeight: '40px', fontWeight: 800 }}>{a.title}</div>
+            <div className="hf-ellipsis" style={{ fontSize: 22, color: HF.text, marginTop: 6 }}>{a.artist}</div>
+            <div style={{ fontSize: 19, color: HF.text2, marginTop: 4 }}>
+              {w.album} · {a.year} · {t(`${n} tracks · ${a.min} min`, `${n} ${fdPl(n, 'трек', 'трека', 'треков')} · ${a.min} мин`)}
+            </div>
+          </div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 26 }}>
+          {buttons.map(([icon, label, primary], i) => {
+            const style = { ...big, ...(i === buttons.length - 1 && buttons.length % 2 ? { gridColumn: '1 / span 2' } : {}) };
+            return primary
+              ? <MetalPill key={icon} icon={icon} height={84} style={style}>{label}</MetalPill>
+              : <GlassPill key={icon} icon={icon} height={84} style={style}>{label}</GlassPill>;
+          })}
+        </div>
+        {provider === 'jellyfin' && <div style={{ fontSize: 17, color: HF.text3, marginTop: 16 }}>{w.noRadio}</div>}
+      </div>}>
+      <div style={{ width: '100%' }}>
+        {a.tracks.map(([title, time], i) => <CbTrackRow key={title} n={i + 1} title={title} time={time} playing={i === 0} pressed={i === pressed} />)}
+      </div>
+    </CbShell>
+  );
+}
+// The track list's width (the frame less the wheel-side column, its gap and the margins).
+const CB_ALBUM_LIST_W = CB.w - 2 * CB.pad - 620 - 40;
+// The page with the tap shown: a ring on the tapped row and a note over it.
+function CbAlbumBoard({ side = 'left', provider = 'yandex' }) {
+  const t = useT();
+  return (
+    <div className="hf" style={{ position: 'relative', width: CB.w, height: CB.h }}>
+      <CbAlbumPage side={side} provider={provider} />
+      <PlNote big style={{ position: 'absolute', top: CB.top + 4 + 88 * 2 + 20, right: side === 'left' ? 140 : CB.w - (CB.pad + CB_ALBUM_LIST_W) + 140 }}>
+        {t('Tap a track: the album plays from it', 'Нажатие на трек — альбом играет с него')}
+      </PlNote>
+    </div>
+  );
+}
+
 // The entry: the player's ⋮ with "Library" last (below Quality; the menu's own items keep their places).
 function CbEntry({ side = 'left' }) {
   const t = useT();
@@ -203,6 +283,12 @@ function carBrowseBoards() {
           el: <CbAlbums side="right" provider="jellyfin" pressed="Night Drive" menu /> },
         { id: 'ca-add-l', label: '(f) Album menu → Add to queue… · car picker in the same panel: Anna’s queues only (the album’s account), "New queue" on top (named after the album), 100 dp rows, back to the menu · left-hand', ...H,
           el: <CbAlbums pressed="Дикие травы" addTo /> },
+        { id: 'ca-album-l', label: '(f) Car album page · a tap on an album tile opens it (a long press still opens the quick menu) · breadcrumbs Albums › title, back to the grid · cover, title, artist · year · tracks · Play · Shuffle · Play next · Add to end · Add to queue… · Start radio (Yandex) · big track rows, a tap plays the album from that track · left-hand', ...H,
+          el: <CbAlbumBoard /> },
+        { id: 'ca-album-r', label: '(f) Car album page · Yandex · right-hand, mirrored (actions and cover on the wheel side, tracks on the far side) · long press on a tile still opens the quick menu', ...H,
+          el: <CbAlbumBoard side="right" /> },
+        { id: 'ca-album-jf-l', label: '(f) Car album page · Jellyfin album · no Start radio (Phases 5–6) · left-hand · long press on a tile still opens the quick menu', ...H,
+          el: <CbAlbumBoard provider="jellyfin" /> },
         { id: 'ca-add-jf-r', label: '(f) Add to queue… on a Jellyfin album · Home Media’s queues only · right-hand, mirrored', ...H,
           el: <CbAlbums side="right" provider="jellyfin" pressed="Night Drive" addTo /> },
       ] },
@@ -210,4 +296,4 @@ function carBrowseBoards() {
   };
 }
 
-Object.assign(window, { CB, CbShell, CbTabs, CbAlbums, CbAddToQueue, CbEntry, carBrowseBoards });
+Object.assign(window, { CB, CbShell, CbTabs, CbAlbums, CbAddToQueue, CbAlbumPage, CbEntry, carBrowseBoards });
