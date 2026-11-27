@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/readme-banner.png" width="560" alt="YAMP — Yet Another Music Player"></p>
+
 # YAMP — Yet Another Music Player
 
 A multi-source music player for Android, built for car head units and Android Auto as much as for the phone: your
