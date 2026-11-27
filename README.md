@@ -1,145 +1,114 @@
-# 🎵 Yandex Music Lite
+# YAMP — Yet Another Music Player
 
-<div align="center">
+A multi-source music player for Android, built for car head units and Android Auto as much as for the phone: your
+own music first — folders on the device, an SD card or a USB stick, and your self-hosted Jellyfin server — with
+Yandex Music as one more, optional source. Multiple persistent queues, radio and mixes, fast folder browsing.
 
-<img src="docs/assets/logo.png" width="130" alt="Yandex Music Lite Logo" />
+The Yandex Music integration is **unofficial**: it uses the official app's client id and request signing and may
+break whenever Yandex changes its API. It needs a Yandex account with an active Yandex Plus; YAMP does not sell,
+resell or unlock anything.
 
-# Yandex Music Lite
+## What YAMP is, and how it differs from its origin
 
-[![Website](https://img.shields.io/badge/Website-GitHub%20Pages-FF9900.svg?style=for-the-badge&logo=googlechrome&logoColor=white)](https://korenskoyr.github.io/YandexMusicLite/)
-[![Android](https://img.shields.io/badge/Platform-Android%208.0%2B-3DDC84.svg?style=for-the-badge&logo=android&logoColor=white)](https://android.com)
-[![Release](https://img.shields.io/badge/Release-Latest-FF3366.svg?style=for-the-badge)](https://github.com/KorenskoyR/YandexMusicLite/releases)
-[![Performance](https://img.shields.io/badge/Performance-Ultra%20Fast-00E5FF.svg?style=for-the-badge)](https://github.com/KorenskoyR/YandexMusicLite)
-[![License](https://img.shields.io/badge/License-GPL--3.0-0A6CFF.svg?style=for-the-badge)](LICENSE)
-[![Language](https://img.shields.io/badge/Kotlin-100%25-7F52FF.svg?style=for-the-badge&logo=kotlin&logoColor=white)](https://kotlinlang.org)
-[![UI](https://img.shields.io/badge/UI-Jetpack%20Compose-4285F4.svg?style=for-the-badge&logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
+YAMP started as a hard fork of [Yandex Music Lite](https://github.com/KorenskoyR/YandexMusicLite) and is no longer
+the same app. Upstream is a player for one service; YAMP is a player with several sources.
 
-### Быстрый и лёгкий плеер Яндекс Музыки для Android
+**Key changes**
 
-Создан для смартфонов, планшетов и автомагнитол — быстро запускается, не перегружает память и играет музыку без рекламы. Выглядит как дорогая аудиотехника: металлические ручки, матовое стекло и живой фон из обложки.
+- **Queues and providers.** The core of the player was rewritten, not patched: several persistent queues, each
+  bound to one account, and a provider layer (This device, Jellyfin, Yandex Music) behind one neutral track model.
+  A new source is a provider, not a branch through the player.
+- **Sources.** Folders on the device, an SD card or a USB stick; a Jellyfin server (with Quick Connect and
+  conversion rules); Yandex Music as one optional source. Several accounts at once, with an account order.
+  A first run offers This device and Jellyfin; Yandex Music is added later from Settings → Accounts.
+- **Radio** (Yandex stations and waves, a radio queue from a seed, FM), **folder browsing,** Android Auto and a car layout that is first-class next to the phone.
+- **Tuned for weak head units.** Much of the work is smooth playback on a slow, low-memory car head unit: a small
+  fixed audio output buffer, fades and crossfades with their own durations (transition, start/pause, seek), gapless
+  and next-track preparation, recovery from a dead or silent link, stream caching and an offline road reserve.
+- **Works with the system equalizer.** Tested on a head unit with Poweramp Equalizer (see below). YAMP has no
+  equalizer of its own and none is planned.
+- **Diagnostics for a car you cannot plug into:** a playback journal and an optional main-thread watchdog.
+- **Widgets** (a line, a player and a cover), a per-account Yandex Plus rule, and an in-app updater.
 
-[🌐 Официальный промо-сайт](https://korenskoyr.github.io/YandexMusicLite/) • [📥 Скачать актуальный APK](https://github.com/KorenskoyR/YandexMusicLite/releases/latest) • [📸 Скриншоты](#-скриншоты-интерфейса) • [✨ Особенности](#-главные-особенности) • [🚗 В автомобиле](#-специально-для-автомобиля-car-mode) • [🛠 Сборка](#-сборка-из-исходников)
+**The providers**
 
-</div>
+- **This device (local files).** Folders on the phone, an SD card or a USB stick, no account needed. Tags (ID3, Vorbis,
+  MP4, old Russian CP1251), embedded covers or `cover.jpg`; MP3, AAC/M4A, FLAC, Opus, Vorbis and WAV. Built for
+  media that comes and goes: a stick that is out stays in the Library, dimmed, and **nothing is deleted**; the queue
+  skips its tracks, and if the track that was playing is on the missing stick after a restart the queue waits and
+  continues when the stick returns. It rescans by itself (after start, when a drive is mounted, once a day) and only
+  reads files that changed. On Android 9–10 head units it reads the stick by its path, since those units don't let
+  apps use it the usual way.
+- **Jellyfin.** Your own server, signed in with a password or Quick Connect; each server and user is its own account
+  with its own queues and cache. The Library, folders (breadcrumbs, filter, pins, play a whole folder),
+  favourites, playlists and search together with other sources. Quality is per account: files that Android plays are
+  streamed as they are, the rest is converted (MP3, or FLAC for ALAC) and played from one full-speed download so
+  seeking works. Favourites can be downloaded for offline playback, plays are reported to the server, and the last
+  visit stays readable when the server can't be reached.
+- **Yandex Music** is the optional one, added from Settings → Accounts (see the note on it above).
 
----
+**Caching, buffering, offline and the equalizer — against upstream**
 
-## 📸 Скриншоты интерфейса
+- **Buffering policy:** the same as upstream's (copied). YAMP adds to it the output side: both players are resampled
+  to the device's mixer rate and the audio output buffer is a fixed 300 ms (Media3's default is 500 ms), so a skip,
+  seek or pause can fade the sound that is already buffered instead of cutting it. Two small changes in
+  retries: no retry of a download that is being written to a file, and a start that gets no bytes gives up after one
+  retry.
+- **Caching:** upstream preloads the next track and keeps a reserve of tracks. YAMP keeps both and adds an on-disk
+  stream cache (size is a setting) that every provider shares, and a "growing file" for streams that arrive without a
+  length (converted Jellyfin tracks): the track is fetched once at full speed and plays from that file, seekable
+  once whole.
+- **Offline:** the road reserve and downloads of liked tracks are upstream's idea. YAMP makes them per account
+  (Yandex likes, Jellyfin favourites), adds the local provider (always offline) and the return from the device's
+  own music to the stream as a trial with a back-off. Not taken from upstream (yet): download storage on a USB
+  drive and offline collections.
+- **Equalizer:** upstream ships its own equalizer next to the system one. YAMP has **none of its own and none is
+  planned**: it announces its audio session to the system equalizer (tested with Poweramp Equalizer) and applies
+  its fades to the audio itself, so they work even when an equalizer app takes over the player's volume.
 
-<div align="center">
-  <img src="docs/assets/showcase.jpg" alt="Скриншоты интерфейса Yandex Music Lite" />
-</div>
+**What is still close to upstream**
 
-<details>
-<summary><b>🔍 Посмотреть отдельные экраны в полном разрешении</b></summary>
-<br/>
+- **The Yandex provider** sits between the original code and a proper provider: the API client, its data classes,
+  request signing, My Wave and the radio stations follow upstream, and Yandex API fixes are ported from it by hand.
+  Behind the provider interface it is separate from the rest of the player, but its insides are not yet rewritten.
+- **Buffering for an uneven mobile link** is upstream's work, copied in: the player keeps 2–3 minutes of music
+  ahead, starts a track after about 2.5 s of sound (not 1 s) and resumes after a dry spell with 5 s in hand, and
+  retries a broken download up to 14 times, failing at once on a real refusal (4xx) so the link is asked again. Most
+  of the stutter-free playback on a car's mobile link comes from this.
+- **The look of the app** is upstream's: thanks to its author for the design the UI grew from. It already differs
+  (new screens, the car layouts, source and queue switchers) and keeps moving away from it.
 
-<div align="center">
+Upstream changes are reviewed and ported by hand, never merged. The `main` branch mirrors upstream; the app lives
+on `yamp`.
 
-| [🌊 Моя волна](docs/assets/wave.jpg) | [▶️ Плеер](docs/assets/player.jpg) | [📋 Очередь](docs/assets/queue.jpg) |
-| :---: | :---: | :---: |
-| <a href="docs/assets/wave.jpg"><img src="docs/assets/wave.jpg" width="220" alt="Моя волна" /></a> | <a href="docs/assets/player.jpg"><img src="docs/assets/player.jpg" width="220" alt="Плеер" /></a> | <a href="docs/assets/queue.jpg"><img src="docs/assets/queue.jpg" width="220" alt="Очередь" /></a> |
+## Origin and license
 
-| [🔍 Поиск](docs/assets/search.jpg) | [🎵 Моя музыка](docs/assets/library.jpg) | [📻 FM Радио](docs/assets/radio.jpg) |
-| :---: | :---: | :---: |
-| <a href="docs/assets/search.jpg"><img src="docs/assets/search.jpg" width="220" alt="Поиск" /></a> | <a href="docs/assets/library.jpg"><img src="docs/assets/library.jpg" width="220" alt="Моя музыка" /></a> | <a href="docs/assets/radio.jpg"><img src="docs/assets/radio.jpg" width="220" alt="FM Радио" /></a> |
+YAMP is a fork of [Yandex Music Lite](https://github.com/KorenskoyR/YandexMusicLite) by KorenskoyR,
+imported at upstream commit `fac6af78faec620ae39ef9f2f20e37c39ba1c220` (1.12.2, 2026-11-09).
+Ideas were also taken from [YML](https://github.com/Ozo-bro/YML) by Ozo-bro.
 
-| [⚙️ Настройки](docs/assets/settings.jpg) | [🚗 Режим «В авто»](docs/assets/car.jpg) |
-| :---: | :---: |
-| <a href="docs/assets/settings.jpg"><img src="docs/assets/settings.jpg" width="220" alt="Настройки" /></a> | <a href="docs/assets/car.jpg"><img src="docs/assets/car.jpg" width="480" alt="В авто" /></a> |
+Licensed under the GNU General Public License v3.0 — see `LICENSE`. All trademarks and audio content
+belong to their respective owners.
 
-Треки и обложки на скриншотах придуманы для примера.
+## Head units with Poweramp Equalizer
 
-</div>
+YAMP is tested with the system equalizer, Poweramp Equalizer on a head unit. If it runs there, change two of its per-app options for YAMP (Poweramp Equalizer →
+Known Players → YAMP); the other options can stay as they are:
 
-</details>
+- **«Затухание» (Fade): off.** With it on, the equalizer briefly takes the sound focus whenever a stream changes,
+  which pauses YAMP on some head units.
+- **«Без DVC»: on.** With it off, the equalizer takes over the volume of YAMP's audio session, so YAMP's own
+  fades, crossfades and skips are not applied and the previous track can be heard over the next one.
 
----
+YAMP shows the same hint in Settings → Playback when Poweramp Equalizer is installed.
 
-## ✨ Главные особенности
+## Build
 
-- 🌊 **«Моя волна» в одно касание**: персональный поток музыки на главной странице. Сразу видно, что играет и что будет дальше, а кольцо спектра вокруг кнопки показывает, сколько трека прошло.
-- ⚡ **Быстрый старт и отзывчивость**: приложение быстро открывается и работает плавно даже на бюджетных смартфонах и китайских магнитолах, а на слабых устройствах само включает облегчённый режим анимаций.
-- 🚗 **Удобный режим для авто (Car Mode)**: экран как приборная панель — крупные ручки, таймлайн, часы и быстрое переключение между волной, любимым и радио.
-- 🎨 **Дизайн Hi-Fi**: тёмная тема, металлические ручки и матовое стекло, а цвет всего приложения берётся из обложки играющего трека.
-- 👆 **Плеер и очередь под пальцем**: плеер тянется за пальцем вверх и вниз, трек меняется свайпом по обложке, жест «Назад» на Android 14+ показывает, куда вы вернётесь. Треки в очереди можно перетаскивать и убирать свайпом.
-- ❤️ **Лайк из шторки**: «Не нравится» и сердечко в плеере в шторке, на экране блокировки и в Android Auto.
-- 📻 **Эфирное FM Радио**: 37 популярных радиостанций в прямом эфире — шкала приёмника, избранное и категории, от танцевальной музыки до рока и новостей.
-- ❤️ **Вся медиатека под рукой**: любимые треки из раздела «Мне нравится», новинки, поиск по каталогу, чарты хитов и трендов.
-- ✏️ **Свои плейлисты**: создавайте, переименовывайте и удаляйте плейлисты, добавляйте и убирайте треки, меняйте порядок перетаскиванием, делайте их публичными или приватными — правки сразу видны и в официальном приложении.
-- 🎤 **Исполнители и альбомы**: отдельные страницы артистов и альбомов с популярными треками и дискографией, ряды в поиске и список недавних запросов.
-- 📶 **Музыка не прерывается**: следующие треки и их обложки подгружаются заранее, поэтому при нестабильном интернете, в тоннелях или на загородных трассах всё появляется без пауз.
-- 💾 **Офлайн-режим**: сохраняйте любимое на устройство и слушайте без интернета; библиотека хранится в локальной базе и открывается мгновенно.
-- 🔍 **Масштаб интерфейса**: авто-подбор под плотность экрана или ручная регулировка 50–200% — спасает автомагнитолы, где интерфейс выходит слишком мелким или крупным.
-- 📱 **Виджет «Сейчас играет»**: обложка и кнопки управления прямо с рабочего стола, без открытия приложения.
-- 🔄 **Встроенные обновления**: приложение само проверит наличие свежей версии на GitHub и обновится в пару касаний. Не хотите эту версию — пропустите её: окно вернётся только со следующей.
-- 🛠 **Журнал сбоев**: если что-то пошло не так, отчёт можно отправить разработчику — данные входа в него не попадают.
-- 🛡️ **Чистый звук без мусора**: никакой рекламы, навязчивых баннеров, скрытых трекеров и фоновых процессов.
-
----
-
-## 🚗 Специально для автомобиля (Car Mode)
-
-Автомобильный интерфейс спроектирован с заботой о комфорте и безопасности в поездках:
-- **Крупные элементы**: большие металлические ручки управления, по которым легко попадать с водительского места.
-- **Таймлайн без лишних цифр**: плавная полоса с перемоткой пальцем; у радио вместо неё линия «В эфире».
-- **Сторона руля**: выберите, с какой стороны руль — кнопки управления встают ближе к водителю, а обложка уходит на дальнюю сторону.
-- **Масштаб под экран**: режим «Авто» сам подбирает размер интерфейса под плотность экрана магнитолы (частая беда — «плотный экран, но заниженный DPI»), есть и ручная регулировка.
-- **Быстрый доступ**: переключение между «Моей волной», любимыми песнями, радио, хитами и скачанной музыкой в одно касание.
-- **Встроенные часы**: крупное отображение времени и даты в стиле автомобильной панели.
-- **Стабильный звук**: адаптировано под Android-магнитолы (Teyes, Kingbeats, Incar и др.) — звук воспроизводится плавно и чисто, без заиканий и эффекта ускорения.
-
----
-
-## 📲 Как установить
-
-1. Перейдите в раздел [**Releases**](https://github.com/KorenskoyR/YandexMusicLite/releases/latest) и скачайте файл **`YandexMusicLite.apk`**.
-2. Откройте загруженный файл на вашем Android-устройстве.
-3. При запросе системы разрешите установку из неизвестных источников.
-4. Запустите **Yandex Music Lite** и авторизуйтесь через свой Яндекс ID — ваша музыка сразу появится в приложении!
-
-> 💡 **Полезно знать:** Все последующие обновления приложение умеет скачивать и устанавливать автоматически через встроенный загрузчик в настройках.
->
-> 💡 **Полезно знать:** Техподдержка осуществляется через ТГ бота: https://t.me/YandexMusicLite_bot
----
-
-## 🛠 Сборка из исходников
-
-Для самостоятельной компиляции проекта потребуется:
-- **JDK**: 17 или новее
-- **Android SDK**: API 37 (compileSdk), приложение поддерживает Android 8.0+ (API 26) и нацелено на Android 16 (API 36)
-- **Gradle**: 9.x (включён gradlew wrapper)
-
-```bash
-# Клонирование репозитория
-git clone https://github.com/KorenskoyR/YandexMusicLite.git
-cd YandexMusicLite
-
-# Отладочная сборка (ключ подписи не нужен)
-./gradlew assembleDebug
-
-# Тесты и статический анализ
-./gradlew testDebugUnitTest lintDebug
+```sh
+./gradlew assembleDebug          # debug APK → app/build/outputs/apk/debug/
+./gradlew assembleRelease        # needs the signing key in local.properties (never committed)
+./gradlew verifyRoborazziDebug lintDebug   # tests, screenshot compare, lint
 ```
 
----
-
-## 🏗 Архитектура и стек технологий
-
-- **Архитектурный паттерн**: Clean Architecture + MVVM; воспроизведение — процессный синглтон `PlaybackController`
-- **UI Framework**: Jetpack Compose (Material 3, Edge-to-Edge, WindowInsets, predictive back)
-- **Внедрение зависимостей**: Dagger Hilt
-- **Аудио-движок**: AndroidX Media3 (два ExoPlayer с кроссфейдом, MediaLibraryService, MediaSession, возобновление с гарнитуры)
-- **Сеть**: Retrofit 3, OkHttp 5, KotlinX Serialization
-- **Асинхронность**: Kotlin Coroutines & StateFlow / SharedFlow
-- **Хранение и кэш**: Room, DataStore Preferences, Coil 3 (три размера обложек, предзагрузка)
-- **Фоновая работа**: WorkManager (офлайн-загрузки), Glance (виджет)
-- **Оптимизация**: R8, Resource Shrinking, Baseline Profile
-
----
-
-## 📄 Лицензия
-
-Код проекта распространяется под лицензией [GNU GPL v3.0](LICENSE): его можно использовать и изменять, а если вы распространяете свою версию, она должна выходить под той же лицензией и с открытым кодом.
-
-Лицензия относится только к коду этого проекта и не даёт прав на сервисы, ключи и материалы третьих лиц. Все права на товарные знаки и аудиоматериалы принадлежат их законным правообладателям.
+Versions come from git: a build on tag `vX.Y.Z` is `X.Y.Z`, any other build is `X.Y.Z-dev.N+sha`.
+Releases are built by GitHub Actions from a pushed `v*` tag; the app updates itself from them.

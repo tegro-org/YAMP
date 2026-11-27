@@ -1,0 +1,214 @@
+{
+  "Items": [
+    {
+      "Name": "Fluffing a Duck",
+      "ServerId": "0123456789abcdef0123456789abcdef",
+      "Id": "0000000000000000000000000000b00b",
+      "PlaylistItemId": "0000000000000000000000000000b00b",
+      "HasLyrics": false,
+      "Container": "flac",
+      "PremiereDate": "2008-01-01T00:00:00.0000000Z",
+      "ChannelId": null,
+      "Genres": [],
+      "RunTimeTicks": 673680000,
+      "ProductionYear": 2008,
+      "IndexNumber": 1,
+      "IsFolder": false,
+      "Type": "Audio",
+      "GenreItems": [],
+      "UserData": {
+        "PlaybackPositionTicks": 0,
+        "PlayCount": 0,
+        "IsFavorite": false,
+        "Played": false,
+        "Key": "01 Fluffing a Duck",
+        "ItemId": "0000000000000000000000000000b00b"
+      },
+      "Artists": [
+        "Kevin MacLeod"
+      ],
+      "ArtistItems": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000b000"
+        }
+      ],
+      "Album": "YAMP Test FLAC",
+      "AlbumId": "0000000000000000000000000000b00c",
+      "AlbumPrimaryImageTag": "0000000000000000000000000000b00d",
+      "AlbumArtist": "Kevin MacLeod",
+      "AlbumArtists": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000b000"
+        }
+      ],
+      "ImageTags": {
+        "Primary": "0000000000000000000000000000b00e"
+      },
+      "BackdropImageTags": [],
+      "ImageBlurHashes": {
+        "Primary": {
+          "0000000000000000000000000000b00e": "eH5jgrL~ozflaxL}t,a}axkCpIa#aKj[aya~aej[fkj[f6kCayj[ay",
+          "0000000000000000000000000000b00d": "eH5jgrL~ozflaxL}t,a}axkCpIa#aKj[aya~aej[fkj[f6kCayj[ay"
+        }
+      },
+      "LocationType": "FileSystem",
+      "MediaType": "Audio"
+    },
+    {
+      "Name": "Sneaky Snitch",
+      "ServerId": "0123456789abcdef0123456789abcdef",
+      "Id": "0000000000000000000000000000b00f",
+      "PlaylistItemId": "0000000000000000000000000000b00f",
+      "HasLyrics": false,
+      "Container": "mp3",
+      "PremiereDate": "2008-01-01T00:00:00.0000000Z",
+      "ChannelId": null,
+      "Genres": [],
+      "RunTimeTicks": 1366204080,
+      "ProductionYear": 2008,
+      "IndexNumber": 1,
+      "IsFolder": false,
+      "Type": "Audio",
+      "GenreItems": [],
+      "UserData": {
+        "PlaybackPositionTicks": 0,
+        "PlayCount": 0,
+        "IsFavorite": false,
+        "Played": false,
+        "Key": "01 Sneaky Snitch",
+        "ItemId": "0000000000000000000000000000b00f"
+      },
+      "Artists": [
+        "Kevin MacLeod"
+      ],
+      "ArtistItems": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000b000"
+        }
+      ],
+      "Album": "YAMP Test MP3",
+      "AlbumId": "0000000000000000000000000000b010",
+      "AlbumArtist": "Kevin MacLeod",
+      "AlbumArtists": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000b000"
+        }
+      ],
+      "ImageTags": {},
+      "BackdropImageTags": [],
+      "ImageBlurHashes": {},
+      "LocationType": "FileSystem",
+      "MediaType": "Audio"
+    },
+    {
+      "Name": "Carefree",
+      "ServerId": "0123456789abcdef0123456789abcdef",
+      "Id": "0000000000000000000000000000b011",
+      "PlaylistItemId": "0000000000000000000000000000b011",
+      "HasLyrics": false,
+      "Container": "mp3",
+      "PremiereDate": "2008-01-01T00:00:00.0000000Z",
+      "ChannelId": null,
+      "Genres": [],
+      "RunTimeTicks": 2051395920,
+      "ProductionYear": 2008,
+      "IndexNumber": 2,
+      "IsFolder": false,
+      "Type": "Audio",
+      "GenreItems": [],
+      "UserData": {
+        "PlaybackPositionTicks": 0,
+        "PlayCount": 0,
+        "IsFavorite": false,
+        "Played": false,
+        "Key": "02 Carefree",
+        "ItemId": "0000000000000000000000000000b011"
+      },
+      "Artists": [
+        "Kevin MacLeod"
+      ],
+      "ArtistItems": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000b000"
+        }
+      ],
+      "Album": "YAMP Test MP3",
+      "AlbumId": "0000000000000000000000000000b010",
+      "AlbumArtist": "Kevin MacLeod",
+      "AlbumArtists": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000b000"
+        }
+      ],
+      "ImageTags": {},
+      "BackdropImageTags": [],
+      "ImageBlurHashes": {},
+      "LocationType": "FileSystem",
+      "MediaType": "Audio"
+    },
+    {
+      "Name": "Monkeys Spinning Monkeys",
+      "ServerId": "0123456789abcdef0123456789abcdef",
+      "Id": "0000000000000000000000000000b012",
+      "PlaylistItemId": "0000000000000000000000000000b012",
+      "HasLyrics": false,
+      "Container": "flac",
+      "PremiereDate": "2008-01-01T00:00:00.0000000Z",
+      "ChannelId": null,
+      "Genres": [],
+      "RunTimeTicks": 1250742860,
+      "ProductionYear": 2008,
+      "IndexNumber": 2,
+      "IsFolder": false,
+      "Type": "Audio",
+      "GenreItems": [],
+      "UserData": {
+        "PlaybackPositionTicks": 0,
+        "PlayCount": 0,
+        "IsFavorite": false,
+        "Played": false,
+        "Key": "02 Monkeys Spinning Monkeys",
+        "ItemId": "0000000000000000000000000000b012"
+      },
+      "Artists": [
+        "Kevin MacLeod"
+      ],
+      "ArtistItems": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000b000"
+        }
+      ],
+      "Album": "YAMP Test FLAC",
+      "AlbumId": "0000000000000000000000000000b00c",
+      "AlbumPrimaryImageTag": "0000000000000000000000000000b00d",
+      "AlbumArtist": "Kevin MacLeod",
+      "AlbumArtists": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000b000"
+        }
+      ],
+      "ImageTags": {
+        "Primary": "0000000000000000000000000000b013"
+      },
+      "BackdropImageTags": [],
+      "ImageBlurHashes": {
+        "Primary": {
+          "0000000000000000000000000000b013": "eH5jgrL~ozflaxL}t,a}axkCpIa#aKj[aya~aej[fkj[f6kCayj[ay",
+          "0000000000000000000000000000b00d": "eH5jgrL~ozflaxL}t,a}axkCpIa#aKj[aya~aej[fkj[f6kCayj[ay"
+        }
+      },
+      "LocationType": "FileSystem",
+      "MediaType": "Audio"
+    }
+  ],
+  "TotalRecordCount": 4,
+  "StartIndex": 0
+}

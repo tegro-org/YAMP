@@ -1,0 +1,880 @@
+package org.tegro.yamp.presentation.main.components
+
+import android.content.res.Configuration
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.rounded.Login
+import androidx.compose.material.icons.automirrored.rounded.Logout
+import androidx.compose.material.icons.rounded.Animation
+import androidx.compose.material.icons.rounded.PlayCircle
+import androidx.compose.material.icons.rounded.Timeline
+import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Bluetooth
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.CloudDownload
+import androidx.compose.material.icons.rounded.Code
+import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material.icons.rounded.DirectionsCar
+import androidx.compose.material.icons.rounded.Equalizer
+import androidx.compose.material.icons.rounded.RecordVoiceOver
+import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.Explicit
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.PowerSettingsNew
+import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.SdCard
+import androidx.compose.material.icons.rounded.AccountTree
+import androidx.compose.material.icons.rounded.Storage
+import androidx.compose.material.icons.rounded.SwapHoriz
+import androidx.compose.material.icons.rounded.SwipeLeft
+import androidx.compose.material.icons.rounded.UploadFile
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
+import androidx.compose.material.icons.rounded.WarningAmber
+import androidx.compose.material.icons.rounded.Dashboard
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import org.tegro.yamp.presentation.hifi.AppDialog
+import org.tegro.yamp.presentation.main.StartMusicPlan
+import androidx.compose.ui.window.DialogProperties
+import org.tegro.yamp.BuildConfig
+import org.tegro.yamp.R
+import org.tegro.yamp.domain.model.AnimationMode
+import org.tegro.yamp.domain.model.StartMusic
+import org.tegro.yamp.domain.model.StartPage
+import org.tegro.yamp.domain.repository.SettingsRepository
+import org.tegro.yamp.presentation.hifi.GlassCircleButton
+import org.tegro.yamp.presentation.hifi.HiFi
+import org.tegro.yamp.presentation.hifi.HiFiMotion
+import org.tegro.yamp.presentation.hifi.HiFiSegmented
+import org.tegro.yamp.presentation.hifi.HiFiSwitch
+import org.tegro.yamp.presentation.hifi.HiFiType
+import org.tegro.yamp.presentation.hifi.IconPlaque
+import org.tegro.yamp.presentation.hifi.LocalHiFiLite
+import org.tegro.yamp.presentation.hifi.hifiGrain
+import android.os.SystemClock
+import android.widget.Toast
+import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.material.icons.rounded.WorkspacePremium
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
+
+private const val SOURCE_URL = "https://github.com/tegro-org/YAMP"
+private const val LICENSE_URL = "https://github.com/tegro-org/YAMP/blob/main/LICENSE"
+
+/**
+ * Settings: a short root list (the account card and three sections), and one page per section. On a
+ * side (head unit, phone on its side) the sections stay on the left and the open one fills the right.
+ */
+@Composable
+fun SettingsSheet(
+    state: SettingsUiState,
+    actions: SettingsActions,
+    onDismiss: () -> Unit,
+    initialPage: SettingsPage? = null
+) {
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val lite = LocalHiFiLite.current
+    val scope = rememberCoroutineScope()
+    val visible = remember { MutableTransitionState(false).apply { targetState = true } }
+    LaunchedEffect(visible.currentState, visible.targetState) {
+        if (!visible.targetState && visible.isIdle) onDismiss()
+    }
+    val close = { visible.targetState = false }
+
+    val density = LocalDensity.current
+    val dragOffset = remember { Animatable(0f) }
+    var confirmLogout by remember { mutableStateOf(false) }
+    var confirmClear by remember { mutableStateOf(false) }
+    var pageName by rememberSaveable { mutableStateOf(initialPage?.name) }
+    // "Hide section" while its page is open: back to the list (a side: the first section)
+    val page = pageName?.let { SettingsPage.valueOf(it) }?.takeIf { it != SettingsPage.DEVELOPER || state.developerSection }
+    // On a side there is always an open section; in portrait Back first returns to the root list
+
+    val pageActions = actions.copyWith(onLogout = { confirmLogout = true }, onClearDownloads = { confirmClear = true }, close = close)
+
+    AppDialog(onDismissRequest = close, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        // Inside the dialog's window: Back there first steps out of a page to the root list, then closes
+        BackHandler(enabled = !isLandscape && page != null) { pageName = null }
+        Box(Modifier.fillMaxSize()) {
+            AnimatedVisibility(visibleState = visible, enter = fadeIn(HiFiMotion.standard()), exit = fadeOut(HiFiMotion.standard())) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.55f))
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = close)
+                )
+            }
+            AnimatedVisibility(
+                visibleState = visible,
+                enter = slideInVertically(HiFiMotion.large()) { it },
+                exit = slideOutVertically(HiFiMotion.standard()) { it },
+                modifier = Modifier.align(if (isLandscape) Alignment.Center else Alignment.BottomCenter)
+            ) {
+                val sheetShape = if (isLandscape) RoundedCornerShape(28.dp) else RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp)
+                Column(
+                    modifier = Modifier
+                        .then(if (isLandscape) Modifier.widthIn(max = 980.dp).fillMaxWidth(0.94f).fillMaxHeight(0.94f) else Modifier.fillMaxWidth().fillMaxHeight())
+                        .statusBarsPadding()
+                        .padding(top = if (isLandscape) 0.dp else 24.dp)
+                        .offset { IntOffset(0, dragOffset.value.roundToInt()) }
+                        .clip(sheetShape)
+                        .background(HiFi.SheetFill)
+                        .hifiGrain(enabled = !lite, alpha = 0.35f)
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
+                ) {
+                    // Header: drag it down to close
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .draggable(
+                                orientation = Orientation.Vertical,
+                                state = rememberDraggableState { delta ->
+                                    scope.launch { dragOffset.snapTo((dragOffset.value + delta).coerceAtLeast(0f)) }
+                                },
+                                onDragStopped = {
+                                    if (dragOffset.value > with(density) { 120.dp.toPx() }) close()
+                                    else scope.launch { dragOffset.animateTo(0f, HiFiMotion.spring()) }
+                                }
+                            )
+                    ) {
+                        Box(
+                            Modifier
+                                .padding(top = 10.dp)
+                                .size(width = 40.dp, height = 5.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.28f))
+                                .align(Alignment.CenterHorizontally)
+                        )
+                        Row(
+                            Modifier.fillMaxWidth().padding(start = if (!isLandscape && page != null) 12.dp else 20.dp, end = 16.dp, top = 12.dp, bottom = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val sub = page.takeIf { !isLandscape }
+                            if (sub != null) {
+                                GlassCircleButton(onClick = { pageName = null }, contentDescription = stringResource(R.string.cd_nazad)) {
+                                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                                }
+                                Spacer(Modifier.width(12.dp))
+                            }
+                            Text(
+                                text = sub?.let { stringResource(it.titleRes) } ?: stringResource(R.string.settings_title),
+                                style = HiFiType.LargeTitle.copy(fontSize = if (sub != null) 24.sp else 28.sp, lineHeight = 34.sp),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                            GlassCircleButton(onClick = close, contentDescription = stringResource(R.string.cd_zakryt)) {
+                                Icon(Icons.Rounded.Close, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                            }
+                        }
+                    }
+
+                    if (isLandscape) {
+                        val open = page ?: SettingsPage.PLAYBACK
+                        Row(Modifier.fillMaxWidth().weight(1f).padding(start = 12.dp, end = 16.dp)) {
+                            Column(
+                                Modifier
+                                    .width(300.dp)
+                                    .fillMaxHeight()
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(top = 8.dp, bottom = 16.dp)
+                                    .selectableGroup()
+                            ) {
+                                SectionNavItem(SettingsPage.ACCOUNT, state.accountName.ifEmpty { stringResource(R.string.settings_group_account) }, accountSummary(state), open == SettingsPage.ACCOUNT) { pageName = it.name }
+                                SectionNavItem(SettingsPage.PLAYBACK, stringResource(R.string.settings_section_playback), playbackSummary(state), open == SettingsPage.PLAYBACK) { pageName = it.name }
+                                SectionNavItem(SettingsPage.PLAYER, stringResource(R.string.settings_section_player), playerSummary(state), open == SettingsPage.PLAYER) { pageName = it.name }
+                                SectionNavItem(SettingsPage.INTERFACE, stringResource(R.string.settings_section_interface), interfaceSummary(state), open == SettingsPage.INTERFACE) { pageName = it.name }
+                                SectionNavItem(SettingsPage.ABOUT, stringResource(R.string.settings_group_about), aboutSummary(), open == SettingsPage.ABOUT) { pageName = it.name }
+                                if (state.developerSection) {
+                                    SectionNavItem(SettingsPage.DEVELOPER, stringResource(R.string.developer_title), developerSummary(state), open == SettingsPage.DEVELOPER) { pageName = it.name }
+                                }
+                            }
+                            Spacer(Modifier.width(16.dp))
+                            AnimatedContent(
+                                targetState = open,
+                                transitionSpec = { fadeIn(HiFiMotion.standard()) togetherWith fadeOut(HiFiMotion.quick()) },
+                                label = "settings_section",
+                                modifier = Modifier.weight(1f).fillMaxHeight()
+                            ) { shown ->
+                                Column(
+                                    Modifier
+                                        .fillMaxSize()
+                                        .verticalScroll(rememberScrollState())
+                                        .navigationBarsPadding()
+                                        .padding(bottom = 20.dp)
+                                ) { SettingsPageContent(shown, state, pageActions) }
+                            }
+                        }
+                    } else {
+                        AnimatedContent(
+                            targetState = page,
+                            transitionSpec = {
+                                val forward = targetState != null
+                                if (lite) fadeIn(HiFiMotion.quick()) togetherWith fadeOut(HiFiMotion.quick())
+                                else (slideInHorizontally(HiFiMotion.standard()) { w -> if (forward) w / 4 else -w / 4 } + fadeIn(HiFiMotion.standard())) togetherWith
+                                    (slideOutHorizontally(HiFiMotion.standard()) { w -> if (forward) -w / 4 else w / 4 } + fadeOut(HiFiMotion.quick()))
+                            },
+                            label = "settings_page",
+                            modifier = Modifier.fillMaxWidth().weight(1f)
+                        ) { shown ->
+                            Column(
+                                Modifier
+                                    .fillMaxSize()
+                                    .verticalScroll(rememberScrollState())
+                                    .navigationBarsPadding()
+                                    .padding(start = 16.dp, end = 16.dp, bottom = 28.dp)
+                            ) {
+                                if (shown == null) RootPage(state) { pageName = it.name }
+                                else SettingsPageContent(shown, state, pageActions)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (confirmLogout) {
+        ConfirmDialog(
+            title = stringResource(R.string.settings_logout_confirm_title),
+            text = stringResource(R.string.settings_logout_confirm_text),
+            confirm = stringResource(R.string.account_management_vyyti),
+            onConfirm = {
+                confirmLogout = false
+                actions.onLogout()
+                close()
+            },
+            onDismiss = { confirmLogout = false }
+        )
+    }
+    if (confirmClear) {
+        ConfirmDialog(
+            title = stringResource(R.string.settings_clear_confirm_title),
+            text = stringResource(R.string.settings_clear_confirm_text),
+            confirm = stringResource(R.string.settings_clear),
+            onConfirm = {
+                confirmClear = false
+                actions.onClearDownloads()
+            },
+            onDismiss = { confirmClear = false }
+        )
+    }
+}
+
+private val SettingsPage.titleRes: Int
+    get() = when (this) {
+        SettingsPage.ACCOUNT -> R.string.settings_group_account
+        SettingsPage.PLAYBACK -> R.string.settings_section_playback
+        SettingsPage.PLAYER -> R.string.settings_section_player
+        SettingsPage.INTERFACE -> R.string.settings_section_interface
+        SettingsPage.ABOUT -> R.string.settings_group_about
+        SettingsPage.DEVELOPER -> R.string.developer_title
+    }
+
+private val SettingsPage.icon: ImageVector
+    get() = when (this) {
+        SettingsPage.ACCOUNT -> Icons.Rounded.Person
+        SettingsPage.PLAYBACK -> Icons.Rounded.PlayArrow
+        SettingsPage.PLAYER -> Icons.Rounded.PlayCircle
+        SettingsPage.INTERFACE -> Icons.Rounded.Dashboard
+        SettingsPage.ABOUT -> Icons.Rounded.Info
+        SettingsPage.DEVELOPER -> Icons.Rounded.Code
+    }
+
+/** The actions a page uses, with the ones that need the sheet (confirmations, closing) wired to it. */
+private fun SettingsActions.copyWith(onLogout: () -> Unit, onClearDownloads: () -> Unit, close: () -> Unit) = copy(
+    onAddAccount = { onAddAccount(); close() },
+    onLogout = onLogout,
+    onClearDownloads = onClearDownloads
+)
+
+// region Summaries: one line under each section
+
+@Composable
+private fun accountSummary(state: SettingsUiState): String = when {
+    state.accountSubtitle != null -> state.accountSubtitle
+    state.plusMissing && state.allowYandexWithoutPlus -> stringResource(R.string.account_plus_dev_tag)
+    state.plusMissing -> stringResource(R.string.plus_missing)
+    else -> stringResource(if (state.hasPlus) R.string.settings_account_plus else R.string.settings_account_no_plus)
+}
+
+@Composable
+private fun playbackSummary(state: SettingsUiState): String {
+    val quality = stringResource(if (state.compatibleSound) R.string.settings_sound_compatible else R.string.settings_sound_max)
+    val crossfade = if (state.crossfadeMs == 0) stringResource(R.string.settings_summary_off) else transitionLengthLabel(state.crossfadeMs)
+    val cache = when {
+        state.reserveMb == 0 -> stringResource(R.string.settings_summary_off)
+        state.reserveMb >= 1024 -> stringResource(R.string.settings_reserve_gb, state.reserveMb / 1024)
+        else -> stringResource(R.string.settings_reserve_mb, state.reserveMb)
+    }
+    return stringResource(R.string.settings_summary_playback, quality.unbroken(), crossfade.unbroken(), cache.unbroken())
+}
+
+@Composable
+private fun interfaceSummary(state: SettingsUiState): String {
+    val open = stringResource(
+        when (state.startPage) {
+            StartPage.LAST -> R.string.settings_open_last
+            StartPage.WAVE -> R.string.settings_open_wave
+            StartPage.CAR -> R.string.settings_open_car
+        }
+    )
+    val wheel = stringResource(if (state.steeringWheelOnLeft) R.string.settings_summary_wheel_left else R.string.settings_summary_wheel_right)
+    val scale = if (state.uiScaleAuto) stringResource(R.string.settings_summary_scale_auto)
+    else stringResource(R.string.settings_summary_scale_percent, (state.uiScaleManual * 100).roundToInt())
+    return stringResource(R.string.settings_summary_interface, open.unbroken(), wheel.unbroken(), scale.unbroken())
+}
+
+@Composable
+private fun playerSummary(state: SettingsUiState): String {
+    val layout = stringResource(if (state.playerCarLayout) R.string.settings_player_large_on else R.string.settings_player_large_off)
+    val next = if (state.playerNextThree) "3" else "1"
+    val likes = stringResource(if (state.likeGestures) R.string.settings_player_likes_gestures else R.string.settings_player_likes_buttons)
+    return stringResource(R.string.settings_summary_player, layout.unbroken(), next, likes.unbroken())
+}
+
+/** A value such as "100 МБ" never breaks across two lines. */
+private fun String.unbroken(): String = replace(' ', ' ')
+
+/** The version shown in Settings. Defaults to the build's git-derived version (D37); screenshot tests pin it. */
+val LocalAppVersion = androidx.compose.runtime.staticCompositionLocalOf { BuildConfig.VERSION_NAME }
+
+@Composable
+private fun aboutSummary(): String = stringResource(R.string.settings_version, LocalAppVersion.current)
+
+@Composable
+private fun developerSummary(state: SettingsUiState): String =
+    stringResource(if (state.allowYandexWithoutPlus) R.string.developer_summary_on else R.string.developer_summary_off)
+
+// endregion
+
+@Composable
+private fun ColumnScope.RootPage(state: SettingsUiState, onOpen: (SettingsPage) -> Unit) {
+    Spacer(Modifier.heightIn(min = 14.dp))
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Color.White.copy(alpha = 0.05f))) {
+        AccountCard(state.accountName, state.avatarUrl, state.hasPlus, onClick = { onOpen(SettingsPage.ACCOUNT) }, subtitle = state.accountSubtitle, plusMissing = state.plusMissing, developerMode = state.allowYandexWithoutPlus)
+    }
+    Spacer(Modifier.heightIn(min = 14.dp))
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Color.White.copy(alpha = 0.05f)).selectableGroup()) {
+        SectionRow(SettingsPage.PLAYBACK, stringResource(R.string.settings_section_playback), playbackSummary(state), onOpen)
+        SectionRow(SettingsPage.PLAYER, stringResource(R.string.settings_section_player), playerSummary(state), onOpen)
+        SectionRow(SettingsPage.INTERFACE, stringResource(R.string.settings_section_interface), interfaceSummary(state), onOpen)
+        SectionRow(SettingsPage.ABOUT, stringResource(R.string.settings_group_about), aboutSummary(), onOpen)
+        if (state.developerSection) SectionRow(SettingsPage.DEVELOPER, stringResource(R.string.developer_title), developerSummary(state), onOpen)
+    }
+    Text(
+        "YAMP",
+        style = HiFiType.SectionCaps.copy(color = Color.White.copy(alpha = 0.40f), fontSize = 12.sp),
+        modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 28.dp)
+    )
+}
+
+@Composable
+private fun SectionRow(page: SettingsPage, title: String, summary: String, onOpen: (SettingsPage) -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 72.dp)
+            .clickable(role = Role.Button) { onOpen(page) }
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconPlaque(page.icon, size = 40.dp)
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(summary, color = HiFi.TextTertiary, fontSize = 13.sp, lineHeight = 18.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+        Spacer(Modifier.width(8.dp))
+        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, tint = Color.White.copy(alpha = 0.45f), modifier = Modifier.size(20.dp))
+    }
+}
+
+@Composable
+private fun SectionNavItem(page: SettingsPage, title: String, summary: String, selected: Boolean, onOpen: (SettingsPage) -> Unit) {
+    val shape = RoundedCornerShape(18.dp)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(bottom = 6.dp)
+            .clip(shape)
+            .then(if (selected) Modifier.background(Color.White.copy(alpha = 0.10f)).border(1.dp, Color(0x4DC9CED8), shape) else Modifier)
+            .selectable(selected = selected, role = Role.Tab) { onOpen(page) }
+            .heightIn(min = 68.dp)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconPlaque(page.icon, size = 40.dp)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, color = Color.White, fontSize = 16.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(summary, color = HiFi.TextTertiary, fontSize = 13.sp, lineHeight = 17.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+@Composable
+private fun ColumnScope.SettingsPageContent(page: SettingsPage, state: SettingsUiState, actions: SettingsActions) {
+    when (page) {
+        SettingsPage.ACCOUNT -> AccountPage(state, actions)
+        SettingsPage.PLAYBACK -> PlaybackPage(state, actions)
+        SettingsPage.PLAYER -> PlayerPage(state, actions)
+        SettingsPage.INTERFACE -> InterfacePage(state, actions)
+        SettingsPage.ABOUT -> AboutPage(state, actions)
+        SettingsPage.DEVELOPER -> DeveloperPage(state, actions)
+    }
+}
+
+@Composable
+private fun ColumnScope.AccountPage(state: SettingsUiState, actions: SettingsActions) {
+    SettingsGroup(stringResource(R.string.settings_g_profile)) {
+        // All accounts are live (D56): the card opens the accounts list (add, remove, default), nothing to switch to
+        AccountCard(state.accountName, state.avatarUrl, state.hasPlus, onClick = actions.onAccountManagement, subtitle = state.accountSubtitle, plusMissing = state.plusMissing, developerMode = state.allowYandexWithoutPlus)
+        SettingsRow(icon = Icons.AutoMirrored.Rounded.Login, title = stringResource(R.string.add_account_title), onClick = actions.onAddAccount)
+    }
+    // With one account nothing is grouped, so the switch only shows with two or more (D58, D64)
+    if (state.multiAccount) {
+        SettingsGroup(stringResource(R.string.settings_g_queues)) {
+            SwitchRow(Icons.Rounded.AccountTree, stringResource(R.string.settings_group_queues), stringResource(R.string.settings_group_queues_hint), state.groupQueues, actions.onGroupQueuesChange)
+        }
+    }
+    SettingsGroup(null) {
+        SettingsRow(icon = Icons.AutoMirrored.Rounded.Logout, title = stringResource(R.string.settings_logout), danger = true, chevron = false, onClick = actions.onLogout)
+    }
+    SettingsNote(stringResource(R.string.settings_logout_note))
+}
+
+@Composable
+private fun ColumnScope.PlaybackPage(state: SettingsUiState, actions: SettingsActions) {
+    SettingsGroup(stringResource(R.string.settings_g_sound)) {
+        // Quality is chosen per account now (canvas `qa-playback`): Settings → Accounts → the account
+        SettingsRow(
+            icon = Icons.Rounded.GraphicEq,
+            title = stringResource(R.string.quality_title),
+            subtitle = stringResource(R.string.quality_per_account),
+            chevron = false,
+            onClick = null
+        )
+        TransitionLengthRow(stringResource(R.string.settings_crossfade), state.crossfadeMs, SettingsRepository.MAX_CROSSFADE_MS, actions.onCrossfadeChange)
+        if (state.crossfadeMs > 0) {
+            SegmentedRow(Icons.Rounded.GraphicEq, stringResource(R.string.settings_transition)) {
+                HiFiSegmented(
+                    options = listOf(stringResource(R.string.settings_transition_crossfade), stringResource(R.string.settings_transition_fade_rise)),
+                    selectedIndex = if (state.transitionFadeThenRise) 1 else 0,
+                    onSelect = { actions.onTransitionFadeThenRiseChange(it == 1) },
+                    fontSize = 13.sp
+                )
+                Spacer(Modifier.heightIn(min = 10.dp))
+                SettingsHint(stringResource(R.string.settings_transition_hint))
+            }
+        }
+        TransitionLengthRow(stringResource(R.string.settings_play_pause_length), state.playPauseMs, SettingsRepository.MAX_PLAY_PAUSE_MS, actions.onPlayPauseChange)
+        TransitionLengthRow(stringResource(R.string.settings_seek_length), state.seekMs, SettingsRepository.MAX_SEEK_MS, actions.onSeekChange)
+        if (state.powerampEqualizer) {
+            SettingsRow(icon = Icons.Rounded.Equalizer, title = stringResource(R.string.settings_poweramp_eq), subtitle = stringResource(R.string.settings_poweramp_eq_hint), onClick = actions.onOpenPowerampEqualizer)
+        }
+        if (state.audioRouterInstalled) {
+            SettingsRow(
+                icon = Icons.Rounded.Equalizer,
+                title = stringResource(R.string.settings_audio_router),
+                onClick = null,
+                subtitle = stringResource(if (state.audioRouterActive) R.string.settings_audio_router_active else R.string.settings_audio_router_hint),
+                chevron = false
+            )
+        }
+        SwitchRow(Icons.AutoMirrored.Rounded.VolumeUp, stringResource(R.string.settings_normalize), stringResource(R.string.settings_normalize_hint), state.normalizeVolume, actions.onNormalizeVolumeChange)
+        if (state.equalizerAvailable) {
+            SettingsRow(icon = Icons.Rounded.Equalizer, title = stringResource(R.string.settings_equalizer), subtitle = stringResource(R.string.settings_equalizer_hint), onClick = actions.onOpenEqualizer)
+        }
+        SwitchRow(Icons.Rounded.RecordVoiceOver, stringResource(R.string.settings_duck_announcements), stringResource(R.string.settings_duck_announcements_hint), state.duckForAnnouncements, actions.onDuckForAnnouncementsChange)
+        SwitchRow(Icons.Rounded.PlayCircle, stringResource(R.string.settings_resume_quiet), stringResource(R.string.settings_resume_quiet_hint), state.resumeWhenQuiet, actions.onResumeWhenQuietChange)
+    }
+    SettingsGroup(stringResource(R.string.settings_g_start)) {
+        SegmentedRow(Icons.Rounded.PowerSettingsNew, stringResource(R.string.settings_start_music)) {
+            val modes = StartMusicPlan.options(state.hasYandex)
+            HiFiSegmented(
+                options = modes.map {
+                    stringResource(
+                        when (it) {
+                            StartMusic.OFF -> R.string.settings_start_music_off
+                            StartMusic.CONTINUE -> R.string.settings_start_music_continue
+                            StartMusic.WAVE -> R.string.settings_start_music_wave
+                        }
+                    )
+                },
+                selectedIndex = modes.indexOf(StartMusicPlan.shown(state.startMusic, state.hasYandex)),
+                onSelect = { actions.onStartMusicChange(modes[it]) },
+                fontSize = 13.sp
+            )
+            Spacer(Modifier.heightIn(min = 10.dp))
+            SettingsHint(stringResource(R.string.settings_start_music_note))
+        }
+        SwitchRow(Icons.Rounded.Bluetooth, stringResource(R.string.settings_bluetooth), stringResource(R.string.settings_bluetooth_hint), state.bluetoothAutoplay, actions.onBluetoothAutoplayChange)
+    }
+    SettingsGroup(stringResource(R.string.settings_g_content)) {
+        SwitchRow(Icons.Rounded.Explicit, stringResource(R.string.settings_explicit), stringResource(R.string.settings_explicit_hint), state.skipExplicit, actions.onSkipExplicitChange)
+        SwitchRow(Icons.Rounded.History, stringResource(R.string.settings_history), stringResource(R.string.settings_history_hint), state.listeningHistory, actions.onListeningHistoryChange)
+    }
+    SettingsNote(stringResource(R.string.settings_wave_tuning_note))
+    SettingsGroup(stringResource(R.string.settings_group_reserve)) {
+        RoadReserveRows(state.reserveMb, actions.onReserveChange, state.reserveUsedBytes, actions.onClearReserve)
+        StreamCacheRows(state.streamCacheMb, actions.onStreamCacheChange, state.streamCacheUsedBytes, actions.onClearStreamCache)
+    }
+    SettingsGroup(stringResource(R.string.settings_group_downloads)) {
+        SettingsRow(icon = Icons.Rounded.CloudDownload, title = stringResource(R.string.settings_download_all), onClick = actions.onDownloadAll)
+        SettingsRow(
+            icon = Icons.Rounded.UploadFile,
+            title = stringResource(R.string.settings_upgrade_downloads),
+            subtitle = stringResource(R.string.settings_upgrade_downloads_hint),
+            onClick = actions.onUpgradeDownloads
+        )
+        if (state.storage.cardAvailable || state.storage.onCard) {
+            SegmentedRow(Icons.Rounded.SdCard, stringResource(R.string.settings_storage_place)) {
+                HiFiSegmented(
+                    options = listOf(stringResource(R.string.settings_storage_internal), stringResource(R.string.settings_storage_card)),
+                    selectedIndex = if (state.storage.onCard) 1 else 0,
+                    onSelect = { if (state.storage.moving == null) actions.onDownloadsOnCardChange(it == 1) },
+                    fontSize = 13.sp
+                )
+                Spacer(Modifier.heightIn(min = 10.dp))
+                val moving = state.storage.moving
+                SettingsHint(
+                    when {
+                        moving != null -> stringResource(R.string.settings_storage_moving, moving.first, moving.second)
+                        !state.storage.cardAvailable -> stringResource(R.string.settings_storage_card_missing)
+                        else -> stringResource(R.string.settings_storage_card_note, formatSize(state.storage.cardFreeBytes))
+                    }
+                )
+            }
+        }
+        SettingsRow(
+            icon = Icons.Rounded.Storage,
+            title = stringResource(R.string.settings_storage),
+            subtitle = stringResource(R.string.settings_storage_value, formatSize(state.cacheSizeBytes)),
+            chevron = false,
+            onClick = null,
+            trailing = {
+                TextButton(onClick = actions.onClearDownloads) {
+                    Text(stringResource(R.string.settings_clear), color = HiFi.Danger, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        )
+    }
+}
+
+/** Settings → Player (canvas `pl-settings`): the layout, how many next tracks, likes by gestures. */
+@Composable
+private fun ColumnScope.PlayerPage(state: SettingsUiState, actions: SettingsActions) {
+    SettingsGroup(stringResource(R.string.settings_section_player)) {
+        // "Large controls" (canvas `pl-settings`): the same layouts with car-sized controls, the ring around Play and
+        // the clock; stored under the old "Car layout" key, so a car layout chosen before is "on"
+        SwitchRow(Icons.Rounded.DirectionsCar, stringResource(R.string.settings_player_large), stringResource(R.string.settings_player_large_hint), state.playerCarLayout, actions.onPlayerCarLayoutChange)
+        SegmentedRow(Icons.Rounded.MusicNote, stringResource(R.string.settings_player_next), stringResource(R.string.settings_player_next_hint)) {
+            HiFiSegmented(
+                options = listOf("1", "3"),
+                selectedIndex = if (state.playerNextThree) 1 else 0,
+                onSelect = { actions.onPlayerNextThreeChange(it == 1) }
+            )
+        }
+        SwitchRow(Icons.Rounded.Favorite, stringResource(R.string.settings_player_likes), stringResource(R.string.settings_player_likes_hint), state.likeGestures, actions.onLikeGesturesChange)
+    }
+    Text(
+        stringResource(R.string.settings_player_wheel_note),
+        color = HiFi.TextTertiary, fontSize = 13.sp, lineHeight = 18.sp,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+    )
+}
+
+@Composable
+private fun ColumnScope.InterfacePage(state: SettingsUiState, actions: SettingsActions) {
+    SettingsGroup(stringResource(R.string.settings_g_start)) {
+        RadioListRow(
+            icon = Icons.Rounded.Home,
+            title = stringResource(R.string.settings_open_page),
+            options = listOf(
+                stringResource(R.string.settings_open_last) to stringResource(R.string.settings_open_last_hint),
+                stringResource(R.string.settings_open_wave) to null,
+                stringResource(R.string.settings_open_car) to stringResource(R.string.settings_open_car_hint)
+            ),
+            selectedIndex = state.startPage.ordinal,
+            onSelect = { actions.onStartPageChange(StartPage.entries[it]) }
+        )
+    }
+    SettingsGroup(stringResource(R.string.settings_g_player)) {
+        SwitchRow(Icons.Rounded.MusicNote, stringResource(R.string.settings_expand_player), stringResource(R.string.settings_expand_player_hint), state.expandPlayerOnPlay, actions.onExpandPlayerChange)
+        SwitchRow(Icons.Rounded.SwipeLeft, stringResource(R.string.settings_swipe_close), stringResource(R.string.settings_swipe_close_hint), state.swipeToCloseMiniPlayer, actions.onSwipeToCloseChange)
+    }
+    SettingsGroup(stringResource(R.string.settings_group_car)) {
+        SegmentedRow(Icons.Rounded.DirectionsCar, stringResource(R.string.settings_steering)) {
+            HiFiSegmented(
+                options = listOf(stringResource(R.string.settings_steering_left_short), stringResource(R.string.settings_steering_right_short)),
+                selectedIndex = if (state.steeringWheelOnLeft) 0 else 1,
+                onSelect = { actions.onSteeringWheelChange(it == 0) }
+            )
+        }
+        SwitchRow(Icons.Rounded.Schedule, stringResource(R.string.settings_car_clock), stringResource(R.string.settings_car_clock_hint), state.carClock, actions.onCarClockChange)
+    }
+    SettingsGroup(stringResource(R.string.settings_g_look)) {
+        UiScaleRow(state.uiScaleAuto, actions.onUiScaleAutoChange, state.uiScaleManual, actions.onUiScaleManualChange)
+        SegmentedRow(Icons.Rounded.Animation, stringResource(R.string.settings_animations)) {
+            HiFiSegmented(
+                options = listOf(
+                    stringResource(R.string.settings_animations_auto),
+                    stringResource(R.string.settings_animations_full),
+                    stringResource(R.string.settings_animations_min)
+                ),
+                selectedIndex = state.animationMode.ordinal,
+                onSelect = { actions.onAnimationModeChange(AnimationMode.entries[it]) },
+                fontSize = 13.sp
+            )
+            Spacer(Modifier.heightIn(min = 10.dp))
+            SettingsHint(stringResource(R.string.settings_animations_note))
+        }
+    }
+}
+
+@Composable
+private fun ColumnScope.AboutPage(state: SettingsUiState, actions: SettingsActions) {
+    val uri = LocalUriHandler.current
+    var journalOpen by remember { mutableStateOf(false) }
+    val versionTaps = rememberVersionTaps(state.developerSection, actions)
+    SettingsGroup(stringResource(R.string.settings_g_version)) {
+        SettingsRow(
+            icon = Icons.Rounded.Info,
+            title = stringResource(R.string.settings_version, LocalAppVersion.current),
+            subtitle = state.updateStatus ?: stringResource(R.string.settings_check_updates),
+            onClick = versionTaps
+        )
+    }
+    SettingsGroup(stringResource(R.string.settings_g_help)) {
+        SettingsRow(
+            icon = Icons.Rounded.WarningAmber,
+            title = stringResource(R.string.crash_log_title),
+            value = if (state.crashReports == 0) stringResource(R.string.crash_log_none) else state.crashReports.toString(),
+            onClick = actions.onOpenCrashLog
+        )
+        SettingsRow(
+            icon = Icons.Rounded.Timeline,
+            title = stringResource(R.string.journal_title),
+            value = state.journal.summary.let { s ->
+                if (s.stalls == 0 && s.pauses == 0 && s.errors == 0) stringResource(R.string.journal_none)
+                else stringResource(R.string.journal_row, s.stalls, s.pauses, s.errors)
+            },
+            onClick = { journalOpen = true }
+        )
+    }
+    SettingsGroup(stringResource(R.string.settings_g_diagnostics)) {
+        SwitchRow(Icons.Rounded.Timeline, stringResource(R.string.diag_log_title), stringResource(R.string.diag_log_hint), state.diagnosticLog, actions.onDiagnosticLogChange)
+        if (state.diagnosticLog) {
+            SettingsRow(icon = Icons.Rounded.Share, title = stringResource(R.string.diag_log_share), onClick = actions.onShareDiagnosticLog)
+            SettingsRow(icon = Icons.Rounded.DeleteOutline, title = stringResource(R.string.diag_log_clear), onClick = actions.onClearDiagnosticLog)
+        }
+        SwitchRow(Icons.Rounded.Timeline, stringResource(R.string.anr_watchdog_title), stringResource(R.string.anr_watchdog_hint), state.anrWatchdog, actions.onAnrWatchdogChange)
+    }
+    if (journalOpen) {
+        PlaybackJournalDialog(state.journal, onShare = actions.onShareJournal, onClear = actions.onClearJournal, onDismiss = { journalOpen = false })
+    }
+    SettingsGroup(stringResource(R.string.settings_g_project)) {
+        SettingsRow(icon = Icons.Rounded.Code, title = stringResource(R.string.settings_source_code), subtitle = "github.com/tegro-org/YAMP", onClick = { runCatching { uri.openUri(SOURCE_URL) } })
+        SettingsRow(icon = Icons.Rounded.Description, title = stringResource(R.string.settings_license), value = "GPL-3.0", onClick = { runCatching { uri.openUri(LICENSE_URL) } })
+    }
+}
+
+/**
+ * The version row's tap (D101): a check for updates after 500 ms without another tap, and the seven taps that open
+ * Settings → Developer, with their toasts.
+ */
+@Composable
+private fun rememberVersionTaps(sectionShown: Boolean, actions: SettingsActions): () -> Unit {
+    val context = LocalContext.current
+    val resources = LocalResources.current
+    val scope = rememberCoroutineScope()
+    val taps = remember { DeveloperTaps() }
+    var pending by remember { mutableStateOf<Job?>(null) }
+    val currentActions by rememberUpdatedState(actions)
+    val shown by rememberUpdatedState(sectionShown)
+    return {
+        pending?.cancel()
+        val tap = taps.onTap(SystemClock.elapsedRealtime(), shown)
+        when {
+            tap.checkNow -> currentActions.onCheckForUpdates()
+            tap.unlocked -> {
+                currentActions.onDeveloperSectionChange(true)
+                Toast.makeText(context, R.string.developer_enabled, Toast.LENGTH_SHORT).show()
+            }
+            tap.checkLater -> pending = scope.launch {
+                delay(DeveloperTaps.CHECK_DELAY_MS)
+                currentActions.onCheckForUpdates()
+            }
+        }
+        tap.remaining?.let { left ->
+            Toast.makeText(context, resources.getQuantityString(R.plurals.developer_taps_left, left, left), Toast.LENGTH_SHORT).show()
+        }
+    }
+}
+
+@Composable
+private fun ColumnScope.DeveloperPage(state: SettingsUiState, actions: SettingsActions) {
+    SettingsGroup(stringResource(R.string.developer_group_yandex)) {
+        SwitchRow(
+            Icons.Rounded.WorkspacePremium, stringResource(R.string.developer_allow_no_plus), stringResource(R.string.developer_allow_no_plus_hint),
+            state.allowYandexWithoutPlus, actions.onAllowYandexWithoutPlusChange
+        )
+    }
+    SettingsGroup(stringResource(R.string.developer_group_section)) {
+        SettingsRow(
+            icon = Icons.Rounded.VisibilityOff,
+            title = stringResource(R.string.developer_hide),
+            subtitle = stringResource(R.string.developer_hide_hint),
+            chevron = false,
+            onClick = actions.onHideDeveloper
+        )
+    }
+}
+
+@Composable
+private fun SwitchRow(icon: ImageVector, title: String, hint: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    SettingsRow(
+        icon = icon,
+        title = title,
+        subtitle = hint,
+        chevron = false,
+        onClick = { onChange(!checked) },
+        trailing = { HiFiSwitch(checked = checked, onCheckedChange = onChange) }
+    )
+}
+
+/** A choice of a few options with a line of explanation each: segments would cut the longer names. */
+@Composable
+private fun RadioListRow(icon: ImageVector, title: String, options: List<Pair<String, String?>>, selectedIndex: Int, onSelect: (Int) -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconPlaque(icon, size = 32.dp)
+            Spacer(Modifier.width(12.dp))
+            Text(title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+        }
+        Column(Modifier.padding(start = 44.dp, top = 6.dp).selectableGroup()) {
+            options.forEachIndexed { index, (label, hint) ->
+                val selected = index == selectedIndex
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 52.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .selectable(selected = selected, role = Role.RadioButton) { onSelect(index) }
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioMark(selected)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(label, color = Color.White, fontSize = 15.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium)
+                        if (hint != null) Text(hint, color = HiFi.TextTertiary, fontSize = 13.sp, lineHeight = 17.sp)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RadioMark(selected: Boolean) {
+    Box(
+        Modifier
+            .size(22.dp)
+            .clip(CircleShape)
+            .then(
+                if (selected) Modifier.background(HiFi.Accent).padding(6.dp).clip(CircleShape).background(Color.White)
+                else Modifier.border(2.dp, Color.White.copy(alpha = 0.35f), CircleShape)
+            )
+    )
+}
+
+@Composable
+private fun SettingsHint(text: String) {
+    Text(text, color = HiFi.TextSecondary, fontSize = 13.sp, lineHeight = 18.sp)
+}
+
+@Composable
+private fun SettingsNote(text: String) {
+    Text(text, color = HiFi.TextTertiary, fontSize = 13.sp, lineHeight = 18.sp, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp))
+}

@@ -1,0 +1,16 @@
+# gitleaks: extend the default rules, then allow the known false positives.
+#
+# - LosslessSigner.kt carries the public signing constant of the Yandex lossless stream (upstream ships it
+#   in its own repository); it is not a credential.
+# - RotorFeedbackLineTest uses a made-up token to check that the journal line scrubs it.
+# - The Jellyfin fixture keeps item keys (not user credentials); all but the first field are placeholder zeros.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Public signing constant and fake credentials in tests"
+paths = [
+  '''LosslessSigner\.kt$''',
+  '''app/src/test/java/org/tegro/yamp/data/queue/RotorFeedbackLineTest\.kt$''',
+  '''provider/jellyfin/src/test/resources/jellyfin/items-albums\.json$''',
+]

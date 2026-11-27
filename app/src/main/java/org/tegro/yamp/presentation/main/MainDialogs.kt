@@ -1,0 +1,244 @@
+package org.tegro.yamp.presentation.main
+
+import org.tegro.yamp.domain.queue.fitsQueueOf
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import org.tegro.yamp.R
+import org.tegro.yamp.domain.media.Track
+import org.tegro.yamp.presentation.common.id
+import org.tegro.yamp.domain.media.Playlist
+import org.tegro.yamp.data.updater.UpdateCheckResult
+import org.tegro.yamp.presentation.account.AccountManagementDialog
+import org.tegro.yamp.presentation.account.AccountViewModel
+import org.tegro.yamp.presentation.catalog.CatalogViewModel
+import org.tegro.yamp.presentation.crash.CrashLogDialog
+import org.tegro.yamp.presentation.crash.CrashLogViewModel
+import org.tegro.yamp.presentation.main.components.TrackContextMenu
+import org.tegro.yamp.presentation.queues.LocalQueueSwitcher
+import org.tegro.yamp.presentation.queues.QueueSwitcherRequest
+import org.tegro.yamp.presentation.update.UpdateDialog
+import org.tegro.yamp.presentation.update.UpdateViewModel
+import kotlinx.coroutines.launch
+
+/** What the track menu was opened for; [pickPlaylist] goes straight to the playlist picker. */
+internal data class TrackMenuRequest(
+    val track: Track,
+    val playlist: Playlist?,
+    val pickPlaylist: Boolean
+)
+
+/** "⋮" on any track, or the player's "add to playlist". */
+@Composable
+internal fun TrackMenuHost(
+    request: TrackMenuRequest,
+    viewModel: MainViewModel,
+    playlistsVm: PlaylistsViewModel,
+    catalogVm: CatalogViewModel,
+    likedTrackIds: Set<String>,
+    snackbar: SnackbarHostState,
+    onDismiss: () -> Unit,
+    onLeavePlayer: () -> Unit
+) {
+    val yandexPlaylists by playlistsVm.playlists.collectAsStateWithLifecycle()
+    val otherPlaylists by playlistsVm.pickerPlaylists.collectAsStateWithLifecycle()
+    // The picker lists the track's own account's playlists (D84): Yandex's, or its Jellyfin server's
+    LaunchedEffect(request.track.ref) { playlistsVm.loadPickerFor(request.track) }
+    val playlists = playlistsVm.pickerFor(request.track, yandexPlaylists, otherPlaylists)
+    val playNextDone = stringResource(R.string.track_menu_play_next_done)
+    val scope = rememberCoroutineScope()
+    val track = request.track
+    val queueSwitcher = LocalQueueSwitcher.current
+    val trackLabel = listOfNotNull(track.title.ifEmpty { null }, track.artists.joinToString { it.name }.takeIf { it.isNotBlank() }).joinToString(" · ")
+    TrackContextMenu(
+        track = track,
+        inPlaylist = request.playlist,
+        playlists = playlists,
+        isLiked = track.id in likedTrackIds,
+        startWithPlaylists = request.pickPlaylist,
+        onDismiss = onDismiss,
+        onPlayNext = {
+            viewModel.enqueueNext(track)
+            scope.launch { snackbar.showSnackbar(playNextDone) }
+        },
+        onToggleLike = { viewModel.toggleLike(track) },
+        onAddTo = { playlistsVm.addTracks(it, listOf(track)) },
+        onCreatePlaylist = { playlistsVm.createWith(it, listOf(track)) },
+        canAddToPlaylist = playlistsVm.canAddToPlaylist(track),
+        onRemoveFromPlaylist = { request.playlist?.let { playlistsVm.removeTrack(it, track.id) } },
+        onTrackWave = { viewModel.waveOrRadio(track) { queueSwitcher?.open(QueueSwitcherRequest.StartRadio.of(track)) } },
+        waveActive = viewModel.waveActive.collectAsStateWithLifecycle().value,
+        onStartRadio = queueSwitcher?.let { switcher -> { switcher.open(QueueSwitcherRequest.StartRadio.of(track)) } },
+        onAddToEnd = { viewModel.addToEnd(listOf(track)) },
+        onAddToQueue = { queueSwitcher?.open(QueueSwitcherRequest.AddTo(listOf(track), trackLabel)) },
+        fitsActiveQueue = viewModel.activeQueue.collectAsStateWithLifecycle().value
+            ?.let { active -> track.ref.fitsQueueOf(active.queue.account?.let { org.tegro.yamp.domain.account.AccountId(it) }) } ?: true,
+        onOpenArtist = track.artists.firstNotNullOfOrNull { artist -> artist.ref?.id?.let { id -> id to artist.name } }
+            ?.let { (id, name) ->
+                {
+                    onLeavePlayer()
+                    catalogVm.openArtist(id, name)
+                }
+            },
+        onOpenAlbum = track.album?.let { album ->
+            val albumId = album.ref?.id ?: return@let null
+            {
+                onLeavePlayer()
+                catalogVm.openAlbum(albumId, album.title.orEmpty())
+            }
+        }
+    )
+}
+
+/** The in-app update offer, while one is available. */
+@Composable
+internal fun UpdateHost(updateVm: UpdateViewModel) {
+    val result by updateVm.checkResult.collectAsStateWithLifecycle()
+    val progress by updateVm.downloadProgress.collectAsStateWithLifecycle()
+    val status by updateVm.statusMessage.collectAsStateWithLifecycle()
+    val mismatch by updateVm.isSignatureMismatch.collectAsStateWithLifecycle()
+    val update = result as? UpdateCheckResult.UpdateAvailable ?: return
+    UpdateDialog(
+        updateInfo = update,
+        downloadProgress = progress,
+        statusMessage = status,
+        hasInstallPermission = updateVm.canRequestPackageInstalls,
+        isSignatureMismatch = mismatch,
+        onRequestPermission = { updateVm.openInstallPermissionSettings() },
+        onStartDownload = { updateVm.startDownload(update.apkDownloadUrl) },
+        onInstall = { updateVm.installDownloaded(forceSystemInstall = true) },
+        onShareOrSave = { updateVm.shareOrSaveDownloadedApk() },
+        onDismiss = { updateVm.dismiss() },
+        onSkip = { updateVm.skip() }
+    )
+}
+
+/**
+ * Account management (from Settings): add, remove, default. No switcher and no startup picker any more — every
+ * signed-in account is live at once and the active queue's account is the context (D56).
+ */
+@Composable
+internal fun AccountHost(
+    accountVm: AccountViewModel,
+    showManagement: Boolean,
+    onCloseManagement: () -> Unit,
+    onAddAccount: () -> Unit,
+    showChooser: Boolean = false,
+    onChooser: (Boolean) -> Unit = {},
+    /** The player's ⋮ → quality: one account's quality sheet (account key, name, is Jellyfin) without the list. */
+    qualitySheet: Triple<String, String, Boolean>? = null,
+    onCloseQualitySheet: () -> Unit = {},
+    /** The steering wheel's side: Settings → Accounts puts its ≡ handles and row menu there on the head unit. */
+    wheelLeft: Boolean = true,
+    /** Opens Account management again (after a folder was added from the chooser, the new card shows its scan). */
+    onOpenManagement: () -> Unit = {}
+) {
+    val accounts by accountVm.allAccounts.collectAsStateWithLifecycle()
+    val order by accountVm.accountOrder.collectAsStateWithLifecycle()
+    val defaultUid by accountVm.defaultAccountUid.collectAsStateWithLifecycle()
+    val hidden by accountVm.hiddenAccounts.collectAsStateWithLifecycle()
+    val jellyfin by accountVm.jellyfinRows.collectAsStateWithLifecycle()
+    val qualityChoices by accountVm.qualityChoices.collectAsStateWithLifecycle()
+    val globalCompatible by accountVm.globalCompatible.collectAsStateWithLifecycle()
+    val nowMetered by accountVm.nowMetered.collectAsStateWithLifecycle()
+    val autoDownloads by accountVm.autoDownloads.collectAsStateWithLifecycle()
+    val globalAutoDownload by accountVm.globalAutoDownload.collectAsStateWithLifecycle()
+    val plusBlocked by accountVm.plusBlocked.collectAsStateWithLifecycle()
+    val allowWithoutPlus by accountVm.allowWithoutPlus.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var jellyfinSignIn by remember { mutableStateOf(false) }
+    // "This device" (Phase 4d): the add flow from the chooser, or the Sources screen from its card
+    var localFlow by remember { mutableStateOf<org.tegro.yamp.presentation.sources.LocalStart?>(null) }
+    val overview by accountVm.localOverview.collectAsStateWithLifecycle()
+    val qualityUi = org.tegro.yamp.presentation.account.AccountQualityUi(
+        choices = qualityChoices,
+        global = globalCompatible,
+        nowMetered = nowMetered,
+        onSet = { account, metered, choice -> accountVm.setQuality(account, metered, choice) },
+        onOpenWifi = {
+            runCatching {
+                context.startActivity(
+                    android.content.Intent(android.provider.Settings.ACTION_WIFI_SETTINGS)
+                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            }
+        },
+        autoDownloads = autoDownloads,
+        globalAuto = globalAutoDownload,
+        onSetAuto = accountVm::setAutoDownload,
+        blocked = plusBlocked,
+        allowWithoutPlus = allowWithoutPlus
+    )
+    qualitySheet?.let { (key, name, jellyfin) ->
+        val big = with(androidx.compose.ui.platform.LocalDensity.current) {
+            org.tegro.yamp.utils.currentWindowSizePx().width.toDp().value >=
+                org.tegro.yamp.presentation.account.HEAD_UNIT_MIN_WIDTH_DP
+        }
+        org.tegro.yamp.presentation.account.AccountQualitySheet(name, key, jellyfin, qualityUi, big, onDismiss = onCloseQualitySheet)
+    }
+    if (showChooser) {
+        org.tegro.yamp.presentation.account.AddAccountChooser(
+            onYandex = { onChooser(false); onAddAccount() },
+            onJellyfin = { onChooser(false); jellyfinSignIn = true },
+            onDismiss = { onChooser(false) },
+            onLocal = { onChooser(false); localFlow = org.tegro.yamp.presentation.sources.LocalStart.ADD }
+        )
+    }
+    localFlow?.let { start ->
+        val big = with(androidx.compose.ui.platform.LocalDensity.current) {
+            org.tegro.yamp.utils.currentWindowSizePx().width.toDp().value >=
+                org.tegro.yamp.presentation.account.HEAD_UNIT_MIN_WIDTH_DP
+        }
+        org.tegro.yamp.presentation.sources.LocalSourcesHost(start, big, wheelLeft, onClose = {
+            localFlow = null
+            if (start == org.tegro.yamp.presentation.sources.LocalStart.ADD) onOpenManagement()
+        })
+    }
+    if (jellyfinSignIn) org.tegro.yamp.presentation.account.JellyfinSignInHost(onDismiss = { jellyfinSignIn = false })
+    if (showManagement) {
+        AccountManagementDialog(
+            accounts = accounts,
+            defaultAccountUid = defaultUid,
+            onSetDefaultAccount = { accountVm.setDefaultAccount(it) },
+            onRemoveAccount = { accountVm.removeAccount(it) },
+            // "Add account" asks where the music is: Yandex or Jellyfin (step 21)
+            onAddNewAccount = { onChooser(true) },
+            onLogoutCurrent = { accountVm.logoutCurrentAccount() },
+            onLogoutAll = { accountVm.logoutAllAccounts() },
+            onDismiss = onCloseManagement,
+            // Debug: test sign-out without losing credentials
+            debugActions = if (org.tegro.yamp.BuildConfig.DEBUG) {
+                org.tegro.yamp.presentation.account.AccountDebugActions(
+                    hidden = hidden,
+                    onHide = { accountVm.hideAccount(it) },
+                    onUnhide = { accountVm.unhideAccount(it) }
+                )
+            } else null,
+            jellyfinAccounts = jellyfin,
+            onRemoveJellyfin = { accountVm.removeJellyfin(it) },
+            local = accountVm.localAccount.collectAsStateWithLifecycle().value?.let { account ->
+                val (sub, status) = org.tegro.yamp.presentation.sources.localAccountLines(overview)
+                org.tegro.yamp.presentation.account.LocalAccountRow(account.displayName, sub, status, warning = overview.absent.isNotEmpty() && overview.scanning == null)
+            },
+            onOpenLocal = { onCloseManagement(); localFlow = org.tegro.yamp.presentation.sources.LocalStart.SOURCES },
+            quality = qualityUi,
+            order = order,
+            onMove = { key, index -> accountVm.moveAccount(key, index) },
+            wheelLeft = wheelLeft,
+            allowWithoutPlus = allowWithoutPlus
+        )
+    }
+}
+
+@Composable
+internal fun CrashLogHost(crashVm: CrashLogViewModel, onDismiss: () -> Unit) {
+    val reports by crashVm.reports.collectAsStateWithLifecycle()
+    CrashLogDialog(reports = reports, onSend = { crashVm.send() }, onClear = { crashVm.clear() }, onDismiss = onDismiss)
+}

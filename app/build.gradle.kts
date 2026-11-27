@@ -34,10 +34,42 @@ val deviceSecret = (localProperties.getProperty("YANDEX_DEVICE_SECRET") ?: Syste
 
 composeCompiler {
     stabilityConfigurationFiles.add(rootProject.layout.projectDirectory.file("app/compose-stability.conf"))
+    // `-PcomposeReports`: recomposition and stability reports in build/compose_reports
+    if (project.hasProperty("composeReports")) {
+        reportsDestination.set(layout.buildDirectory.dir("compose_reports"))
+        metricsDestination.set(layout.buildDirectory.dir("compose_reports"))
+    }
 }
 
+// Version from git (decision D37), never bumped by hand:
+//   on a tag vX.Y.Z            -> versionName "X.Y.Z"                      (release)
+//   N commits after that tag   -> versionName "X.Y.Z-dev.N+<sha>"          (debug / untagged)
+//   no tag yet                 -> "0.0.0-dev.<commits>+<sha>"; no git at all -> "0.0.0-local"
+//   versionCode = number of commits on the branch (monotonic, so the updater's "higher code wins" holds).
+fun git(vararg args: String): String? = runCatching {
+    providers.exec {
+        commandLine("git", *args)
+        isIgnoreExitValue = true
+    }.standardOutput.asText.get().trim().ifBlank { null }
+}.getOrNull()
+
+val gitSha = git("rev-parse", "--short", "HEAD")
+val gitCount = git("rev-list", "--count", "HEAD")?.toIntOrNull()
+val gitDescribe = git("describe", "--tags", "--match", "v[0-9]*", "--long")
+val describeMatch = gitDescribe?.let { Regex("^v(\\d+\\.\\d+\\.\\d+)-(\\d+)-g[0-9a-f]+$").find(it) }
+val versionBase = describeMatch?.groupValues?.get(1) ?: "0.0.0"
+val versionDistance = describeMatch?.groupValues?.get(2)?.toInt() ?: (gitCount ?: 0)
+val appVersionName = when {
+    gitSha == null -> "0.0.0-local"
+    describeMatch != null && versionDistance == 0 -> versionBase
+    else -> "$versionBase-dev.$versionDistance+$gitSha"
+}
+// Debug builds from scripts/build-apk.sh pass -Pyamp.buildNumber=<N> (a local counter, see the script) so two
+// builds of the same commit never share a versionCode; release builds keep the commit count.
+val appVersionCode = providers.gradleProperty("yamp.buildNumber").orNull?.toIntOrNull() ?: gitCount ?: 1
+
 android {
-    namespace = "com.korenskoy.yandexmusic"
+    namespace = "org.tegro.yamp"
     compileSdk {
         version = release(37)
     }
@@ -50,11 +82,11 @@ android {
     }
 
     defaultConfig {
-        applicationId = "YandexMusicLite.KorenskoyR"
+        applicationId = "org.tegro.music.yamp"
         minSdk = 26
         targetSdk = 36
-        versionCode = 47
-        versionName = "1.12.2"
+        versionCode = appVersionCode
+        versionName = appVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -118,8 +150,8 @@ android {
         noCompress.addAll(listOf("tflite", "mp3"))
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures {
         compose = true
@@ -128,6 +160,7 @@ android {
     testOptions {
         // Robolectric screenshot tests render with the app's real resources
         unitTests.isIncludeAndroidResources = true
+        // The test JVMs' locale (UTF-8) is set for every module in the root build.gradle.kts
     }
 }
 
@@ -164,6 +197,13 @@ dependencies {
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.session)
     implementation(libs.media3.exoplayer.hls)
+    // MetadataRetriever (tags of local files, docs/phase-4d-local-files.md §6): moved here from exoplayer in 1.9
+    implementation(libs.media3.inspector)
+
+    // Pure domain module: refs, accounts, queue model, provider interfaces (docs/phase-3-providers.md D71)
+    implementation(project(":core:domain"))
+    implementation(project(":provider:jellyfin"))
+    implementation(project(":provider:local"))
 
     // Coroutines & Serialization
     implementation(libs.kotlinx.coroutines.core)
@@ -194,9 +234,13 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.androidx.room.testing)
     testImplementation(platform(libs.androidx.compose.bom))
     testImplementation(libs.androidx.compose.ui.test.junit4)
     testImplementation(libs.robolectric)
+    // StubExoPlayer: a scripted player for the engine tests (PlayerEngineTest)
+    testImplementation(libs.media3.test.utils)
     testImplementation(libs.roborazzi)
     testImplementation(libs.roborazzi.compose)
     testImplementation(libs.roborazzi.junit.rule)

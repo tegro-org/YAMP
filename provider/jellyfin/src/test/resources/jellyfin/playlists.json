@@ -1,0 +1,37 @@
+{
+  "Items": [
+    {
+      "Name": "YAMP Test Playlist",
+      "ServerId": "0123456789abcdef0123456789abcdef",
+      "Id": "0000000000000000000000000000b008",
+      "ChannelId": null,
+      "Genres": [],
+      "RunTimeTicks": 5342022860,
+      "IsFolder": true,
+      "Type": "Playlist",
+      "GenreItems": [],
+      "UserData": {
+        "PlaybackPositionTicks": 0,
+        "PlayCount": 0,
+        "IsFavorite": false,
+        "Played": false,
+        "Key": "0000000000000000000000000000b009",
+        "ItemId": "0000000000000000000000000000b008"
+      },
+      "ChildCount": 4,
+      "ImageTags": {
+        "Primary": "0000000000000000000000000000b00a"
+      },
+      "BackdropImageTags": [],
+      "ImageBlurHashes": {
+        "Primary": {
+          "0000000000000000000000000000b00a": "eE5jgrQ-fQMIo}Q,kWfQo}azfQfQfQfQfQL}o}fQtlaytmayfQafaK"
+        }
+      },
+      "LocationType": "FileSystem",
+      "MediaType": "Audio"
+    }
+  ],
+  "TotalRecordCount": 1,
+  "StartIndex": 0
+}

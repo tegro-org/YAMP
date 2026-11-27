@@ -10,6 +10,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Local files on API <= 29 are read as paths (docs/phase-4d-local-files.md §1, D93); API 30+ uses SAF grants -->
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29" />
 
     <!-- Android 11+ package visibility: lets the in-app updater find the system package installer -->
     <queries>
@@ -21,6 +25,10 @@
         <intent>
             <action android:name="android.media.action.DISPLAY_AUDIO_EFFECT_CONTROL_PANEL" />
         </intent>
+        <!-- Poweramp Equalizer: a hint for its per-app settings, and a way to open it, in Settings → Playback -->
+        <package android:name="com.maxmpz.equalizer" />
+        <!-- MonJaro Audio Router: while it routes to a USB amplifier, transitions fall back to hard cuts -->
+        <package android:name="com.usbswitch" />
     </queries>
 
     <application
@@ -35,17 +43,22 @@
         android:enableOnBackInvokedCallback="true"
         tools:targetApi="33"
         android:supportsRtl="true"
+        android:requestLegacyExternalStorage="true"
         android:theme="@style/Theme.YandexMusic">
+        <!-- A new window size (split screen, a free window, a launcher's strip, turning) is laid out in place: the
+             screens are Compose and follow the window; recreated, the open player and the panels closed and the
+             picture blinked on every move of the divider (upstream 1.14.12) -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:theme="@style/Theme.YandexMusic.Starting"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- "Play <query> on Yandex Music Lite" from the assistant -->
+            <!-- "Play <query> on YAMP" from the assistant -->
             <intent-filter>
                 <action android:name="android.media.action.MEDIA_PLAY_FROM_SEARCH" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -66,6 +79,14 @@
                 <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
         </service>
+
+        <!-- Browse-tree covers for Android Auto (content:// only, no headers): read-only, serves only covers
+             the tree named, under hashed keys (BrowseArtwork) -->
+        <provider
+            android:name=".data.player.ArtworkProvider"
+            android:authorities="${applicationId}.artwork"
+            android:exported="true"
+            tools:ignore="ExportedContentProvider" />
 
         <meta-data
             android:name="com.google.android.gms.car.application"
@@ -104,6 +125,35 @@
 
         <receiver
             android:name=".widget.WidgetSkipReceiver"
+            android:exported="false" />
+
+        <!-- «Плеер» 4×2 and «Обложка» 2×2 beside «Строка» -->
+        <receiver
+            android:name=".widget.PlayerWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_player_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/player_widget_info" />
+        </receiver>
+        <receiver
+            android:name=".widget.CoverWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_cover_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/cover_widget_info" />
+        </receiver>
+
+        <!-- Like and dislike from a widget -->
+        <receiver
+            android:name=".widget.WidgetActionReceiver"
             android:exported="false" />
 
         <!-- Headset/Bluetooth Play after the process died: resumes the saved session -->

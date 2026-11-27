@@ -24,5 +24,8 @@ dependencyResolutionManagement {
 
 rootProject.name = "Yandex Music"
 include(":app")
+include(":core:domain")
+include(":provider:jellyfin")
+include(":provider:local")
 include(":baselineprofile")
  

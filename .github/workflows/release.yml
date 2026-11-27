@@ -1,10 +1,12 @@
 name: Build & Publish Release APK
 
+# Releasing = pushing a tag vX.Y.Z. The build derives versionName X.Y.Z from the tag and versionCode from
+# the commit count (D37). The in-app updater takes the first .apk asset of the latest release and its digest.
+
 on:
   push:
     tags:
-      - 'v*'
-  workflow_dispatch:
+      - 'v[0-9]*'
 
 jobs:
   build:
@@ -19,20 +21,34 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up JDK 17
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: '21' # Robolectric screenshot tests for SDK 35 need Java 21
+          java-version: '21'
           distribution: 'temurin'
           cache: gradle
+          cache-dependency-path: |
+            *.gradle*
+            gradle/wrapper/gradle-wrapper.properties
+            gradle/libs.versions.toml
 
+      # Robolectric downloads its Android runtimes (android-all-instrumented, SDK 28 and 35) from Maven Central at
+      # test time into ~/.m2. A Maven Central hiccup failed every Robolectric class at once in the v0.3.0 and
+      # v0.5.1 release runs (re-runs passed); keeping the jars in the Actions cache takes Maven Central out of that path.
+      - name: Cache Robolectric runtimes
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-${{ hashFiles('gradle/libs.versions.toml') }}-sdk28-35
+          restore-keys: |
+            robolectric-
       - name: Setup Keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
           if [ -n "$KEYSTORE_BASE64" ]; then
             echo "$KEYSTORE_BASE64" | base64 --decode > release.keystore
-            echo "Production keystore restored from secret."
+            echo "Keystore restored from secret."
           else
             echo "::error::KEYSTORE_BASE64 secret is missing in GitHub repository settings!"
             exit 1
@@ -42,12 +58,12 @@ jobs:
         run: chmod +x gradlew
 
       - name: Scan for leaked secrets
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.21.2 \
+            git /repo --config /repo/.gitleaks.toml --no-banner --redact --exit-code 1
 
       - name: Run unit tests
-        run: ./gradlew testDebugUnitTest --no-daemon
+        run: ./gradlew testDebugUnitTest :core:domain:test :provider:jellyfin:test :provider:local:test --no-daemon
 
       - name: Build Release APK
         env:
@@ -55,9 +71,15 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-          YANDEX_SALT: "XGRlBW9FXlekgbPrRHuSiA"
           YANDEX_DEVICE_SECRET: ${{ secrets.YANDEX_DEVICE_SECRET }}
         run: ./gradlew assembleRelease --no-daemon
+
+      - name: Check the built version matches the tag
+        run: |
+          VERSION=$(python3 -c "import json; print(json.load(open('app/build/outputs/apk/release/output-metadata.json'))['elements'][0]['versionName'])")
+          TAG="${GITHUB_REF_NAME#v}"
+          echo "built versionName=$VERSION, tag=$TAG"
+          [ "$VERSION" = "$TAG" ] || { echo "::error::versionName $VERSION does not match tag $TAG (is the tag on this commit?)"; exit 1; }
 
       - name: Check APK contents
         # The published APK must never carry signing material or local configuration
@@ -71,26 +93,17 @@ jobs:
       - name: Prepare APK artifact
         run: |
           mkdir -p release_artifacts
-          cp app/build/outputs/apk/release/*.apk release_artifacts/YandexMusicLite.apk
+          cp app/build/outputs/apk/release/*.apk "release_artifacts/YAMP-${GITHUB_REF_NAME#v}.apk"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: release_artifacts/YandexMusicLite.apk
-          generate_release_notes: false
-          name: Yandex Music Lite ${{ github.ref_name }}
-          body: |
-            ### Yandex Music Lite ${{ github.ref_name }}
-
-            Что нового:
-            • 🚗 «В авто»: следующий трек больше не лежит на обложке текущего. Под обложкой теперь ряд из трёх обложек «Далее», как на экране волны в телефоне: видно, что заиграет дальше, и любой из них можно включить нажатием.
-            • 🚗 На вертикальных магнитолах (например, Geely Galaxy L7) кнопки управления больше не касаются друг друга, а кольцо вокруг play не задевает соседние кнопки. Порядок на экране как на телефоне: обложка, трек, управление, «Далее», источники.
-            • 🚗 Сообщения в режиме «В авто» (например, «Нет подключения») появляются над кнопками источников и больше их не закрывают.
-            • Если вы обновляетесь с 1.11 — в 1.12 появились настройки по разделам, настройка «Моей волны» и волна по треку, выравнивание громкости, SD-карта, вход на устройствах без WebView и многое другое (см. описание v1.12.0).
+          files: release_artifacts/YAMP-*.apk
+          generate_release_notes: true
+          name: YAMP ${{ github.ref_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Remove decoded keystore
         if: always()
         run: rm -f release.keystore
-

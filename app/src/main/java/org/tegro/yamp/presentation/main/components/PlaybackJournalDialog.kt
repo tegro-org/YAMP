@@ -1,0 +1,156 @@
+package org.tegro.yamp.presentation.main.components
+
+import android.content.res.Resources
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import org.tegro.yamp.R
+import org.tegro.yamp.data.player.PlaybackJournal
+import org.tegro.yamp.presentation.hifi.HiFi
+import org.tegro.yamp.presentation.hifi.HiFiAlertDialog
+import org.tegro.yamp.presentation.hifi.HiFiDialogAction
+import org.tegro.yamp.presentation.hifi.HiFiDialogActionKind
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+/**
+ * The last hour of music: how long it played, its stops, crossfades, skips, errors, focus and pauses. Shared
+ * as text with a report, so "it paused by itself" can be told apart: the link, the track, the device or the app.
+ * The event lines are technical and English on purpose — they are for the developer.
+ */
+@Composable
+fun PlaybackJournalDialog(
+    snapshot: PlaybackJournal.Snapshot,
+    onShare: (String) -> Unit,
+    onClear: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val resources = LocalResources.current
+    val locale = LocalConfiguration.current.locales[0]
+    val time = remember(locale) { SimpleDateFormat("HH:mm:ss", locale) }
+    HiFiAlertDialog(
+        onDismissRequest = onDismiss,
+        title = stringResource(R.string.journal_title),
+        content = {
+            Column {
+                Text(stringResource(R.string.journal_hint), color = HiFi.TextSecondary, fontSize = 13.sp, lineHeight = 18.sp)
+                Spacer(Modifier.height(12.dp))
+                summaryLines(resources, snapshot.summary).forEach { (label, value) ->
+                    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(label, color = Color.White, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                        Spacer(Modifier.width(8.dp))
+                        Text(value, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+                if (snapshot.events.isNotEmpty()) {
+                    Spacer(Modifier.height(12.dp))
+                    Text(stringResource(R.string.journal_events), color = HiFi.TextTertiary, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.sp)
+                    Spacer(Modifier.height(6.dp))
+                    snapshot.events.takeLast(SHOWN).reversed().forEach { event ->
+                        Row(Modifier.padding(vertical = 3.dp)) {
+                            Text(time.format(Date(event.atMs)), color = HiFi.TextTertiary, fontSize = 12.sp, modifier = Modifier.width(62.dp))
+                            Text(eventText(event), color = eventColor(event.kind), fontSize = 12.sp, lineHeight = 16.sp)
+                        }
+                    }
+                }
+            }
+        },
+        confirm = { HiFiDialogAction(stringResource(R.string.journal_share), { onShare(journalText(resources, snapshot, time)) }) },
+        dismiss = { HiFiDialogAction(stringResource(R.string.journal_clear), { onClear(); onDismiss() }, HiFiDialogActionKind.Quiet) }
+    )
+}
+
+private const val SHOWN = 40
+
+private fun eventColor(kind: PlaybackJournal.Kind): Color = when (kind) {
+    PlaybackJournal.Kind.STALL, PlaybackJournal.Kind.CROSSFADE_LATE, PlaybackJournal.Kind.HOLD_TIMEOUT, PlaybackJournal.Kind.UNDERRUN,
+    PlaybackJournal.Kind.OUTPUT_STALL, PlaybackJournal.Kind.POSITION_BACK, PlaybackJournal.Kind.KILLED,
+    PlaybackJournal.Kind.RETURN_FAILED, PlaybackJournal.Kind.STOP -> HiFi.Warning
+    PlaybackJournal.Kind.ERROR, PlaybackJournal.Kind.PAUSE, PlaybackJournal.Kind.OUTPUT_GONE -> HiFi.Danger
+    else -> Color.White.copy(alpha = 0.82f)
+}
+
+private fun seconds(ms: Long): String = String.format(Locale.US, "%.1f", ms / 1000f).removeSuffix(".0")
+
+internal fun summaryLines(r: Resources, s: PlaybackJournal.Summary): List<Pair<String, String>> = listOf(
+    r.getString(R.string.journal_played) to r.getString(R.string.journal_minutes, s.playedMs / 60_000),
+    r.getString(R.string.journal_stalls) to if (s.stalls == 0) "0" else r.getString(R.string.journal_stalls_value, s.stalls, seconds(s.stalledMs)),
+    r.getString(R.string.journal_crossfades) to r.getString(R.string.journal_crossfades_value, s.crossfades - s.crossfadesLate, s.crossfades),
+    r.getString(R.string.journal_errors) to s.errors.toString(),
+    r.getString(R.string.journal_pauses) to s.pauses.toString()
+) + listOfNotNull(
+    (r.getString(R.string.journal_output_stalls) to r.getString(R.string.journal_output_stalls_value, s.outputStalls, seconds(s.outputStalledMs)))
+        .takeIf { s.outputStalls > 0 },
+    (r.getString(R.string.journal_position_jumps) to s.positionJumps.toString()).takeIf { s.positionJumps > 0 },
+    (r.getString(R.string.journal_kills) to s.kills.toString()).takeIf { s.kills > 0 }
+)
+
+/** One line per event, technical and English: what the developer needs. */
+internal fun eventText(e: PlaybackJournal.Event): String {
+    val title = e.title?.let { "«$it»" }
+    val detail = e.detail
+    val body = when (e.kind) {
+        PlaybackJournal.Kind.START -> "start ${detail.orEmpty()}" + (if (e.valueMs > 0) " at ${e.valueMs / 1000} s" else "")
+        PlaybackJournal.Kind.STALL -> "stall ${seconds(e.valueMs)} s"
+        PlaybackJournal.Kind.CROSSFADE -> "crossfade, ready after ${seconds(e.valueMs)} s"
+        PlaybackJournal.Kind.CROSSFADE_LATE -> "crossfade LATE: previous ended, fade-in after ${seconds(e.valueMs)} s"
+        PlaybackJournal.Kind.HOLD_TIMEOUT -> "next track brought no data in 20 s"
+        PlaybackJournal.Kind.SKIP -> "skip (${detail.orEmpty()})"
+        PlaybackJournal.Kind.ERROR -> "error: ${detail.orEmpty()}"
+        PlaybackJournal.Kind.FOCUS -> "audio focus ${detail.orEmpty()}"
+        PlaybackJournal.Kind.PAUSE -> "PAUSE: ${detail.orEmpty()}"
+        PlaybackJournal.Kind.OUTPUT_GONE -> "PAUSE: the headphones or the Bluetooth went away"
+        PlaybackJournal.Kind.UNDERRUN -> "underrun: ${detail.orEmpty()}"
+        PlaybackJournal.Kind.TIMING -> "timing: ${detail.orEmpty()}"
+        PlaybackJournal.Kind.FORMAT -> "format: ${detail.orEmpty()}"
+        PlaybackJournal.Kind.OUTPUT -> "output: ${detail.orEmpty()}"
+        PlaybackJournal.Kind.TAP -> "tap ${detail.orEmpty()}"
+        PlaybackJournal.Kind.AUDIO -> "audio: ${detail.orEmpty()}"
+        PlaybackJournal.Kind.NEXT -> "next ${detail.orEmpty()}"
+        PlaybackJournal.Kind.CACHE -> "cache ${detail.orEmpty()}"
+        PlaybackJournal.Kind.REPORT -> "report ${detail.orEmpty()}"
+        PlaybackJournal.Kind.QUALITY -> "quality ${detail.orEmpty()}"
+        PlaybackJournal.Kind.FADE -> "fade ${detail.orEmpty()}"
+        PlaybackJournal.Kind.JUMP -> "jump ${detail.orEmpty()}"
+        PlaybackJournal.Kind.ROUTER -> "router ${detail.orEmpty()}"
+        PlaybackJournal.Kind.ROTOR -> "ROTOR ${detail.orEmpty()}"
+        PlaybackJournal.Kind.REOPENED_AFTER_REST -> "reopened after a rest of ${e.valueMs / 60_000} min"
+        PlaybackJournal.Kind.WAVE -> "wave ${detail.orEmpty()}"
+        PlaybackJournal.Kind.LINK -> "link ${detail.orEmpty()}"
+        PlaybackJournal.Kind.OUTPUT_STALL -> "output stall ${seconds(e.valueMs)} s · ${detail.orEmpty()}"
+        PlaybackJournal.Kind.POSITION_BACK -> "position back ${seconds(e.valueMs)} s · ${detail.orEmpty()}"
+        PlaybackJournal.Kind.KILLED -> "KILLED: Android closed the app · ${detail.orEmpty()}"
+        PlaybackJournal.Kind.STOP -> "STOP ${detail.orEmpty()}"
+        PlaybackJournal.Kind.PLUS -> "PLUS ${detail.orEmpty()}"
+        PlaybackJournal.Kind.RETURN_TRY -> "return to the streams: trial"
+        PlaybackJournal.Kind.RETURN_FAILED -> "return to the streams failed, back to the device · next try in ${seconds(e.valueMs)} s"
+    }
+    return listOfNotNull(body, title).joinToString(" ")
+}
+
+/** The journal as plain text, for a message to the developer. */
+internal fun journalText(r: Resources, snapshot: PlaybackJournal.Snapshot, time: SimpleDateFormat): String = buildString {
+    appendLine(r.getString(R.string.journal_title))
+    summaryLines(r, snapshot.summary).forEach { (label, value) -> appendLine("$label: $value") }
+    if (snapshot.events.isNotEmpty()) {
+        appendLine()
+        snapshot.events.forEach { appendLine("${time.format(Date(it.atMs))}  ${eventText(it)}") }
+    }
+}.trimEnd()

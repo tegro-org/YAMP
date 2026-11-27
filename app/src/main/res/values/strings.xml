@@ -1,13 +1,11 @@
-<resources xmlns:tools="http://schemas.android.com/tools">
-    <string name="app_name">Yandex Music Lite</string>
+<!-- MissingTranslation is ignored until the string migration (ARCHITECTURE K4) gives every key a values-ru twin. -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
+    <string name="app_name">YAMP</string>
     <string name="account_management_upravlenie_akkauntami">Управление аккаунтами</string>
     <string name="account_management_pereklyuchenie_profiley_i_nastroyki">Переключение профилей и настройки входа</string>
     <string name="cd_zakryt">Закрыть</string>
     <string name="cd_avatar">Аватар</string>
-    <string name="account_management_aktiven">Активен</string>
-    <string name="cd_udalit_profil">Удалить профиль</string>
     <string name="account_management_profil_po_umolchaniyu_avto">★ — профиль по умолчанию (авто-вход при старте)</string>
-    <string name="account_management_voyti_v_drugoy_akkaunt">Войти в другой аккаунт</string>
     <string name="account_management_vyyti_iz_etogo_akkaunta">Выйти из этого аккаунта</string>
     <string name="account_management_vyyti_so_vseh_akkauntov">Выйти со всех аккаунтов</string>
     <string name="account_management_vyyti_iz_akkaunta">Выйти из аккаунта?</string>
@@ -19,16 +17,8 @@
     <string name="account_management_otmena">Отмена</string>
     <string name="account_management_vyyti_so_vseh">Выйти со всех</string>
     <string name="account_management_udalit">Удалить</string>
-    <string name="startup_account_picker_vyberite_profil">Выберите профиль</string>
-    <string name="startup_account_picker_vhod_v_yandex_music">Вход в Yandex Music Lite</string>
-    <string name="startup_account_picker_dostupnye_akkaunty">ДОСТУПНЫЕ АККАУНТЫ</string>
-    <string name="startup_account_picker_zapomnit_kak_profil_po">Запомнить как профиль по умолчанию</string>
-    <string name="startup_account_picker_novyy">Новый</string>
-    <string name="startup_account_picker_voyti">Войти</string>
     <string name="auth_ozhidanie_interneta">Ожидание интернета…</string>
     <string name="cd_nazad">Назад</string>
-    <string name="cd_predyduschiy">Предыдущий</string>
-    <string name="cd_sleduyuschiy">Следующий</string>
     <string name="cd_nravitsya">Нравится</string>
     <string name="library_mne_nravitsya">Мне нравится</string>
     <string name="cd_slushat">Слушать</string>
@@ -39,7 +29,7 @@
     <string name="search_v_trende">В тренде</string>
     <string name="cd_oblozhka">Обложка</string>
     <string name="search_treki_artisty_albomy">Треки, артисты, альбомы</string>
-    <string name="cache_menu_yandex_music_lite">Yandex Music Lite</string>
+    <string name="cache_menu_yandex_music_lite">YAMP</string>
     <string name="download_progress_modal_zagruzka_kollektsii">Загрузка коллекции</string>
     <string name="download_progress_modal_svernut">Свернуть</string>
     <string name="download_progress_modal_otmenit">Отменить</string>
@@ -59,8 +49,8 @@
     <string name="cd_logotip_radiostantsii">Логотип радиостанции</string>
     <string name="cd_v_izbrannoe">В избранное</string>
     <string name="cd_logotip_prilozheniya">Логотип приложения</string>
-    <string name="splash_yandex_music_lite">YANDEX MUSIC LITE</string>
-    <string name="splash_lossless_audio">LOSSLESS AUDIO</string>
+    <string name="splash_app_name">YAMP</string>
+    <string name="splash_tagline">YET ANOTHER MUSIC PLAYER</string>
     <string name="update_dostupno_obnovlenie">Доступно обновление</string>
     <string name="update_chto_novogo_v_etoy">Что нового в этой версии:</string>
     <string name="update_zagruzka_paketa">Загрузка пакета…</string>
@@ -80,10 +70,11 @@
     <string name="download_progress_waiting_hint">Скачивание начнётся при подключении к интернету</string>
     <string name="msg_wave_load_failed">Не удалось загрузить «Мою волну». Проверьте подключение к интернету</string>
     <string name="msg_station_unavailable">Радиостанция недоступна</string>
+    <string name="msg_playback_refused">The server refused access to this track. Check the account in Settings → Accounts</string>
     <string name="msg_playback_failed">Не удаётся воспроизвести музыку. Проверьте подключение к интернету</string>
-    <string name="tracks_count_one">%d трек</string>
-    <string name="tracks_count_few">%d трека</string>
-    <string name="tracks_count_many">%d треков</string>
+    <string name="tracks_count_one" tools:ignore="PluralsCandidate">%d track</string>
+    <string name="tracks_count_few" tools:ignore="PluralsCandidate">%d tracks</string>
+    <string name="tracks_count_many" tools:ignore="PluralsCandidate">%d tracks</string>
     <string name="stations_count_one">%d радиостанция</string>
     <string name="stations_count_few">%d радиостанции</string>
     <string name="stations_count_many">%d радиостанций</string>
@@ -166,16 +157,61 @@
     <string name="search_albums">Альбомы</string>
     <string name="track_menu_artist">Исполнитель: %1$s</string>
     <string name="track_menu_album">Альбом: %1$s</string>
-    <string name="widget_name">Сейчас играет</string>
-    <string name="widget_description">Текущий трек, пауза и переключение треков на рабочем столе</string>
-    <string name="widget_nothing_playing">Ничего не играет</string>
-    <string name="widget_tap_to_open">Нажмите, чтобы открыть приложение</string>
+    <string name="widget_name">Line</string>
+    <string name="widget_description">Current track, play/pause and skip in one row</string>
+    <string name="widget_player_name">Player</string>
+    <string name="widget_player_description">Cover, progress, like and skip</string>
+    <string name="widget_cover_name">Cover</string>
+    <string name="widget_cover_description">The cover with play/pause and skip</string>
+    <string name="widget_wave_title">My Wave</string>
+    <string name="widget_wave_hint">Tap to start listening</string>
+    <string name="widget_wave_start">Listen to My Wave</string>
+    <string name="widget_open_title">Open YAMP</string>
+    <string name="widget_open_hint">Choose what to play</string>
+    <string name="widget_open_start">Open YAMP</string>
+    <string name="widget_source_wave">MY WAVE</string>
+    <string name="widget_source_radio">RADIO</string>
+    <string name="widget_live">Live</string>
+    <string name="widget_cd_prev">Previous</string>
+    <string name="widget_cd_play_pause">Play or pause</string>
+    <string name="widget_cd_next">Next</string>
+    <string name="widget_cd_like">Like</string>
+    <string name="widget_cd_dislike">Dislike</string>
+    <string name="widget_tab_music">Music</string>
+    <string name="widget_tab_radio">Radio</string>
+    <string name="widget_tab_search">Search</string>
     <string name="crash_log_title">Журнал сбоев</string>
     <string name="crash_log_none">Сбоев не было</string>
+    <string name="journal_title">Журнал воспроизведения</string>
+    <string name="journal_hint">Последний час музыки: остановки, переходы, пропуски, ошибки, аудиофокус, паузы с их причиной. Поможет понять, где прерывается звук: связь, трек, устройство или приложение.</string>
+    <string name="journal_none">Остановок и пауз не было</string>
+    <string name="journal_row" tools:ignore="PluralsCandidate">Остановок %1$d · пауз %2$d · ошибок %3$d</string>
+    <string name="journal_played">Играло</string>
+    <string name="journal_minutes" tools:ignore="PluralsCandidate">%1$d мин</string>
+    <string name="journal_stalls">Остановки звука</string>
+    <string name="journal_stalls_value">%1$d · %2$s с</string>
+    <string name="journal_crossfades">Кроссфейды с готовым треком</string>
+    <string name="journal_crossfades_value">%1$d из %2$d</string>
+    <string name="journal_errors">Ошибки</string>
+    <string name="journal_pauses">Паузы</string>
+    <string name="journal_output_stalls">Output stalls</string>
+    <string name="journal_output_stalls_value">%1$d · %2$s s</string>
+    <string name="journal_position_jumps">Track time back-jumps</string>
+    <string name="journal_kills">Closed by Android</string>
+    <string name="journal_events">СОБЫТИЯ</string>
+    <string name="journal_share">Поделиться</string>
+    <string name="journal_clear">Очистить</string>
+    <string name="settings_g_diagnostics">Диагностика</string>
+    <string name="diag_log_title">Диагностический журнал</string>
+    <string name="diag_log_hint">Файл на устройстве: события воспроизведения, ошибки, аудиофокус, паузы и их причины. Без токенов и ссылок на потоки. Около 2 МБ, последние сутки</string>
+    <string name="diag_log_share">Отправить журнал</string>
+    <string name="diag_log_clear">Очистить журнал</string>
+    <string name="anr_watchdog_title">Main-thread watchdog</string>
+    <string name="anr_watchdog_hint">When the app freezes for 4 seconds or more, writes where the main thread is stuck to the diagnostic log (needs the log; turning this on turns the log on). Costs one tiny check per second</string>
     <string name="crash_log_send">Отправить разработчику</string>
     <string name="crash_log_clear">Очистить</string>
     <string name="crash_log_close">Закрыть</string>
-    <string name="crash_log_subject">Yandex Music Lite %1$s — журнал сбоев</string>
+    <string name="crash_log_subject">YAMP %1$s — журнал сбоев</string>
     <string name="crash_log_privacy">Отчёт содержит только техническую информацию: версию приложения, модель телефона и место ошибки. Данные входа из него удалены. Отправка — только по вашему выбору.</string>
 
     <!-- Redesign 2.0 (Hi-Fi) -->
@@ -231,34 +267,27 @@
     <string name="radio_on_air">В ЭФИРЕ</string>
     <string name="radio_favorites">Избранные</string>
     <string name="radio_all_stations">Все станции</string>
-    <string name="car_label">В АВТО</string>
     <string name="car_next">Далее</string>
     <string name="car_source_wave">Моя волна</string>
-    <string name="car_source_liked">Любимое</string>
     <string name="car_source_radio">Радио</string>
     <string name="car_source_hits">Хиты</string>
-    <string name="car_source_downloaded">Скачанные</string>
-    <string name="car_exit">Выйти из режима В авто</string>
     <string name="car_timeline">Позиция в треке</string>
     <string name="settings_title">Настройки</string>
     <string name="settings_group_account">Аккаунт</string>
     <string name="settings_group_downloads">Загрузки</string>
-    <string name="settings_group_car">В авто</string>
+    <string name="settings_group_car">Автомобиль</string>
     <string name="settings_group_about">О приложении</string>
     <string name="settings_account_plus">Яндекс Плюс активен</string>
     <string name="settings_account_no_plus">Аккаунт Яндекса</string>
-    <string name="settings_switch_account">Сменить</string>
-    <string name="settings_startup_profile">Профиль при запуске</string>
-    <string name="settings_startup_ask">Спрашивать</string>
-    <string name="settings_add_account">Войти в другой аккаунт</string>
     <string name="settings_logout">Выйти из аккаунта</string>
     <string name="settings_logout_confirm_title">Выйти из аккаунта?</string>
     <string name="settings_logout_confirm_text">Данные и кэш этого профиля будут удалены с устройства. Другие сохранённые профили останутся.</string>
-    <string name="settings_crossfade">Кроссфейд</string>
-    <string name="settings_crossfade_off">Выкл.</string>
-    <string name="settings_crossfade_seconds">%1$d с</string>
-    <string name="settings_auto_download">Автоскачивание</string>
-    <string name="settings_auto_download_hint">Сохранять «Мне нравится» офлайн</string>
+    <string name="settings_crossfade">Crossfade duration</string>
+    <string name="settings_play_pause_length">Play/pause duration</string>
+    <string name="settings_seek_length">Seek duration</string>
+    <string name="settings_duration_off">Off</string>
+    <string name="settings_duration_seconds">%1$d s</string>
+    <string name="settings_duration_seconds_half">%1$d.5 s</string>
     <string name="settings_download_all">Скачать всю коллекцию</string>
     <string name="settings_storage">Хранилище</string>
     <string name="settings_storage_value">Скачано %1$s</string>
@@ -287,6 +316,9 @@
     <string name="library_empty_title">Здесь пока пусто</string>
     <string name="library_empty_message">Отмечайте треки сердечком — они появятся в «Моей музыке».</string>
     <string name="queue_remove">Убрать</string>
+    <string name="queue_main_name">Основная</string>
+    <string name="queue_my_wave_name">Моя волна</string>
+    <string name="queue_offline_mix_name">Что есть на устройстве</string>
     <string name="update_err_empty_response">Пустой ответ от GitHub</string>
     <string name="update_err_no_apk">Релиз %1$s найден, но файла APK в нём нет</string>
     <string name="update_err_network">Не удалось проверить обновления: нет связи</string>
@@ -298,11 +330,11 @@
     <string name="update_err_apk_empty">Файл обновления пуст или не сохранился</string>
     <string name="update_err_apk_missing">Файл обновления пуст или не найден</string>
     <string name="update_err_apk_corrupt">Файл повреждён или это не пакет APK</string>
-    <string name="update_err_apk_foreign">Это не обновление Yandex Music Lite</string>
+    <string name="update_err_apk_foreign">Это не обновление YAMP</string>
     <string name="update_err_apk_older">Скачанная версия не новее установленной</string>
     <string name="update_err_apk_check">Не удалось проверить файл обновления</string>
     <string name="update_share_title">Сохранить или отправить файл обновления</string>
-    <string name="update_err_allow_install">Разрешите установку приложений для Yandex Music Lite в открывшихся настройках</string>
+    <string name="update_err_allow_install">Разрешите установку приложений для YAMP в открывшихся настройках</string>
     <string name="update_notes_default">• Улучшения стабильности и воспроизведения</string>
     <string name="update_status_checking">Проверяем обновления…</string>
     <string name="update_status_latest">Установлена последняя версия</string>
@@ -312,19 +344,22 @@
     <string name="update_file_size">Размер файла: ~%1$s МБ</string>
     <string name="update_open_installer">Открыть установщик</string>
     <string name="update_install">Установить</string>
-    <string name="notification_channel_description">Уведомления плеера Yandex Music Lite</string>
+    <string name="notification_channel_description">Уведомления плеера YAMP</string>
+    <string name="notification_preparing">Подготовка…</string>
     <string name="account_is_default">По умолчанию</string>
     <string name="account_make_default">Сделать по умолчанию</string>
     <string name="tab_wave">Волна</string>
     <string name="tab_search">Поиск</string>
     <string name="tab_music">Музыка</string>
     <string name="tab_radio">Радио</string>
-    <string name="tab_car">В авто</string>
     <string name="radio_live_frequency">Прямой эфир • %1$s</string>
     <string name="search_nothing_found_hint">Попробуйте написать иначе или короче.</string>
     <string name="notification_unlike">Убрать из «Мне нравится»</string>
     <string name="notification_station_favorite">Станцию в избранное</string>
     <string name="notification_station_unfavorite">Убрать станцию из избранного</string>
+    <string name="update_channel_name">Updates</string>
+    <string name="update_notification_title">YAMP %1$s is available</string>
+    <string name="update_notification_text">Open YAMP to download and install it</string>
     <string name="update_skip_version">Пропустить эту версию</string>
     <string name="update_skip_hint">Окно больше не появится для этой версии — напомним, когда выйдет следующая. Обновиться можно в настройках.</string>
     <string name="update_status_skipped">Доступна %1$s · пропущена — нажмите, чтобы показать</string>
@@ -345,7 +380,7 @@
     <string name="settings_g_version">Версия</string>
     <string name="settings_g_help">Помощь</string>
     <string name="settings_g_project">Проект</string>
-    <string name="settings_logout_note">При выходе данные и кэш этого профиля удаляются с устройства.</string>
+    <string name="settings_logout_note">The account\'s queues are hidden and come back when you sign in to it again; its downloads are removed.</string>
     <string name="settings_summary_off">выкл.</string>
     <string name="settings_summary_playback">%1$s · кроссфейд %2$s · кэш %3$s</string>
     <string name="settings_summary_interface">Открывать: %1$s · руль %2$s · масштаб %3$s</string>
@@ -357,11 +392,26 @@
     <string name="settings_normalize_hint">Тихие и громкие треки звучат одинаково</string>
     <string name="settings_equalizer">Эквалайзер</string>
     <string name="settings_equalizer_hint">Эквалайзер телефона или магнитолы</string>
+    <string name="msg_queue_empty">“%1$s” is empty — add music with “Add to queue…”</string>
+    <string name="settings_duck_announcements">Keep playing under announcements</string>
+    <string name="settings_poweramp_eq">Poweramp Equalizer</string>
+    <string name="settings_poweramp_eq_hint">Known Players → YAMP: «Затухание» (Fade) off — it took the sound focus and paused YAMP on head units; «Без DVC» on — YAMP\'s own volume works, so crossfades, fades and skips are clean. Leave the other two options as they are. Tap to open it</string>
+    <string name="settings_audio_router">MonJaro Audio Router</string>
+    <string name="settings_audio_router_hint">While its «ЗВУК НА USB» routing is on, it overrides each player\'s volume every few seconds, so crossfades and fades can\'t work. With a USB amplifier connected YAMP switches to hard cuts by itself</string>
+    <string name="settings_audio_router_active">A USB audio output is connected: tracks change with hard cuts now (no crossfade or fades), because the router overrides the player volume while it routes to USB</string>
+    <string name="settings_resume_quiet">Resume when nothing else plays</string>
+    <string name="settings_resume_quiet_hint">When another app takes the sound but nothing plays (an equalizer on a head unit does that), the music goes on a moment later. Only if it was playing, never from a pause</string>
+    <string name="settings_duck_announcements_hint">A navigator or a radar detector speaking makes the music quieter instead of pausing it. A phone call still pauses</string>
+    <string name="settings_transition">Transition</string>
+    <string name="settings_transition_crossfade">Crossfade</string>
+    <string name="settings_transition_fade_rise">Fade then rise</string>
+    <string name="settings_transition_hint">Crossfade: the next track rises while the current one fades. Fade then rise: the current one fades out over the whole length, then the next one rises over the same length (twice the length in all) — never both at once. The play/pause and seek lengths are separate; 0 is instant</string>
+    <string name="search_jellyfin_only_hint">Search your Jellyfin library: type an artist, album or track</string>
     <string name="settings_start_music">Музыка при запуске</string>
     <string name="settings_start_music_off">Не включать</string>
     <string name="settings_start_music_continue">Продолжить</string>
     <string name="settings_start_music_wave">Моя волна</string>
-    <string name="settings_start_music_note">Играет сразу, без нажатия на «Пуск». Вместе с «Открывать: В авто» в разделе «Интерфейс» магнитола включает «Мою волну» сама.</string>
+    <string name="settings_start_music_note">Plays right away, without pressing Play. «My Wave» starts the wave of the first Yandex account in Settings → Accounts (reorder them to choose); without a Yandex account the last queue resumes. With «Open: Player» in Interface, the head unit shows the player at once.</string>
     <string name="settings_bluetooth">Bluetooth машины</string>
     <string name="settings_bluetooth_hint">Включать музыку при подключении к машине, пока приложение запущено</string>
     <string name="settings_explicit">Без ненормативной лексики</string>
@@ -375,10 +425,10 @@
     <string name="settings_storage_moving">Переносим треки: %1$d из %2$d</string>
     <string name="settings_open_page">Открывать</string>
     <string name="settings_open_last">Последний раздел</string>
-    <string name="settings_open_last_hint">Где закрыли, в том числе «В авто»</string>
+    <string name="settings_open_last_hint">Где закрыли, в том числе плеер</string>
     <string name="settings_open_wave">Моя волна</string>
-    <string name="settings_open_car">В авто</string>
-    <string name="settings_open_car_hint">Сразу режим для магнитолы</string>
+    <string name="settings_open_car">Плеер</string>
+    <string name="settings_open_car_hint">Сразу открывается плеер</string>
     <string name="settings_expand_player">Разворачивать плеер</string>
     <string name="settings_expand_player_hint">Когда вы включаете музыку: трек, плейлист, альбом или волну</string>
     <string name="settings_swipe_close">Закрывать смахиванием</string>
@@ -418,7 +468,6 @@
     <string name="wave_by_track_title">По треку «%1$s»</string>
     <string name="wave_by_track_cd">Волна по этому треку</string>
     <string name="wave_by_track_started">Волна по треку «%1$s»: этот трек доиграет, дальше — похожие</string>
-    <string name="wave_by_track_car">Волна по треку «%1$s»</string>
     <string name="action_undo">Отменить</string>
     <string name="auth_phone_kicker">YANDEX MUSIC LITE</string>
     <string name="auth_phone_title">Вход с телефона</string>
@@ -449,7 +498,410 @@
     <string name="auth_webview_still_missing">WebView всё ещё недоступен</string>
     <string name="crash_offer_title">Приложение закрылось с ошибкой</string>
     <string name="auth_phone_minutes">Он действует %1$d мин</string>
-    <string name="car_next_wave">Далее в волне</string>
-    <string name="car_next_track_wave">Далее · волна по треку</string>
     <string name="car_next_play_cd">Включить «%1$s»</string>
+
+    <!-- Phase 1 queues: English here, Russian in values-ru (ARCHITECTURE K1) -->
+    <string name="queue_switcher_title">Queues</string>
+    <string name="queue_switcher_hint">Tap to switch · hold for more</string>
+    <string name="queue_new">New queue</string>
+    <string name="queue_new_hint">Starts empty. Add music with “Add to queue…”, or make it active and play something.</string>
+    <string name="queue_name_hint">Name</string>
+    <string name="queue_create">Create</string>
+    <string name="queue_cancel">Cancel</string>
+    <string name="queue_rename">Rename</string>
+    <string name="queue_duplicate">Duplicate</string>
+    <string name="queue_clear">Clear</string>
+    <string name="queue_delete">Delete queue</string>
+    <string name="queue_delete_confirm_title">Delete queue?</string>
+    <string name="queue_delete_confirm_text">“%1$s” and its %2$s will be removed from the app. The music itself is not deleted.</string>
+    <string name="queue_delete_action">Delete</string>
+    <plurals name="queue_tracks">
+        <item quantity="one">%1$d track</item>
+        <item quantity="other">%1$d tracks</item>
+    </plurals>
+    <string name="queue_paused_at">%1$s · paused at %2$d</string>
+    <string name="queue_position">%1$d / %2$d</string>
+    <string name="queue_endless">∞</string>
+    <string name="queue_add_title">Add to queue</string>
+    <string name="queue_added_to">Added to “%1$s”</string>
+    <string name="track_menu_add_to_end">Add to end of queue</string>
+    <string name="track_menu_add_to_queue">Add to queue…</string>
+    <string name="queue_default_name">Queue %1$d</string>
+    <string name="queue_duplicate_name">%1$s (copy)</string>
+    <string name="cd_queues">Queues</string>
+    <string name="cd_queue_shuffle">Shuffle</string>
+    <string name="cd_queue_repeat">Repeat</string>
+    <!-- The first tab as a queue's page (D49) -->
+    <string name="home_next_up">Up next</string>
+    <string name="home_queue_empty">The queue is empty</string>
+    <!-- Library → History (Phase 1b, D46) -->
+    <string name="history_title">History</string>
+    <string name="history_row">History</string>
+    <string name="history_today">Today</string>
+    <string name="history_yesterday">Yesterday</string>
+    <string name="history_empty">What you listen to will appear here</string>
+    <string name="history_clear">Clear history</string>
+    <string name="history_clear_confirm">Clear the history?</string>
+    <string name="history_clear_confirm_text">Every track heard so far leaves the list. The music itself is not deleted.</string>
+    <string name="history_filter_all">All</string>
+    <string name="history_filter_wave">My Wave</string>
+    <string name="history_filter_radio">Radio</string>
+    <string name="settings_history">Keep listening history</string>
+    <string name="settings_history_hint">Every track that sounded, by day, in Library → History</string>
+    <string name="radio_start">Start radio</string>
+    <string name="radio_picker_title">Start radio</string>
+    <string name="radio_new">New radio</string>
+    <string name="radio_keep">Keep history</string>
+    <string name="radio_keep_hint">Every played track stays in the radio; off — only the last few</string>
+    <string name="radio_queue_name">Radio: %1$s</string>
+    <string name="radio_started">Radio: %1$s</string>
+    <string name="msg_radio_load_failed">The radio could not be loaded. Check the connection</string>
+    <string name="msg_wave_stuck_nothing_new">Nothing new in My Wave, and nothing saved either. The music goes on once new tracks come</string>
+    <string name="msg_wave_stuck_saved">Nothing new in My Wave — the saved tracks play meanwhile</string>
+    <string name="cd_radio_keep_on">History kept</string>
+    <!-- Phase 2a: accounts live at once, queues bound to an account (D56–D64) -->
+    <string name="settings_g_queues">Queues</string>
+    <string name="settings_group_queues">Group</string>
+    <string name="settings_group_queues_hint">A section per account. Off — one list, a marker on each row</string>
+    <string name="radio_new_on">New radio on</string>
+    <string name="queue_account">Account</string>
+    <string name="queue_account_hint">The queue plays, likes and gets suggestions under this account. It can’t be changed later.</string>
+    <string name="queue_removed_account_note">Its account was removed · sign in to it again and this queue comes back</string>
+    <string name="queue_removed_account_note_named">Account %1$s was removed · sign in to it again and this queue comes back</string>
+    <string name="queue_removed_place">%1$d of %2$d</string>
+    <string name="queue_removed_open_subtitle_named">Account %1$s removed · %2$s</string>
+    <string name="queue_removed_open_subtitle">Its account was removed · %1$s</string>
+    <string name="queue_removed_next">Next</string>
+    <string name="queue_track_unavailable">unavailable</string>
+    <string name="queue_removed_open_hint_named">Sign in to %1$s again in Settings → Accounts and the queue plays as before.</string>
+    <string name="queue_removed_open_hint">Sign in to its account again in Settings → Accounts and the queue plays as before.</string>
+    <plurals name="queue_removed_accounts">
+        <item quantity="one">Removed accounts · %1$d queue</item>
+        <item quantity="other">Removed accounts · %1$d queues</item>
+    </plurals>
+    <string name="queue_account_caption">as %1$s</string>
+    <string name="account_management_all_live">All accounts work at the same time. Each queue belongs to the account it was created on.</string>
+    <!-- Debug: test sign-out without losing credentials (debug builds only) -->
+    <string name="debug_account_hide">Hide %1$s (test sign-out)</string>
+    <string name="debug_account_unhide">Unhide %1$s</string>
+    <!-- On-disk stream cache (D86) -->
+    <string name="settings_stream_cache_size">Stream cache</string>
+    <string name="settings_stream_cache_hint">Played and next tracks are kept on disk: Back and Next start at once, even after a dropout</string>
+    <string name="settings_stream_cache_clear">Clear stream cache</string>
+    <string name="next_state_ready">Next track ready</string>
+    <string name="next_state_loading">Next track loading</string>
+    <string name="next_state_failed">Couldn\'t load — tap to retry</string>
+    <!-- Jellyfin sign-in and accounts (docs/phase-3-providers.md §5, step 21) -->
+    <string name="add_account_title">Add account</string>
+    <string name="add_account_where">Where is the music?</string>
+    <string name="add_account_yandex">Yandex Music</string>
+    <string name="add_account_yandex_sub">Another Yandex account — its own My Wave and likes</string>
+    <string name="add_account_jellyfin_sub">Your own music server — address, then a code or a password</string>
+    <string name="add_account_note">Every account works at the same time and gets its own queue to start from.</string>
+    <string name="welcome_line">Where is your music?</string>
+    <string name="welcome_local_sub">A folder, an SD card or a USB stick — no account needed</string>
+    <string name="welcome_jellyfin_sub">Your own music server — its address, then a code or a password</string>
+    <string name="welcome_later">Yandex Music and more accounts can be added later in Settings → Accounts.</string>
+    <string name="account_leaves_no_source">This is your only source. After signing out you will need to add a folder on this device or a Jellyfin server before the app opens. Yandex Music can be added again later in Settings → Accounts.</string>
+    <string name="queue_empty_title">The queue is empty</string>
+    <string name="queue_empty_hint">Add music from Library or Search</string>
+    <string name="jellyfin_intro">Your own music server. Enter its address, then confirm a code in Jellyfin or sign in with your account on it.</string>
+    <string name="jellyfin_server">Server address</string>
+    <string name="jellyfin_check">Check</string>
+    <string name="jellyfin_check_again">Check again</string>
+    <string name="jellyfin_checking">Checking the server…</string>
+    <string name="jellyfin_unreachable">Can\'t reach the server. Check the address and the connection.</string>
+    <string name="jellyfin_not_jellyfin">This address answers, but it isn\'t a Jellyfin server.</string>
+    <string name="jellyfin_not_jellyfin_hint">Use the address you open Jellyfin with in a browser, e.g. https://music.example.org.</string>
+    <string name="jellyfin_https_only">Only https:// addresses are supported — the connection must be encrypted.</string>
+    <string name="jellyfin_bad_address">That doesn\'t look like a server address.</string>
+    <string name="jellyfin_quick_connect">Quick Connect</string>
+    <string name="jellyfin_name_password">Name and password</string>
+    <string name="jellyfin_qc_available">Quick Connect is on for this server — no password to type.</string>
+    <string name="jellyfin_get_code">Get a code</string>
+    <string name="jellyfin_qc_how">In Jellyfin, where you are signed in: your profile → Quick Connect → enter this code.</string>
+    <string name="jellyfin_qc_waiting">Waiting for confirmation…</string>
+    <string name="jellyfin_qc_confirmed">Confirmed in Jellyfin</string>
+    <string name="jellyfin_qc_token">No password is typed in YAMP this way. It keeps only the access token issued by the server, encrypted on this device.</string>
+    <string name="jellyfin_user">User name</string>
+    <string name="jellyfin_password">Password</string>
+    <string name="jellyfin_sign_in">Sign in</string>
+    <string name="jellyfin_signing_in">Signing in…</string>
+    <string name="jellyfin_error_credentials">Wrong user name or password.</string>
+    <string name="jellyfin_error_code">The code wasn\'t confirmed in time. Get a new one.</string>
+    <string name="jellyfin_duplicate_title">Already added</string>
+    <string name="jellyfin_duplicate_text">%1$s is already in your accounts. One server and user is one account — its queues and library are already here.</string>
+    <string name="jellyfin_duplicate_ok">OK</string>
+    <string name="jellyfin_remove_confirm">Sign out of %1$s? Its queues stay hidden until you sign in to the same server and user again.</string>
+    <string name="jellyfin_lib_albums">Albums</string>
+    <string name="jellyfin_lib_artists">Artists</string>
+    <string name="jellyfin_lib_playlists">Playlists</string>
+    <string name="jellyfin_page_offline">%1$s isn’t reachable. Shown from the last visit; retrying by itself.</string>
+    <string name="jellyfin_list_empty">Nothing here yet</string>
+    <!-- Album / artist actions (canvas am-*) -->
+    <string name="tab_home">Home</string>
+    <string name="media_play_now">Play now</string>
+    <string name="media_play_now_sub">Replaces the current queue</string>
+    <string name="media_album_word">Album</string>
+    <string name="media_artist_word">Artist</string>
+    <string name="media_artist_asks">Adding an artist asks first: all albums or the popular tracks.</string>
+    <string name="media_artist_add_title">Add «%1$s»</string>
+    <string name="media_artist_play_title">Play «%1$s»</string>
+    <string name="media_target_play">Replaces the current queue.</string>
+    <string name="media_target_next">Plays right after the current track.</string>
+    <string name="media_target_end">Goes to the end of the current queue.</string>
+    <string name="media_target_queue">Then choose the queue.</string>
+    <string name="media_target_playlist">Then choose the playlist.</string>
+    <string name="media_all_albums">All albums · release order</string>
+    <string name="media_with_extras">Include singles and compilations</string>
+    <string name="media_popular">Popular tracks</string>
+    <string name="media_add">Add</string>
+    <string name="media_play">Play</string>
+    <string name="media_loading">Loading…</string>
+    <string name="media_load_failed">Couldn’t load the tracks</string>
+    <string name="media_added">Added: %1$s</string>
+    <string name="media_albums_one" tools:ignore="PluralsCandidate">%d album</string>
+    <string name="media_albums_few" tools:ignore="PluralsCandidate">%d albums</string>
+    <string name="media_albums_many" tools:ignore="PluralsCandidate">%d albums</string>
+    <string name="media_releases_one" tools:ignore="PluralsCandidate">%d release</string>
+    <string name="media_releases_few" tools:ignore="PluralsCandidate">%d releases</string>
+    <string name="media_releases_many" tools:ignore="PluralsCandidate">%d releases</string>
+    <string name="cd_media_menu">Album or artist actions</string>
+    <string name="settings_section_player">Player</string>
+    <string name="settings_summary_player">%1$s · next %2$s · %3$s</string>
+    <string name="settings_player_large">Large controls</string>
+    <string name="settings_player_large_hint">Landscape only (head unit, phone in landscape): car-sized buttons, the ring around Play and the clock</string>
+    <string name="settings_player_large_on">large controls</string>
+    <string name="settings_player_large_off">normal controls</string>
+    <string name="settings_player_next">Next tracks</string>
+    <string name="settings_player_next_hint">1: one row, tap opens the queue · 3: cards</string>
+    <string name="settings_player_likes">Like by gestures</string>
+    <string name="settings_player_likes_hint">Double tap the cover = like, hold = dislike; no buttons</string>
+    <string name="settings_player_likes_gestures">likes by gestures</string>
+    <string name="settings_player_likes_buttons">like buttons</string>
+    <string name="settings_player_wheel_note">The wheel’s side comes from Settings → Interface</string>
+    <string name="tab_player">Player</string>
+    <string name="player_liked_gesture">Liked</string>
+    <string name="player_disliked_gesture">Disliked — won’t play again</string>
+    <string name="player_queue_position">Queue · %1$d of %2$d</string>
+    <plurals name="playlist_msg_added_many">
+        <item quantity="one">%1$d track added to «%2$s»</item>
+        <item quantity="other">%1$d tracks added to «%2$s»</item>
+    </plurals>
+    <string name="quality_title">Quality</string>
+    <string name="quality_unmetered">Unmetered (Wi-Fi)</string>
+    <string name="quality_metered">Metered (mobile, limited Wi-Fi)</string>
+    <string name="quality_lossless">Lossless (FLAC)</string>
+    <string name="quality_compatible">Compatible (MP3)</string>
+    <string name="quality_original">Original</string>
+    <string name="quality_converted">Compressed, up to 320 kbps</string>
+    <string name="quality_converted_note">Lossless and above 320 kbps — converted to MP3; the rest as is.</string>
+    <string name="quality_original_note">The file as it is on the server: seekable, no work for the server.</string>
+    <string name="quality_seg_compressed">Compressed</string>
+    <string name="quality_seg_lossless">Lossless</string>
+    <string name="quality_seg_compatible">Compatible</string>
+    <string name="quality_economy">Economy</string>
+    <string name="quality_economy_full">Economy, up to 128 kbps</string>
+    <string name="quality_cap_server">as on the server</string>
+    <string name="quality_cap_320">up to 320 kbps</string>
+    <string name="quality_cap_mp3_320">MP3 up to 320</string>
+    <string name="quality_cap_128">up to 128 kbps</string>
+    <string name="quality_economy_note_jf">For a weak network and to save data. Above 128 kbps — converted to MP3 128.</string>
+    <string name="quality_lossless_note">FLAC when the track has it (needs Plus), else the best MP3.</string>
+    <string name="quality_compatible_note">The best MP3 Yandex offers, up to 320 kbps.</string>
+    <string name="quality_economy_note_ya">For a weak network and to save data. Yandex’s own variant up to 128 kbps — no conversion, seekable.</string>
+    <string name="quality_next_track_jf">Converted tracks seek once they are on the device. A network change applies from the next track.</string>
+    <string name="quality_short_economy">economy</string>
+    <string name="queue_previous">Previous</string>
+    <string name="queue_previous_hint">Previous: %1$d</string>
+    <string name="quality_now_metered">Now: metered</string>
+    <string name="quality_now_unmetered">Now: unmetered</string>
+    <string name="account_auto_download_liked">Auto-download liked</string>
+    <string name="account_auto_download_favourites">Auto-download favourites</string>
+    <string name="account_auto_download_hint">New ones are saved for offline listening.</string>
+    <string name="quality_next_track">A network change applies from the next track.</string>
+    <string name="quality_car_title">Car Wi-Fi as metered</string>
+    <string name="quality_car_text">The head unit sees the car’s 4G router as ordinary Wi-Fi. Mark that network as metered once, and YAMP uses the “Metered” quality in the car and the other one at home.</string>
+    <string name="quality_car_steps">Android Settings → Wi-Fi → the car network → Advanced → Metered</string>
+    <string name="quality_open_wifi">Open Wi-Fi settings</string>
+    <string name="quality_summary">Wi-Fi: %1$s · metered: %2$s</string>
+    <string name="quality_short_original">original</string>
+    <string name="quality_short_converted">compressed</string>
+    <string name="quality_per_account">Quality is chosen per account: Settings → Accounts → the account.</string>
+    <string name="quality_tap_account">Tap an account for its quality and auto-download.</string>
+    <string name="wide_menu_more">More</string>
+    <string name="wide_menu_quality">Quality · %1$s</string>
+    <string name="wide_menu_quality_unknown">Quality</string>
+    <string name="folders_title">Folders</string>
+    <string name="folders_filter">Filter folders</string>
+    <string name="folders_filter_here">Filter in this folder</string>
+    <string name="folders_pinned">Pinned</string>
+    <string name="folders_pinned_n">Pinned · %1$d</string>
+    <string name="folders_all_n">All folders · %1$d</string>
+    <string name="folders_others_n">Other folders · %1$d</string>
+    <string name="folders_filter_note">The filter searches this level only; pinned folders stay on top.</string>
+    <string name="folders_tracks_n">Tracks · %1$d</string>
+    <string name="folders_count_one" tools:ignore="PluralsCandidate">%1$d folder</string>
+    <string name="folders_count_few" tools:ignore="PluralsCandidate">%1$d folders</string>
+    <string name="folders_count_many" tools:ignore="PluralsCandidate">%1$d folders</string>
+    <string name="folder_word">Folder</string>
+    <string name="folders_pin">Pin to the top</string>
+    <string name="folders_unpin">Unpin</string>
+    <string name="folders_empty">This folder is empty</string>
+    <string name="folders_no_match">Nothing on this level matches</string>
+    <string name="folders_play_cd">Play the folder</string>
+    <string name="folders_crumbs_more">…</string>
+    <string name="media_shuffle">Shuffle</string>
+    <string name="home_pinned_folders">Pinned folders</string>
+    <string name="home_recently_added">Recently added</string>
+    <string name="home_favourites">Favourites</string>
+    <string name="home_all">All</string>
+    <string name="home_all_n">All · %1$d</string>
+    <string name="home_all_folders">All folders</string>
+    <string name="library_row_liked">Liked</string>
+    <string name="library_row_favourites">Favourites</string>
+    <string name="library_row_downloaded">Downloaded</string>
+    <string name="library_row_folders">Folders</string>
+    <string name="library_downloaded_jellyfin_empty">No downloads yet: favourites download in Settings → Downloads</string>
+    <string name="player_menu_music">Music</string>
+    <string name="car_filter">Filter</string>
+    <string name="car_add_to_queue">Add to queue</string>
+    <string name="car_new_queue">New queue</string>
+    <string name="car_new_queue_sub">“%1$s” · on %2$s</string>
+    <string name="car_queues_only">Only %1$s’s queues: the album’s account.</string>
+    <string name="car_added">Added to “%1$s”</string>
+    <string name="car_library_empty">Nothing here yet</string>
+    <string name="car_account_pick">Account</string>
+    <string name="car_back_to_player">Back to the player</string>
+    <string name="car_add_to_end">Add to end</string>
+    <string name="car_album_minutes">%1$d min</string>
+    <string name="car_album_no_radio">Playlists and radio for Jellyfin come later (Phases 5–6).</string>
+    <!-- Android Auto browse tree (gap (d)) -->
+    <string name="auto_albums">Albums</string>
+    <string name="auto_play_all">Play all</string>
+    <!-- Seeking a converted stream before its disk copy is complete (canvas 5e) -->
+    <string name="seek_locked_message">Seeking available once loaded · %1$d%%</string>
+    <string name="seek_locked_a11y">Seeking not available yet, loaded %1$d%%</string>
+    <string name="seek_locked_message_no_percent">Seeking available once loaded</string>
+    <string name="seek_locked_a11y_no_percent">Seeking not available yet</string>
+    <!-- Account order (D90, canvas ac-order) -->
+    <string name="account_move_up">Move up</string>
+    <string name="account_move_down">Move down</string>
+    <string name="account_already_first">Already first</string>
+    <string name="account_already_last">Already last</string>
+    <string name="account_remove">Remove</string>
+    <string name="account_order_hint">Drag ≡ or use ⋮ → Move up / down. This order is used everywhere: Music, car, Android Auto, queues. New accounts go to the end.</string>
+    <string name="cd_account_drag">Drag to reorder</string>
+    <string name="cd_account_menu">Account actions</string>
+    <!-- Local files scan (docs/phase-4d-local-files.md §5): the foreground notification -->
+    <string name="local_scan_channel_name">Music files scan</string>
+    <string name="local_scan_title">Scanning music files</string>
+    <string name="local_scan_progress" translatable="false">%1$d / %2$d · %3$s</string>
+    <string name="local_device_name">This device</string>
+    <string name="local_unknown_artist">Unknown artist</string>
+    <string name="local_volume_phone">Phone</string>
+    <string name="local_not_connected">Not connected — tracks unavailable</string>
+    <string name="local_not_connected_short">Not connected</string>
+    <string name="local_tracks_unavailable">Tracks unavailable</string>
+    <string name="local_volume_not_connected">%1$s is not connected</string>
+    <string name="local_volume_not_connected_line">%1$s not connected</string>
+    <string name="local_plays_again">Its tracks play again once it is connected.</string>
+    <string name="local_waiting_for">Waiting for %1$s…</string>
+    <string name="local_all_unavailable">The rest of the queue is on storage that is not connected</string>
+    <string name="add_account_local_sub">A folder on the phone, an SD card or a USB stick — no account needed</string>
+    <string name="local_permission_text">To read your music files YAMP needs access to storage. It only reads the folders you choose; nothing leaves the device.</string>
+    <string name="local_continue">Continue</string>
+    <string name="local_permission_denied">Without access to storage YAMP can\'t read the music files.</string>
+    <string name="local_choose_folder">Choose a folder</string>
+    <string name="local_choose_folder_sub">YAMP reads music from it and its subfolders.</string>
+    <string name="local_use_this_folder">Add this folder</string>
+    <string name="local_storage">Storage</string>
+    <string name="local_items_one" tools:ignore="PluralsCandidate">%d item</string>
+    <string name="local_items_few" tools:ignore="PluralsCandidate">%d items</string>
+    <string name="local_items_many" tools:ignore="PluralsCandidate">%d items</string>
+    <string name="local_audio_files_one" tools:ignore="PluralsCandidate">%d audio file</string>
+    <string name="local_audio_files_few" tools:ignore="PluralsCandidate">%d audio files</string>
+    <string name="local_audio_files_many" tools:ignore="PluralsCandidate">%d audio files</string>
+    <string name="local_no_volumes">No storage found</string>
+    <string name="local_folder_unreadable">This folder can\'t be read</string>
+    <string name="local_volume_system_picker">Android 9–10 lets apps open this drive only through the system folder picker. Choose the music folder there.</string>
+    <string name="local_choose_in_system_picker">Choose in the system picker</string>
+    <string name="local_no_system_picker">This device has no system folder picker</string>
+    <string name="local_added">Music added. The first scan runs in the background — play while it goes.</string>
+    <string name="local_add_failed">This folder can\'t be used: pick a folder on the phone, an SD card or a USB stick.</string>
+    <string name="local_sources">Sources</string>
+    <string name="local_add_folder">Add folder</string>
+    <string name="local_rescan">Rescan</string>
+    <string name="local_full_rescan">Full rescan</string>
+    <string name="local_remove_source">Remove source</string>
+    <string name="local_exclude">Exclude folders…</string>
+    <string name="local_exclude_title">Exclude folders</string>
+    <string name="local_show_hidden">Show hidden and .nomedia folders</string>
+    <string name="local_available">Available</string>
+    <string name="local_scanning_percent">Scanning · %1$d %%</string>
+    <string name="local_scanning">Scanning…</string>
+    <string name="local_needs_access">Needs access again — add the folder once more</string>
+    <string name="local_scanned_ago">scanned %1$s</string>
+    <string name="local_last_seen">last seen %1$s</string>
+    <string name="local_not_scanned">not scanned yet</string>
+    <string name="local_unsupported_one" tools:ignore="PluralsCandidate">%d file not supported</string>
+    <string name="local_unsupported_few" tools:ignore="PluralsCandidate">%d files not supported</string>
+    <string name="local_unsupported_many" tools:ignore="PluralsCandidate">%d files not supported</string>
+    <string name="local_unsupported_hint">%1$s — tap for the list</string>
+    <string name="local_unsupported_text">These formats are skipped for now and counted on every scan; support comes later.</string>
+    <string name="local_more" tools:ignore="PluralsCandidate">+ %1$d more</string>
+    <string name="local_unreadable">Unreadable</string>
+    <string name="local_sources_note">Tracks of a stick that is not plugged in stay in Library, dimmed, and are skipped in queues. Two sticks with the same Music/ are two separate sources.</string>
+    <string name="local_sources_note_short">Two sticks with the same Music/ are separate sources.</string>
+    <string name="local_rescan_note">Rescan reads only new or changed files. ⋮ on a source → Full rescan.</string>
+    <string name="local_rescan_sub">New and changed files only</string>
+    <string name="local_full_rescan_sub">Re-reads every file; favourites are kept</string>
+    <string name="local_excluded_n" tools:ignore="PluralsCandidate">%1$d excluded: %2$s</string>
+    <string name="local_exclude_note">Switch off = not scanned; its tracks leave Library on the next scan. Files are never touched. › opens deeper levels.</string>
+    <string name="local_hidden_skipped">Hidden — skipped (see “Show hidden”)</string>
+    <string name="local_remove_title">Remove this source?</string>
+    <string name="local_remove_text">%1$s: its tracks leave Library. The files are not touched. Queues keep their entries (unavailable). Removing the last source hides “This device”; its queues are kept.</string>
+    <string name="local_empty_title">Add a folder with music</string>
+    <string name="local_empty_text">On the phone, an SD card or a USB stick. YAMP scans it and keeps the list even while a stick is out.</string>
+    <string name="local_sources_one" tools:ignore="PluralsCandidate">%d source</string>
+    <string name="local_sources_few" tools:ignore="PluralsCandidate">%d sources</string>
+    <string name="local_sources_many" tools:ignore="PluralsCandidate">%d sources</string>
+    <string name="local_status_scanning">%1$s: scanning %2$d %%</string>
+    <string name="local_queue_absent_one" tools:ignore="PluralsCandidate">%1$d track is on %2$s</string>
+    <string name="local_queue_absent_few" tools:ignore="PluralsCandidate">%1$d tracks are on %2$s</string>
+    <string name="local_queue_absent_many" tools:ignore="PluralsCandidate">%1$d tracks are on %2$s</string>
+    <string name="local_queue_absent_sub">Skipped until it is connected</string>
+    <string name="local_open_sources">“This device” opens its sources.</string>
+
+    <string name="developer_title">Developer</string>
+    <string name="developer_group_yandex">Yandex Music</string>
+    <string name="developer_allow_no_plus">Allow Yandex accounts without Plus</string>
+    <string name="developer_allow_no_plus_hint">Yandex music and FM radio play without a subscription — for testing the app.</string>
+    <string name="developer_group_section">Section</string>
+    <string name="developer_hide">Hide section</string>
+    <string name="developer_hide_hint">Turns the option off; 7 taps on the version bring it back</string>
+    <string name="developer_summary_off">Accounts without Plus: off</string>
+    <string name="developer_summary_on">Accounts without Plus: on</string>
+    <string name="developer_enabled">Developer section enabled</string>
+    <plurals name="developer_taps_left">
+        <item quantity="one">%d more tap…</item>
+        <item quantity="other">%d more taps…</item>
+    </plurals>
+    <string name="account_plus_dev_tag">No Plus (developer mode)</string>
+    <string name="msg_plus_missing">%1$s has no Yandex Plus — its music doesn’t play.</string>
+    <string name="plus_required">Yandex Plus required</string>
+
+    <string name="plus_missing">No Yandex Plus subscription</string>
+    <string name="plus_missing_hint">Yandex Music doesn’t play without Plus</string>
+    <string name="plus_subscribe">Get a subscription</string>
+    <string name="plus_other_queue">Another queue</string>
+    <string name="plus_queues">Queues</string>
+    <string name="plus_add_source">Add a source</string>
+    <string name="plus_panel_player">%1$s has no Plus, so this queue doesn’t play. Jellyfin and This device queues play as usual.</string>
+    <string name="plus_panel_player_alone">%1$s has no Plus, so this queue doesn’t play. Add a folder on this device or a Jellyfin server to listen meanwhile.</string>
+    <string name="plus_panel_radio">FM radio goes through the active account, %1$s. Without Plus it doesn’t play.</string>
+    <string name="plus_no_browser">There is no browser to open the page.</string>
+    <string name="plus_notice_title">%1$s is added</string>
+    <string name="plus_notice_text">Its Yandex music and FM radio won’t play until the subscription is active. Its likes, playlists and queues are kept.</string>
+    <string name="plus_notice_ok">OK</string>
 </resources>

@@ -1,0 +1,794 @@
+package org.tegro.yamp.presentation.main
+
+import org.tegro.yamp.presentation.player.look
+import kotlinx.coroutines.launch
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.SnackbarDuration
+import org.tegro.yamp.domain.model.AnimationMode
+import org.tegro.yamp.presentation.main.components.DockScrim
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.WindowInsets
+import org.tegro.yamp.presentation.hifi.LocalLinkState
+import org.tegro.yamp.utils.CoverSize
+import android.content.res.Configuration
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import org.tegro.yamp.domain.media.Track
+import org.tegro.yamp.presentation.common.coverUri
+import org.tegro.yamp.presentation.common.id
+import org.tegro.yamp.presentation.common.isRadio
+import org.tegro.yamp.presentation.account.AccountViewModel
+import org.tegro.yamp.presentation.catalog.CatalogActions
+import org.tegro.yamp.presentation.catalog.CatalogPageScreen
+import org.tegro.yamp.presentation.catalog.CatalogViewModel
+import org.tegro.yamp.presentation.crash.CrashLogViewModel
+import org.tegro.yamp.presentation.hifi.ArtworkTint
+import org.tegro.yamp.presentation.hifi.HiFiBackdrop
+import org.tegro.yamp.presentation.hifi.HiFiMotion
+import org.tegro.yamp.presentation.hifi.LocalArtworkTint
+import org.tegro.yamp.presentation.hifi.LocalHiFiLite
+import org.tegro.yamp.presentation.hifi.TintMath
+import org.tegro.yamp.presentation.hifi.rememberArtworkTint
+import org.tegro.yamp.presentation.hifi.rememberHiFiLite
+import org.tegro.yamp.presentation.main.components.FloatingGlassBottomBar
+import org.tegro.yamp.presentation.main.components.DockBottomGap
+import org.tegro.yamp.presentation.main.components.DockClearance
+import org.tegro.yamp.presentation.main.components.FloatingGlassDock
+import org.tegro.yamp.presentation.main.components.LocalTrackMenu
+import org.tegro.yamp.presentation.player.QueueModes
+import org.tegro.yamp.presentation.queues.LocalQueueSwitcher
+import org.tegro.yamp.presentation.queues.QueueSwitcherHost
+import org.tegro.yamp.presentation.queues.QueueSwitcherLauncher
+import org.tegro.yamp.presentation.queues.QueueSwitcherViewModel
+import org.tegro.yamp.presentation.main.components.MainTab
+import org.tegro.yamp.presentation.main.components.MiniPlayer
+import org.tegro.yamp.presentation.main.components.TrackMenuLauncher
+import org.tegro.yamp.presentation.player.FullScreenPlayer
+import org.tegro.yamp.presentation.player.QualityDetailsDialog
+import org.tegro.yamp.presentation.player.playerSourceLabelRes
+import org.tegro.yamp.presentation.radio.RadioViewModel
+import org.tegro.yamp.presentation.update.UpdateViewModel
+import org.tegro.yamp.data.player.PlaybackController
+import org.tegro.yamp.utils.LocalStreamQuality
+import org.tegro.yamp.utils.toCoverUrl
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.withTimeoutOrNull
+
+private const val PLAYER_COVER_KEY = "player_cover"
+
+/** How long a request to open the player waits for a restored session's track. */
+private const val OPEN_PLAYER_WAIT_MS = 5_000L
+
+/**
+ * The app's frame: the tab content, the floating mini-player and tab bar, the full-screen player and
+ * the dialogs. Only what all of them share is collected here (the playing track, play state, likes);
+ * every tab collects its own state, so a change on one tab does not recompose the others.
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+fun MainScreen(
+    viewModel: MainViewModel,
+    onNavigateToAuth: () -> Unit = {},
+    openPlayerSignal: Int = 0,
+    /** This opening of the app (MainActivity): the music on launch is started once for it. */
+    launch: Long = 0L,
+    /** A home screen widget asks to start the music (the wave) / to open a tab; answered once, then handed back. */
+    startAsk: Boolean = false,
+    onStartAskHandled: () -> Unit = {},
+    tabAsk: String? = null,
+    onTabAskHandled: () -> Unit = {},
+    accountVm: AccountViewModel = hiltViewModel(),
+    searchVm: SearchViewModel = hiltViewModel(),
+    playlistsVm: PlaylistsViewModel = hiltViewModel(),
+    radioVm: RadioViewModel = hiltViewModel(),
+    updateVm: UpdateViewModel = hiltViewModel(),
+    catalogVm: CatalogViewModel = hiltViewModel(),
+    crashVm: CrashLogViewModel = hiltViewModel(),
+    queuesVm: QueueSwitcherViewModel = hiltViewModel()
+) {
+    val currentTrack by viewModel.currentTrack.collectAsStateWithLifecycle()
+    val isPlaying by viewModel.isPlaying.collectAsStateWithLifecycle()
+    val isBuffering by viewModel.isBuffering.collectAsStateWithLifecycle()
+    val currentSource by viewModel.currentSource.collectAsStateWithLifecycle()
+    val likedTrackIds by viewModel.likedTrackIds.collectAsStateWithLifecycle()
+    val favoriteStationIds by radioVm.favoriteStationIds.collectAsStateWithLifecycle()
+    val streamQuality by viewModel.streamQuality.collectAsStateWithLifecycle()
+    val linkState by viewModel.linkState.collectAsStateWithLifecycle()
+    val catalogStack by catalogVm.stack.collectAsStateWithLifecycle()
+    // A Yandex account is signed in: the first tab is My Wave, else a plain Home (Jellyfin only)
+    val isAuthorizedYandex by viewModel.isAuthorized.collectAsStateWithLifecycle()
+    val radioStations by radioVm.stations.collectAsStateWithLifecycle()
+    // Progress ticks 10× a second: the State is handed out as `{ progressState.value }` and read only where
+    // it is drawn, so nothing here recomposes on a tick
+    val progressState = viewModel.progress.collectAsStateWithLifecycle()
+    val progress = remember(progressState) { { progressState.value } }
+    // The next track's state and the loaded part: read only where a Next button or a progress bar draws them
+    val bufferedState = viewModel.bufferedProgress.collectAsStateWithLifecycle()
+    val nextTrackState = viewModel.nextTrack.collectAsStateWithLifecycle()
+    val seekLockState = viewModel.seekLock.collectAsStateWithLifecycle()
+    val playbackAux = remember(bufferedState, nextTrackState, seekLockState) {
+        org.tegro.yamp.presentation.player.PlaybackAux(
+            next = { nextTrackState.value.look() },
+            buffered = { bufferedState.value },
+            seekLock = { seekLockState.value }
+        )
+    }
+
+    val now = NowPlaying(currentTrack, isPlaying, isBuffering, currentSource, likedTrackIds)
+
+    // The tab chosen in this session; before any choice, the one the settings open on
+    var chosenTab by rememberSaveable { mutableStateOf<MainTab?>(null) }
+    val startTab by viewModel.startTab.collectAsStateWithLifecycle()
+    // "Player" is not a page (the car screen is retired): it opens the player over the first tab
+    val currentTab = (chosenTab ?: startTab ?: MainTab.HOME).takeIf { it != MainTab.PLAYER } ?: MainTab.HOME
+    val tabKnown = chosenTab != null || startTab != null
+    LaunchedEffect(currentTab, tabKnown) { if (tabKnown) viewModel.rememberTab(currentTab) }
+    LaunchedEffect(launch) { viewModel.applyStartMusic(launch) }
+    val swipeToClose by viewModel.swipeToCloseMiniPlayer.collectAsStateWithLifecycle()
+    val animationMode by viewModel.animationMode.collectAsStateWithLifecycle()
+    // Saveable: a rotation recreates the screen and must not throw the user back out of the player
+    var isPlayerExpanded by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    // A tap on a widget or the notification may come before a restored session has a track: wait for it a while
+    LaunchedEffect(openPlayerSignal) {
+        if (openPlayerSignal <= 0) return@LaunchedEffect
+        val hasTrack = viewModel.currentTrack.value != null ||
+            withTimeoutOrNull(OPEN_PLAYER_WAIT_MS) { viewModel.currentTrack.first { it != null } } != null
+        if (hasTrack) isPlayerExpanded = true
+    }
+    // "Open the player when the music starts": only for music the user started. Each start once, and only a fresh
+    // one: a start made before this screen listened still counts, a previous opening's does not
+    var handledStart by rememberSaveable { androidx.compose.runtime.mutableLongStateOf(0L) }
+    LaunchedEffect(Unit) {
+        viewModel.musicStarts.collect { start ->
+            if (start == null || start.id <= handledStart) return@collect
+            handledStart = start.id
+            val fresh = org.tegro.yamp.data.player.PlayRequests.isFresh(start, android.os.SystemClock.elapsedRealtime())
+            if (fresh && viewModel.expandsOnPlay()) isPlayerExpanded = true
+        }
+    }
+    // The "Player" tab (or "open on: Player"): the player opens as soon as there is something in it; with nothing
+    // on, the active queue starts first
+    var playerPending by rememberSaveable { mutableStateOf(false) }
+    val openPlayerTab: () -> Unit = {
+        if (viewModel.currentTrack.value != null) isPlayerExpanded = true
+        else {
+            playerPending = true
+            viewModel.togglePlayPause()
+        }
+    }
+    LaunchedEffect(startTab) { if (startTab == MainTab.PLAYER && chosenTab == null) openPlayerTab() }
+    LaunchedEffect(currentTrack != null, playerPending) {
+        if (playerPending && currentTrack != null) {
+            playerPending = false
+            isPlayerExpanded = true
+        }
+    }
+    val navigate: (MainTab) -> Unit = { if (it == MainTab.PLAYER) openPlayerTab() else chosenTab = it }
+    // The widget's empty state offers the wave only with a Yandex account; its start is the Home knob's own, and
+    // like the knob it counts as switching music on (the player may open). Music already playing is left alone
+    LaunchedEffect(startAsk) {
+        if (!startAsk) return@LaunchedEffect
+        onStartAskHandled()
+        if (!viewModel.isPlaying.value) viewModel.homeKnob(wavePage = true, pagePlays = false)
+    }
+    LaunchedEffect(tabAsk) {
+        if (tabAsk == null) return@LaunchedEffect
+        onTabAskHandled()
+        // An explicit tab wins over a player start that was still waiting for a track
+        playerPending = false
+        MainTab.ofRoute(tabAsk)?.let { tab ->
+            if (tab != MainTab.PLAYER) isPlayerExpanded = false
+            navigate(tab)
+        }
+    }
+    // Nothing to show any more: a stale "expanded" would open an empty player with the next track. Only a track that
+    // went away closes it — not the brief "no track yet" while a restored session loads after the app comes back
+    // (the player was open, and it must stay open).
+    var hadTrack by remember { mutableStateOf(false) }
+    LaunchedEffect(currentTrack == null) {
+        if (PlayerOpenRule.closesPlayer(hadTrack, hasTrack = currentTrack != null)) isPlayerExpanded = false
+        if (currentTrack != null) hadTrack = true
+    }
+    var showAccountDialog by remember { mutableStateOf(false) }
+    // "Add account" asks where the music is: Yandex or Jellyfin (Phase 4 step 21)
+    var showAddAccount by remember { mutableStateOf(false) }
+    var showCrashLog by remember { mutableStateOf(false) }
+    var qualityDetails by remember { mutableStateOf<PlaybackController.QualityDetails?>(null) }
+    // The wide player's ⋮ → quality: the playing account's quality sheet (account key, name, is Jellyfin)
+    var accountQualityFor by remember { mutableStateOf<Triple<String, String, Boolean>?>(null) }
+    var trackMenu by remember { mutableStateOf<TrackMenuRequest?>(null) }
+    val trackMenuLauncher = remember {
+        TrackMenuLauncher { track, playlist -> trackMenu = TrackMenuRequest(track, playlist, pickPlaylist = false) }
+    }
+    val queueSwitcherLauncher = remember(queuesVm) { QueueSwitcherLauncher { queuesVm.open(it) } }
+    // Album / artist actions: a long press on one, or the ⋮ of its page
+    var mediaMenu by remember { mutableStateOf<org.tegro.yamp.presentation.media.MediaTarget?>(null) }
+    val mediaMenuLauncher = remember { org.tegro.yamp.presentation.media.MediaMenuLauncher { mediaMenu = it } }
+    val mediaScope = androidx.compose.runtime.rememberCoroutineScope()
+    val catalogActions = remember(catalogVm, viewModel) {
+        CatalogActions(
+            onBack = { catalogVm.back() },
+            onRetry = { catalogVm.retry() },
+            onOpenArtist = { id, name -> catalogVm.openArtist(id, name) },
+            onOpenAlbum = { id, title -> catalogVm.openAlbum(id, title) },
+            onPlay = { tracks, trackId, shuffle -> catalogVm.play(tracks, trackId, shuffle) },
+            onOpen = { catalogVm.open(it) },
+            onLoadMore = { catalogVm.loadMore() },
+            onToggleLike = { viewModel.toggleLike(it) },
+            onAddToEnd = viewModel::addToEnd
+        )
+    }
+    val folderActions = remember(catalogVm) {
+        org.tegro.yamp.presentation.folders.FolderActions(
+            onPlay = catalogVm::playFolder,
+            onOpen = { catalogVm.open(it) },
+            onJump = catalogVm::jumpTo,
+            onPlayTracks = { _, tracks, id -> catalogVm.play(tracks, id) }
+        )
+    }
+    val folderPins by catalogVm.pins.collectAsStateWithLifecycle()
+    val allAccountTags by viewModel.accountTags.collectAsStateWithLifecycle()
+    // Another tab: the catalog pages belong to where they were opened
+    LaunchedEffect(currentTab) { catalogVm.closeAll() }
+    InstallDownloadedUpdateOnResume(updateVm)
+    PrefetchCovers(viewModel, currentTrack)
+
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    // One tint for the whole app: the playing cover, or the station's brand colours on air
+    val autoLite = rememberHiFiLite()
+    val lite = when (animationMode) {
+        AnimationMode.FULL -> false
+        AnimationMode.MINIMUM -> true
+        else -> autoLite
+    }
+    val stationTint = remember(currentTrack?.id, radioStations) {
+        val track = currentTrack
+        if (track?.isRadio != true) null
+        else radioStations.firstOrNull { it.id == track.id.removePrefix("radio_") }?.let {
+            ArtworkTint(Color(TintMath.normalize(it.brandColorStart.toInt())), Color(TintMath.normalize(it.brandColorEnd.toInt())))
+        }
+    }
+    val coverForTint = if (currentTrack?.isRadio == true) null else currentTrack?.coverUri.toCoverUrl(CoverSize.Small)
+    val appTint = rememberArtworkTint(coverForTint, stationTint)
+    val tabStates = rememberSaveableStateHolder()
+    val contentBottom = if (isLandscape) DockClearance else if (currentTrack != null) 168.dp else 100.dp
+    // On a side a notch or a three-button bar sits next to the page, and the pages run edge to edge
+    val sideInsets = WindowInsets.displayCutout.union(WindowInsets.navigationBars).only(WindowInsetsSides.Horizontal)
+    // The mini-player stays out of the way on the first tab while that page already shows what plays (D49)
+    val activeQueue by viewModel.activeQueue.collectAsStateWithLifecycle()
+    // Home with Jellyfin groups scrolled past its hero: the mini player comes back (canvas `hj-home-c-scroll`)
+    var homeHeroHidden by remember { mutableStateOf(false) }
+    // The car Library over the player (gap (f)): the account key it opened on ("" = the Yandex account in context)
+    var carLibraryFor by rememberSaveable { mutableStateOf<String?>(null) }
+    val showMini = currentTrack != null && !(currentTab == MainTab.HOME && homePagePlays(homeModeOf(activeQueue), now) && !homeHeroHidden)
+    val snackbar = remember { SnackbarHostState() }
+    val openPlayer = { isPlayerExpanded = true }
+    // The Plus gate (D101): the active queue's account has no Plus — the player and the radio say so
+    val plusBlocked by viewModel.plusBlocked.collectAsStateWithLifecycle()
+    val noBrowser = stringResource(org.tegro.yamp.R.string.plus_no_browser)
+    val plusBlock = rememberPlusBlock(
+        blocked = plusBlocked, activeAccount = activeQueue?.queue?.account, tags = allAccountTags,
+        onQueues = { queuesVm.open(org.tegro.yamp.presentation.queues.QueueSwitcherRequest.Switch()) },
+        onAddSource = { showAddAccount = true },
+        onNoBrowser = { mediaScope.launch { snackbar.showSnackbar(noBrowser) } }
+    )
+
+    val absentVolumes by accountVm.absentVolumes.collectAsStateWithLifecycle()
+    CompositionLocalProvider(
+        org.tegro.yamp.presentation.sources.LocalAbsentVolumes provides absentVolumes,
+        LocalStreamQuality provides streamQuality,
+        LocalLinkState provides linkState,
+        LocalTrackMenu provides trackMenuLauncher,
+        LocalQueueSwitcher provides queueSwitcherLauncher,
+        org.tegro.yamp.presentation.common.LocalPlusBlock provides plusBlock,
+        org.tegro.yamp.presentation.main.components.LocalWaveTab provides isAuthorizedYandex,
+        org.tegro.yamp.presentation.media.LocalMediaMenu provides mediaMenuLauncher,
+        LocalHiFiLite provides lite,
+        LocalArtworkTint provides appTint,
+        org.tegro.yamp.presentation.player.LocalPlaybackAux provides playbackAux
+    ) {
+        SharedTransitionLayout(modifier = Modifier.fillMaxSize()) {
+            val sharedScope = this
+            Box(modifier = Modifier.fillMaxSize()) {
+                // One living background under every tab: it does not blink when tabs change
+                HiFiBackdrop(coverUrl = coverForTint)
+                // Nothing until the start tab is known: no other tab flashes on the way
+                if (tabKnown) AnimatedContent(
+                    targetState = currentTab,
+                    transitionSpec = {
+                        (fadeIn(HiFiMotion.standard()) + slideInVertically(HiFiMotion.standard()) { it / 100 }) togetherWith
+                            fadeOut(HiFiMotion.quick())
+                    },
+                    label = "tabs",
+                    modifier = Modifier.fillMaxSize()
+                ) { tab ->
+                    tabStates.SaveableStateProvider(tab.route) {
+                        // An artist or album page covers the tab until Back (or another tab) closes it. Pages
+                        // slide in from the right as they open and back out to the right on Back.
+                        val depth = catalogStack.size
+                        AnimatedContent(
+                            targetState = depth to catalogStack.lastOrNull()?.takeIf { depth > 0 },
+                            contentKey = { (_, page) -> page?.page },
+                            transitionSpec = { catalogTransition(forward = targetState.first > initialState.first, lite = lite) },
+                            label = "catalog_page",
+                            modifier = if (isLandscape) Modifier.windowInsetsPadding(sideInsets) else Modifier
+                        ) { (_, catalogTop) ->
+                        if (catalogTop != null) {
+                            CatalogPageScreen(
+                                state = catalogTop,
+                                currentTrackId = now.trackId,
+                                isPlaying = isPlaying,
+                                likedTrackIds = likedTrackIds,
+                                contentBottom = contentBottom,
+                                actions = catalogActions,
+                                folderPins = folderPins,
+                                accountTags = allAccountTags,
+                                folderActions = folderActions
+                            )
+                        } else when (tab) {
+                            MainTab.HOME -> HomeTab(
+                                viewModel, now, progress, isLandscape, contentBottom,
+                                onOpenPlayer = if (currentTrack != null) openPlayer else null,
+                                onOpenTab = navigate,
+                                onOpenPage = { catalogVm.open(it) },
+                                onPlayFolder = catalogVm::playFolder,
+                                onHeroHidden = { homeHeroHidden = it }
+                            )
+                            MainTab.SEARCH -> SearchTab(viewModel, searchVm, catalogVm, now)
+                            MainTab.LIBRARY -> LibraryTab(
+                                viewModel, accountVm, playlistsVm, updateVm, crashVm, now,
+                                onOpenAccounts = { showAccountDialog = true },
+                                onOpenCrashLog = { showCrashLog = true },
+                                onAddAccount = { showAddAccount = true },
+                                onOpenPage = { catalogVm.open(it) }
+                            )
+                            MainTab.RADIO -> RadioTab(viewModel, radioVm, now)
+                            MainTab.PLAYER -> Unit
+                        }
+                        }
+                    }
+                }
+
+                // Floating navigation and mini-player
+                run {
+                    val mini: @Composable () -> Unit = {
+                        val track = currentTrack
+                        if (showMini && track != null) {
+                            AnimatedVisibility(
+                                visible = !isPlayerExpanded,
+                                enter = fadeIn(HiFiMotion.standard()),
+                                exit = fadeOut(HiFiMotion.quick())
+                            ) {
+                                MiniPlayer(
+                                    track = track,
+                                    isPlaying = isPlaying,
+                                    isLoading = isBuffering,
+                                    progress = progress,
+                                    onPlayPauseClick = { viewModel.togglePlayPause() },
+                                    onNextClick = { viewModel.playNext() },
+                                    onClick = openPlayer,
+                                    onDismiss = { viewModel.stopAndClearPlayer() },
+                                    swipeToDismiss = swipeToClose,
+                                    coverModifier = Modifier.sharedCover(sharedScope, this, enabled = !lite && !track.isRadio)
+                                )
+                            }
+                        }
+                    }
+                    if (isLandscape) {
+                        DockScrim(Modifier.align(Alignment.BottomCenter))
+                        FloatingGlassDock(
+                            currentRoute = currentTab.route,
+                            onNavigate = navigate,
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .windowInsetsPadding(sideInsets)
+                                .navigationBarsPadding()
+                                .padding(start = 16.dp, end = 16.dp, bottom = DockBottomGap),
+                            player = mini
+                        )
+                    } else {
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .navigationBarsPadding()
+                                .padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
+                                .fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            if (showMini) {
+                                mini()
+                                Spacer(modifier = Modifier.height(10.dp))
+                            }
+                            FloatingGlassBottomBar(currentRoute = currentTab.route, onNavigate = navigate)
+                        }
+                    }
+                }
+
+                AnimatedVisibility(
+                    visible = isPlayerExpanded,
+                    enter = fadeIn(HiFiMotion.large()) + slideInVertically(HiFiMotion.large()) { it / 6 },
+                    exit = fadeOut(HiFiMotion.standard()) + slideOutVertically(HiFiMotion.standard()) { it / 6 },
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    val track = currentTrack
+                    if (track != null) {
+                        PlayerHost(
+                            track = track,
+                            now = now,
+                            favoriteStationIds = favoriteStationIds,
+                            progress = progress,
+                            viewModel = viewModel,
+                            radioVm = radioVm,
+                            onCollapse = { isPlayerExpanded = false },
+                            onSearch = {
+                                isPlayerExpanded = false
+                                chosenTab = MainTab.SEARCH
+                            },
+                            onAddToPlaylist = { trackMenu = TrackMenuRequest(track, null, pickPlaylist = true) },
+                            onQualityClick = { qualityDetails = viewModel.qualityDetails() },
+                            onAccountQuality = { accountQualityFor = it },
+                            coverModifier = Modifier.sharedCover(sharedScope, this, enabled = !lite && !track.isRadio),
+                            onMusic = { carLibraryFor = activeQueue?.queue?.account.orEmpty() },
+                            shown = transition.targetState == androidx.compose.animation.EnterExitState.Visible
+                        )
+                    }
+                }
+
+                carLibraryFor?.let { key ->
+                    val wheelLeft by viewModel.steeringWheelOnLeft.collectAsStateWithLifecycle()
+                    val queuesState by queuesVm.state.collectAsStateWithLifecycle()
+                    org.tegro.yamp.presentation.car.CarLibraryHost(
+                        accountKey = key.ifEmpty { null },
+                        controlsOnLeft = wheelLeft,
+                        accountTags = allAccountTags,
+                        nowPlaying = currentTrack?.let {
+                            org.tegro.yamp.presentation.car.CarNowPlaying(it.title, it.artists.joinToString { a -> a.name }, it.coverUri, isPlaying, it.ref)
+                        },
+                        queueRows = queuesState.queues,
+                        snackbar = snackbar,
+                        scope = mediaScope,
+                        onPlayPause = { viewModel.togglePlayPause() },
+                        onNext = { viewModel.playNext() },
+                        onClose = { carLibraryFor = null }
+                    )
+                }
+
+                // Playback and playlist errors ("no connection", "station unavailable"), above the mini-player
+                val lifecycleOwner = LocalLifecycleOwner.current
+                LaunchedEffect(lifecycleOwner) {
+                    // Collected only while visible, so a message raised in the background falls back to a toast
+                    lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                        merge(viewModel.playbackMessages, playlistsVm.messages).collect { snackbar.showSnackbar(it) }
+                    }
+                }
+                // A wave by a track has started: say so, and offer to undo it
+                val resources = androidx.compose.ui.platform.LocalResources.current
+                val undoLabel = stringResource(org.tegro.yamp.R.string.action_undo)
+                LaunchedEffect(lifecycleOwner) {
+                    lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                        viewModel.trackWaveStarted.collect { seed ->
+                            launch {
+                                val result = snackbar.showSnackbar(
+                                    message = resources.getString(org.tegro.yamp.R.string.wave_by_track_started, seed.title.orEmpty()),
+                                    actionLabel = undoLabel,
+                                    duration = SnackbarDuration.Long
+                                )
+                                if (result == SnackbarResult.ActionPerformed) viewModel.undoTrackWave()
+                            }
+                        }
+                    }
+                }
+                // A track was disliked (a button, the cover gesture, the notification or the car): offer to undo it
+                LaunchedEffect(lifecycleOwner) {
+                    lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                        viewModel.dislikes.collect { dislike ->
+                            // The latest dislike's Undo comes at once, not after the earlier ones' snackbars
+                            snackbar.currentSnackbarData?.dismiss()
+                            launch {
+                                val result = snackbar.showSnackbar(
+                                    message = resources.getString(org.tegro.yamp.R.string.player_disliked_gesture),
+                                    actionLabel = undoLabel,
+                                    duration = SnackbarDuration.Long
+                                )
+                                if (result == SnackbarResult.ActionPerformed) viewModel.undoDislike(dislike)
+                            }
+                        }
+                    }
+                }
+                Box(Modifier.fillMaxSize()) {
+                val snackBottom = when {
+                    isLandscape -> DockClearance
+                    currentTrack != null -> 160.dp
+                    else -> 90.dp
+                }
+                SnackbarHost(
+                    hostState = snackbar,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .padding(bottom = snackBottom)
+                ) { data ->
+                    org.tegro.yamp.presentation.hifi.HiFiSnackbar(
+                        message = data.visuals.message,
+                        actionLabel = data.visuals.actionLabel,
+                        onAction = { data.performAction() }
+                    )
+                }
+                }
+
+                if (showCrashLog) CrashLogHost(crashVm) { showCrashLog = false }
+                qualityDetails?.let { details -> QualityDetailsDialog(details) { qualityDetails = null } }
+                trackMenu?.let { request ->
+                    TrackMenuHost(
+                        request, viewModel, playlistsVm, catalogVm, likedTrackIds, snackbar,
+                        onDismiss = { trackMenu = null },
+                        onLeavePlayer = { isPlayerExpanded = false }
+                    )
+                }
+                mediaMenu?.let { target ->
+                    org.tegro.yamp.presentation.media.MediaMenuHost(target, snackbar, mediaScope, onDismiss = { mediaMenu = null })
+                }
+                QueueSwitcherHost(queuesVm, snackbar)
+                PlusHost(viewModel, plusBlock, snackbar)
+                UpdateHost(updateVm)
+                AccountHost(
+                    accountVm,
+                    showManagement = showAccountDialog,
+                    onCloseManagement = { showAccountDialog = false },
+                    onAddAccount = onNavigateToAuth,
+                    showChooser = showAddAccount,
+                    onChooser = { showAddAccount = it },
+                    qualitySheet = accountQualityFor,
+                    onCloseQualitySheet = { accountQualityFor = null },
+                    wheelLeft = viewModel.steeringWheelOnLeft.collectAsStateWithLifecycle().value,
+                    onOpenManagement = { showAccountDialog = true }
+                )
+            }
+        }
+    }
+}
+
+/** A catalog page slides a fifth of the way in from the right and fades in; Back mirrors it. */
+private fun catalogTransition(forward: Boolean, lite: Boolean): androidx.compose.animation.ContentTransform =
+    if (lite) {
+        fadeIn(HiFiMotion.quick()) togetherWith fadeOut(HiFiMotion.quick())
+    } else {
+        val dir = if (forward) 1 else -1
+        (androidx.compose.animation.slideInHorizontally(HiFiMotion.large()) { it * dir / 5 } + fadeIn(HiFiMotion.standard())) togetherWith
+            (androidx.compose.animation.slideOutHorizontally(HiFiMotion.standard()) { -it * dir / 5 } + fadeOut(HiFiMotion.quick()))
+    }
+
+/** The full-screen player wired to the view models. */
+// coverModifier is the shared cover transition handed through to the player's cover
+@Suppress("ModifierParameter")
+@Composable
+private fun PlayerHost(
+    track: Track,
+    now: NowPlaying,
+    favoriteStationIds: Set<String>,
+    progress: () -> Long,
+    viewModel: MainViewModel,
+    radioVm: RadioViewModel,
+    onCollapse: () -> Unit,
+    onSearch: () -> Unit,
+    onAddToPlaylist: () -> Unit,
+    onQualityClick: () -> Unit,
+    onAccountQuality: (Triple<String, String, Boolean>) -> Unit,
+    coverModifier: Modifier,
+    onMusic: () -> Unit = {},
+    /** False while the exit animation runs (see [FullScreenPlayer]'s `shown`). */
+    shown: Boolean = true
+) {
+    val queue by viewModel.currentPlaylist.collectAsStateWithLifecycle()
+    val activeQueue by viewModel.activeQueue.collectAsStateWithLifecycle()
+    val accountTags by viewModel.accountTags.collectAsStateWithLifecycle()
+    val isFetchingMoreQueue by viewModel.isFetchingMoreQueue.collectAsStateWithLifecycle()
+    val waveActive by viewModel.waveActive.collectAsStateWithLifecycle()
+    val queueSwitcher = LocalQueueSwitcher.current
+    val sleepTimer by viewModel.sleepTimer.collectAsStateWithLifecycle()
+    val stationId = track.id.removePrefix("radio_")
+    // The sheet's rows are the queue's entries (a track twice = two rows) while a queue is what plays
+    val entries = activeQueue?.takeIf { !track.isRadio && it.isShownAs(queue) }
+    val queueModes = remember(entries?.queue?.shuffle, entries?.queue?.repeat, entries != null) {
+        QueueModes(
+            shuffle = entries?.queue?.shuffle == true,
+            repeat = entries?.queue?.repeat ?: org.tegro.yamp.domain.queue.RepeatMode.ALL,
+            shown = entries != null,
+            onShuffle = viewModel::setShuffle,
+            onRepeat = viewModel::setRepeat
+        )
+    }
+    val steeringWheelOnLeft by viewModel.steeringWheelOnLeft.collectAsStateWithLifecycle()
+    val carLayout by viewModel.playerCarLayout.collectAsStateWithLifecycle()
+    val nextThree by viewModel.playerNextThree.collectAsStateWithLifecycle()
+    val likeGestures by viewModel.likeGestures.collectAsStateWithLifecycle()
+    val showClock by viewModel.carClock.collectAsStateWithLifecycle()
+    val waveTuning by viewModel.waveTuning.collectAsStateWithLifecycle()
+    val waveSeed by viewModel.waveSeed.collectAsStateWithLifecycle()
+    val skipExplicit by viewModel.skipExplicit.collectAsStateWithLifecycle()
+    // What will really play next, by the player's own rule (explicit passed over, a playlist goes on from its start)
+    val upcoming = remember(queue, now.trackId, now.source, skipExplicit, track.isRadio) {
+        if (track.isRadio) emptyList()
+        else org.tegro.yamp.data.player.PlaybackQueue.upcoming(queue, queue.indexOfFirst { it.id == now.trackId }, now.source, 3) { skipExplicit && it.explicit }
+    }
+    val caption = entries?.let { stringResource(org.tegro.yamp.R.string.player_queue_position, it.cursorIndex + 1, it.entries.size) }
+        ?: playerSourceLabelRes(now.source, track.isRadio)?.let { stringResource(it) }.orEmpty()
+    FullScreenPlayer(
+        track = track,
+        isPlaying = now.isPlaying,
+        isLoading = now.isBuffering,
+        controlsOnLeft = steeringWheelOnLeft,
+        isLiked = if (track.isRadio) stationId in favoriteStationIds else track.id in now.likedTrackIds,
+        progress = progress,
+        queue = queue,
+        sourceLabel = playerSourceLabelRes(now.source, track.isRadio)?.let { stringResource(it) }.orEmpty(),
+        queueAccount = viewModel.markOf(accountTags, activeQueue?.queue?.account),
+        onPlayPauseClick = { viewModel.togglePlayPause() },
+        onToggleLike = { viewModel.toggleLike(track) },
+        onNextClick = { viewModel.playNext() },
+        onPrevClick = { viewModel.playPrev() },
+        onSeekTo = { viewModel.seekTo(it) },
+        onTrackSelect = { id -> viewModel.playTrack(id, queue) },
+        onRemoveFromQueue = { viewModel.removeFromQueue(it) },
+        onRemoveEntry = viewModel::removeEntry,
+        onMoveInQueue = { id, target -> viewModel.moveInQueue(id, target) },
+        onCollapse = onCollapse,
+        onCloseAndClear = {
+            onCollapse()
+            viewModel.stopAndClearPlayer()
+        },
+        onDislikeClick = { viewModel.dislikeTrack(track) },
+        onTrackWave = { viewModel.waveOrRadio(track) { queueSwitcher?.open(org.tegro.yamp.presentation.queues.QueueSwitcherRequest.StartRadio.of(track)) } },
+        waveActive = waveActive,
+        onLoadMoreQueue = { viewModel.loadMoreQueue() },
+        isFetchingMoreQueue = isFetchingMoreQueue,
+        sleepTimer = sleepTimer,
+        onSleepTimer = { viewModel.setSleepTimer(it) },
+        onSleepAtEndOfTrack = { viewModel.setSleepAtEndOfTrack() },
+        onCancelSleepTimer = { viewModel.cancelSleepTimer() },
+        onAddToPlaylist = onAddToPlaylist,
+        onQualityClick = onQualityClick,
+        onAccountQuality = {
+            val key = activeQueue?.queue?.account
+            // A local file has no stream quality to choose: the general quality screen
+            if (key == null || track.isRadio || org.tegro.yamp.domain.account.AccountId(key).provider == org.tegro.yamp.domain.account.Provider.LOCAL) onQualityClick()
+            else onAccountQuality(
+                Triple(
+                    key,
+                    accountTags.firstOrNull { it.key == key }?.name ?: org.tegro.yamp.domain.account.AccountId(key).id,
+                    org.tegro.yamp.domain.account.AccountId(key).provider == org.tegro.yamp.domain.account.Provider.JELLYFIN
+                )
+            )
+        },
+        coverModifier = coverModifier,
+        queueEntryIds = entries?.entries?.map { it.entryId }.orEmpty(),
+        queueCursorIndex = entries?.cursorIndex ?: -1,
+        queueModes = queueModes,
+        onEntrySelect = viewModel::playEntry,
+        carLayout = carLayout,
+        nextThree = nextThree,
+        likeGestures = likeGestures,
+        upcoming = upcoming,
+        upcomingLoading = now.source == org.tegro.yamp.data.player.PlaylistSource.VIBE && !track.isRadio && upcoming.isEmpty(),
+        onUpcomingClick = { viewModel.playTrack(it.id, queue, now.source, byUser = false) },
+        caption = caption,
+        queueName = activeQueue?.queue?.name ?: stringResource(org.tegro.yamp.R.string.queue_switcher_title),
+        onQueues = {
+            queueSwitcher?.open(
+                org.tegro.yamp.presentation.queues.QueueSwitcherRequest.Switch(
+                    side = if (steeringWheelOnLeft) org.tegro.yamp.presentation.hifi.PanelSide.LEFT else org.tegro.yamp.presentation.hifi.PanelSide.RIGHT
+                )
+            )
+        },
+        onSearch = onSearch,
+        showClock = showClock,
+        waveTuning = waveTuning,
+        trackWaveSeed = waveSeed,
+        onWaveTuningChange = viewModel::setWaveTuning,
+        onBackToMyWave = viewModel::returnToMyWave,
+        onMusic = onMusic,
+        shown = shown
+    )
+}
+
+/** The cover shared between the mini-player and the full player (off in lite mode and for radio). */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+private fun Modifier.sharedCover(scope: SharedTransitionScope, visibility: AnimatedVisibilityScope, enabled: Boolean): Modifier =
+    if (!enabled) this else with(scope) {
+        this@sharedCover.sharedElement(rememberSharedContentState(PLAYER_COVER_KEY), visibility)
+    }
+
+/**
+ * Covers are fetched before they are needed: the playing track and the next two (player and small
+ * size), and the wave's "next up" cards — opening the player or moving on finds them ready.
+ */
+@Composable
+private fun PrefetchCovers(viewModel: MainViewModel, track: Track?) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val queue by viewModel.currentPlaylist.collectAsStateWithLifecycle()
+    val wavePreview by viewModel.wavePreview.collectAsStateWithLifecycle()
+    val ahead = remember(queue, track?.id) { listOfNotNull(track) + upcomingOf(queue, track?.id, limit = 2) }
+    LaunchedEffect(ahead) {
+        org.tegro.yamp.utils.prefetchCovers(context, ahead, listOf(CoverSize.Large, CoverSize.Small))
+    }
+    LaunchedEffect(wavePreview) {
+        org.tegro.yamp.utils.prefetchCovers(context, wavePreview.take(5), listOf(CoverSize.Medium))
+    }
+}
+
+/** Back from the system installer's permission screen: continue the update that was waiting for it. */
+@Composable
+private fun InstallDownloadedUpdateOnResume(updateVm: UpdateViewModel) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                updateVm.onAppResumed()
+                if (updateVm.downloadProgress.value >= 2f && updateVm.canRequestPackageInstalls) {
+                    updateVm.installDownloaded()
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+}
+
+/** When the open player closes by itself. */
+internal object PlayerOpenRule {
+    /**
+     * Only when a track that was on screen went away (the queue ran empty). "No track yet" — a restored session still
+     * loading after the app comes back from the background or process death — leaves the player open.
+     */
+    fun closesPlayer(hadTrack: Boolean, hasTrack: Boolean): Boolean = hadTrack && !hasTrack
+}

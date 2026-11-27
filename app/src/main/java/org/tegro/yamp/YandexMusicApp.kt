@@ -1,0 +1,105 @@
+package org.tegro.yamp
+
+import android.os.StrictMode
+import coil3.request.allowHardware
+import okio.Path.Companion.toOkioPath
+import coil3.request.crossfade
+import coil3.memory.MemoryCache
+import coil3.disk.DiskCache
+import coil3.SingletonImageLoader
+import coil3.PlatformContext
+import coil3.ImageLoader
+import android.app.Application
+import androidx.work.Configuration
+import org.tegro.yamp.widget.NowPlayingWidgetUpdater
+import dagger.hilt.android.HiltAndroidApp
+import javax.inject.Inject
+
+@HiltAndroidApp
+class YandexMusicApp : Application(), Configuration.Provider, SingletonImageLoader.Factory {
+
+    /**
+     * WorkManager starts on demand from this configuration (its start-up initializer is removed in the
+     * manifest), so it is ready whenever it is first used — whatever order the process starts in.
+     */
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder().build()
+
+    @Inject
+    lateinit var widgetUpdater: NowPlayingWidgetUpdater
+
+    @Inject
+    lateinit var diagnosticLog: org.tegro.yamp.data.diagnostics.DiagnosticLog
+
+    @Inject
+    lateinit var mainThreadWatchdog: org.tegro.yamp.data.diagnostics.MainThreadWatchdog
+
+    @Inject
+    lateinit var bluetoothAutoplay: org.tegro.yamp.data.player.BluetoothAutoplay
+
+    /** A Jellyfin server's covers get that account's header; no other image host gets anything (step 23). */
+    @Inject
+    lateinit var jellyfinPlayReporting: org.tegro.yamp.data.provider.jellyfin.JellyfinPlayReporting
+
+    @Inject
+    lateinit var jellyfinImageAuth: org.tegro.yamp.data.provider.jellyfin.JellyfinImageAuth
+
+    /** Local files: the scan at start, on a mount, on a media change hint and daily (docs/phase-4d-local-files.md §5). */
+    @Inject
+    lateinit var localTriggers: org.tegro.yamp.data.provider.local.scan.LocalTriggers
+
+    /**
+     * Covers: a quarter of the app's memory for decoded images and 300 MB on disk, so covers seen once come
+     * back without the network. The loader keeps its own HTTP client: the app's one adds the account token
+     * to every request, and image hosts (radio logos come from third-party sites) must never get it.
+     */
+    override fun newImageLoader(context: PlatformContext): ImageLoader =
+        ImageLoader.Builder(context)
+            .memoryCache { MemoryCache.Builder().maxSizePercent(context, 0.25).build() }
+            .diskCache {
+                DiskCache.Builder()
+                    .directory(cacheDir.resolve("covers").toOkioPath())
+                    .maxSizeBytes(300L * 1024 * 1024)
+                    .build()
+            }
+            .crossfade(COVER_CROSSFADE_MS)
+            .components {
+                add(
+                    coil3.network.okhttp.OkHttpNetworkFetcherFactory(
+                        callFactory = { okhttp3.OkHttpClient.Builder().addInterceptor { chain -> jellyfinImageAuth.intercept(chain) }.build() }
+                    )
+                )
+            }
+            // Plain bitmaps, never "hardware" ones: head units that draw their window without the GPU (Android 9
+            // on Allwinner with a Mali-400) crash on a hardware bitmap ("Software rendering doesn't support
+            // hardware bitmaps"). On Android 8+ the pixels sit in native memory either way.
+            .allowHardware(false)
+            .build()
+
+    override fun onCreate() {
+        // Before anything else, so a crash during start-up is recorded too
+        org.tegro.yamp.data.crash.CrashLog.install(this)
+        // The debug build tells of disk and network work on the main thread and of leaks in its log ("StrictMode"):
+        // a run of the tests shows where the app could stutter or freeze (the 1.14.5 crash was such a call)
+        if (BuildConfig.DEBUG) {
+            StrictMode.setThreadPolicy(StrictMode.ThreadPolicy.Builder().detectDiskReads().detectDiskWrites().detectNetwork().detectCustomSlowCalls().penaltyLog().build())
+            StrictMode.setVmPolicy(StrictMode.VmPolicy.Builder().detectLeakedClosableObjects().detectLeakedSqlLiteObjects().detectActivityLeaks().penaltyLog().build())
+        }
+        super.onCreate()
+        diagnosticLog.writeHeader("process start")
+        // A crash goes to the diagnostic log too, before the crash handler installed above hands over
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+            runCatching { diagnosticLog.eventNow("CRASH", "${thread.name}: $error") }
+            previous?.uncaughtException(thread, error)
+        }
+        mainThreadWatchdog.start()
+        widgetUpdater.start()
+        bluetoothAutoplay.start()
+        jellyfinPlayReporting.start()
+        localTriggers.start()
+    }
+}
+
+/** Covers fade in over this long when they arrive (a cover from memory shows at once). */
+private const val COVER_CROSSFADE_MS = 150

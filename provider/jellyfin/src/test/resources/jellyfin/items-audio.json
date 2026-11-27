@@ -1,0 +1,300 @@
+{
+  "Items": [
+    {
+      "Name": "Fluffing a Duck",
+      "ServerId": "0123456789abcdef0123456789abcdef",
+      "Id": "0000000000000000000000000000a000",
+      "HasLyrics": false,
+      "Container": "flac",
+      "PremiereDate": "2008-01-01T00:00:00.0000000Z",
+      "ChannelId": null,
+      "RunTimeTicks": 673680000,
+      "ProductionYear": 2008,
+      "IndexNumber": 1,
+      "IsFolder": false,
+      "Type": "Audio",
+      "UserData": {
+        "PlaybackPositionTicks": 0,
+        "PlayCount": 0,
+        "IsFavorite": false,
+        "Played": false,
+        "Key": "01 Fluffing a Duck",
+        "ItemId": "0000000000000000000000000000a000"
+      },
+      "Artists": [
+        "Kevin MacLeod"
+      ],
+      "ArtistItems": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000a001"
+        }
+      ],
+      "Album": "YAMP Test FLAC",
+      "AlbumId": "0000000000000000000000000000a002",
+      "AlbumPrimaryImageTag": "0000000000000000000000000000a003",
+      "AlbumArtist": "Kevin MacLeod",
+      "AlbumArtists": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000a001"
+        }
+      ],
+      "ImageTags": {
+        "Primary": "0000000000000000000000000000a004"
+      },
+      "BackdropImageTags": [],
+      "ImageBlurHashes": {
+        "Primary": {
+          "0000000000000000000000000000a004": "eH5jgrL~ozflaxL}t,a}axkCpIa#aKj[aya~aej[fkj[f6kCayj[ay",
+          "0000000000000000000000000000a003": "eH5jgrL~ozflaxL}t,a}axkCpIa#aKj[aya~aej[fkj[f6kCayj[ay"
+        }
+      },
+      "LocationType": "FileSystem",
+      "MediaType": "Audio"
+    },
+    {
+      "Name": "Monkeys Spinning Monkeys",
+      "ServerId": "0123456789abcdef0123456789abcdef",
+      "Id": "0000000000000000000000000000a005",
+      "HasLyrics": false,
+      "Container": "flac",
+      "PremiereDate": "2008-01-01T00:00:00.0000000Z",
+      "ChannelId": null,
+      "RunTimeTicks": 1250742860,
+      "ProductionYear": 2008,
+      "IndexNumber": 2,
+      "IsFolder": false,
+      "Type": "Audio",
+      "UserData": {
+        "PlaybackPositionTicks": 0,
+        "PlayCount": 0,
+        "IsFavorite": false,
+        "Played": false,
+        "Key": "02 Monkeys Spinning Monkeys",
+        "ItemId": "0000000000000000000000000000a005"
+      },
+      "Artists": [
+        "Kevin MacLeod"
+      ],
+      "ArtistItems": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000a001"
+        }
+      ],
+      "Album": "YAMP Test FLAC",
+      "AlbumId": "0000000000000000000000000000a002",
+      "AlbumPrimaryImageTag": "0000000000000000000000000000a003",
+      "AlbumArtist": "Kevin MacLeod",
+      "AlbumArtists": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000a001"
+        }
+      ],
+      "ImageTags": {
+        "Primary": "0000000000000000000000000000a006"
+      },
+      "BackdropImageTags": [],
+      "ImageBlurHashes": {
+        "Primary": {
+          "0000000000000000000000000000a006": "eH5jgrL~ozflaxL}t,a}axkCpIa#aKj[aya~aej[fkj[f6kCayj[ay",
+          "0000000000000000000000000000a003": "eH5jgrL~ozflaxL}t,a}axkCpIa#aKj[aya~aej[fkj[f6kCayj[ay"
+        }
+      },
+      "LocationType": "FileSystem",
+      "MediaType": "Audio"
+    },
+    {
+      "Name": "Wallpaper",
+      "ServerId": "0123456789abcdef0123456789abcdef",
+      "Id": "0000000000000000000000000000a007",
+      "HasLyrics": false,
+      "Container": "flac",
+      "PremiereDate": "2008-01-01T00:00:00.0000000Z",
+      "ChannelId": null,
+      "RunTimeTicks": 2200555100,
+      "ProductionYear": 2008,
+      "IndexNumber": 3,
+      "IsFolder": false,
+      "Type": "Audio",
+      "UserData": {
+        "PlaybackPositionTicks": 0,
+        "PlayCount": 0,
+        "IsFavorite": false,
+        "Played": false,
+        "Key": "03 Wallpaper",
+        "ItemId": "0000000000000000000000000000a007"
+      },
+      "Artists": [
+        "Kevin MacLeod"
+      ],
+      "ArtistItems": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000a001"
+        }
+      ],
+      "Album": "YAMP Test FLAC",
+      "AlbumId": "0000000000000000000000000000a002",
+      "AlbumPrimaryImageTag": "0000000000000000000000000000a003",
+      "AlbumArtist": "Kevin MacLeod",
+      "AlbumArtists": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000a001"
+        }
+      ],
+      "ImageTags": {
+        "Primary": "0000000000000000000000000000a008"
+      },
+      "BackdropImageTags": [],
+      "ImageBlurHashes": {
+        "Primary": {
+          "0000000000000000000000000000a008": "eH5jgrL~ozflaxL}t,a}axkCpIa#aKj[aya~aej[fkj[f6kCayj[ay",
+          "0000000000000000000000000000a003": "eH5jgrL~ozflaxL}t,a}axkCpIa#aKj[aya~aej[fkj[f6kCayj[ay"
+        }
+      },
+      "LocationType": "FileSystem",
+      "MediaType": "Audio"
+    },
+    {
+      "Name": "Sneaky Snitch",
+      "ServerId": "0123456789abcdef0123456789abcdef",
+      "Id": "0000000000000000000000000000a009",
+      "HasLyrics": false,
+      "Container": "mp3",
+      "PremiereDate": "2008-01-01T00:00:00.0000000Z",
+      "ChannelId": null,
+      "RunTimeTicks": 1366204080,
+      "ProductionYear": 2008,
+      "IndexNumber": 1,
+      "IsFolder": false,
+      "Type": "Audio",
+      "UserData": {
+        "PlaybackPositionTicks": 0,
+        "PlayCount": 0,
+        "IsFavorite": false,
+        "Played": false,
+        "Key": "01 Sneaky Snitch",
+        "ItemId": "0000000000000000000000000000a009"
+      },
+      "Artists": [
+        "Kevin MacLeod"
+      ],
+      "ArtistItems": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000a001"
+        }
+      ],
+      "Album": "YAMP Test MP3",
+      "AlbumId": "0000000000000000000000000000a00a",
+      "AlbumArtist": "Kevin MacLeod",
+      "AlbumArtists": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000a001"
+        }
+      ],
+      "ImageTags": {},
+      "BackdropImageTags": [],
+      "ImageBlurHashes": {},
+      "LocationType": "FileSystem",
+      "MediaType": "Audio"
+    },
+    {
+      "Name": "Carefree",
+      "ServerId": "0123456789abcdef0123456789abcdef",
+      "Id": "0000000000000000000000000000a00b",
+      "HasLyrics": false,
+      "Container": "mp3",
+      "PremiereDate": "2008-01-01T00:00:00.0000000Z",
+      "ChannelId": null,
+      "RunTimeTicks": 2051395920,
+      "ProductionYear": 2008,
+      "IndexNumber": 2,
+      "IsFolder": false,
+      "Type": "Audio",
+      "UserData": {
+        "PlaybackPositionTicks": 0,
+        "PlayCount": 0,
+        "IsFavorite": false,
+        "Played": false,
+        "Key": "02 Carefree",
+        "ItemId": "0000000000000000000000000000a00b"
+      },
+      "Artists": [
+        "Kevin MacLeod"
+      ],
+      "ArtistItems": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000a001"
+        }
+      ],
+      "Album": "YAMP Test MP3",
+      "AlbumId": "0000000000000000000000000000a00a",
+      "AlbumArtist": "Kevin MacLeod",
+      "AlbumArtists": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000a001"
+        }
+      ],
+      "ImageTags": {},
+      "BackdropImageTags": [],
+      "ImageBlurHashes": {},
+      "LocationType": "FileSystem",
+      "MediaType": "Audio"
+    },
+    {
+      "Name": "Local Forecast - Elevator",
+      "ServerId": "0123456789abcdef0123456789abcdef",
+      "Id": "0000000000000000000000000000a00c",
+      "HasLyrics": false,
+      "Container": "mp3",
+      "PremiereDate": "2008-01-01T00:00:00.0000000Z",
+      "ChannelId": null,
+      "RunTimeTicks": 1892048979,
+      "ProductionYear": 2008,
+      "IndexNumber": 3,
+      "IsFolder": false,
+      "Type": "Audio",
+      "UserData": {
+        "PlaybackPositionTicks": 0,
+        "PlayCount": 0,
+        "IsFavorite": false,
+        "Played": false,
+        "Key": "03 Local Forecast - Elevator",
+        "ItemId": "0000000000000000000000000000a00c"
+      },
+      "Artists": [
+        "Kevin MacLeod"
+      ],
+      "ArtistItems": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000a001"
+        }
+      ],
+      "Album": "YAMP Test MP3",
+      "AlbumId": "0000000000000000000000000000a00a",
+      "AlbumArtist": "Kevin MacLeod",
+      "AlbumArtists": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000a001"
+        }
+      ],
+      "ImageTags": {},
+      "BackdropImageTags": [],
+      "ImageBlurHashes": {},
+      "LocationType": "FileSystem",
+      "MediaType": "Audio"
+    }
+  ],
+  "TotalRecordCount": 6,
+  "StartIndex": 0
+}

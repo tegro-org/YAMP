@@ -1,0 +1,122 @@
+{
+  "Items": [
+    {
+      "Name": "Дорога",
+      "ServerId": "0123456789abcdef0123456789abcdef",
+      "Id": "0000000000000000000000000000b001",
+      "PremiereDate": "2008-01-01T00:00:00.0000000Z",
+      "ChannelId": null,
+      "RunTimeTicks": 3566759180,
+      "ProductionYear": 2008,
+      "IsFolder": true,
+      "Type": "MusicAlbum",
+      "UserData": {
+        "PlaybackPositionTicks": 0,
+        "PlayCount": 0,
+        "IsFavorite": false,
+        "Played": false,
+        "ItemId": "0000000000000000000000000000b001"
+      },
+      "ChildCount": 2,
+      "Artists": [
+        "Kevin MacLeod"
+      ],
+      "ArtistItems": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000b002"
+        }
+      ],
+      "AlbumArtist": "Kevin MacLeod",
+      "AlbumArtists": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000b002"
+        }
+      ],
+      "ImageTags": {},
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown"
+    },
+    {
+      "Name": "YAMP Test FLAC",
+      "ServerId": "0123456789abcdef0123456789abcdef",
+      "Id": "0000000000000000000000000000b008",
+      "PremiereDate": "2008-01-01T00:00:00.0000000Z",
+      "ChannelId": null,
+      "RunTimeTicks": 4124977960,
+      "ProductionYear": 2008,
+      "IsFolder": true,
+      "Type": "MusicAlbum",
+      "UserData": {
+        "PlaybackPositionTicks": 0,
+        "PlayCount": 0,
+        "IsFavorite": false,
+        "Played": false,
+        "ItemId": "0000000000000000000000000000b008"
+      },
+      "ChildCount": 3,
+      "Artists": [
+        "Kevin MacLeod"
+      ],
+      "ArtistItems": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000b002"
+        }
+      ],
+      "AlbumArtist": "Kevin MacLeod",
+      "AlbumArtists": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000b002"
+        }
+      ],
+      "ImageTags": {
+        "Primary": "0000000000000000000000000000b009"
+      },
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown"
+    },
+    {
+      "Name": "YAMP Test MP3",
+      "ServerId": "0123456789abcdef0123456789abcdef",
+      "Id": "0000000000000000000000000000b00a",
+      "PremiereDate": "2008-01-01T00:00:00.0000000Z",
+      "ChannelId": null,
+      "RunTimeTicks": 5309648979,
+      "ProductionYear": 2008,
+      "IsFolder": true,
+      "Type": "MusicAlbum",
+      "UserData": {
+        "PlaybackPositionTicks": 0,
+        "PlayCount": 0,
+        "IsFavorite": false,
+        "Played": false,
+        "ItemId": "0000000000000000000000000000b00a"
+      },
+      "ChildCount": 3,
+      "Artists": [
+        "Kevin MacLeod"
+      ],
+      "ArtistItems": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000b002"
+        }
+      ],
+      "AlbumArtist": "Kevin MacLeod",
+      "AlbumArtists": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000b002"
+        }
+      ],
+      "ImageTags": {},
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown"
+    }
+  ],
+  "TotalRecordCount": 3,
+  "StartIndex": 0
+}

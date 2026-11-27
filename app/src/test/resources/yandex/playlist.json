@@ -1,0 +1,16 @@
+{
+  "owner": {"uid": 123456789, "login": "someone", "name": "Someone", "verified": false},
+  "uid": 123456789,
+  "kind": 1003,
+  "title": "Дорога",
+  "trackCount": 2,
+  "revision": 17,
+  "visibility": "public",
+  "cover": {"type": "mosaic", "itemsUri": ["avatars.yandex.net/get-music-content/1/a/%%", "avatars.yandex.net/get-music-content/2/b/%%"], "custom": false},
+  "ogImage": "avatars.yandex.net/get-music-content/1/og/%%",
+  "tracks": [
+    {"id": 58142730, "timestamp": "2026-11-01T10:00:00+00:00", "albumId": 7536452,
+     "track": {"id": "58142730", "title": "Storytime", "durationMs": 330810, "artists": [{"id": 61094, "name": "Nightwish"}], "albums": [{"id": 7536452, "title": "Imaginaerum"}]}},
+    {"id": 1, "timestamp": "2026-11-01T10:01:00+00:00"}
+  ]
+}

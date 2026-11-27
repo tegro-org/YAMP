@@ -1,0 +1,211 @@
+package org.tegro.yamp.presentation.queues
+
+import androidx.compose.material3.SnackbarHostState
+import org.tegro.yamp.domain.queue.fitsQueueOf
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
+import org.tegro.yamp.R
+import org.tegro.yamp.domain.media.Track
+import org.tegro.yamp.presentation.common.id
+import org.tegro.yamp.domain.queue.MediaRef
+import org.tegro.yamp.domain.queue.RadioSeed
+import org.tegro.yamp.presentation.hifi.PanelSide
+
+/** Why the switcher opens. The car asks for the big panel on the driver's side. */
+sealed interface QueueSwitcherRequest {
+    data class Switch(val car: Boolean = false, val side: PanelSide = PanelSide.RIGHT) : QueueSwitcherRequest
+
+    /** "Add to queue…" for [tracks]; [subtitle] names what is being added (a track, an album). */
+    data class AddTo(val tracks: List<Track>, val subtitle: String) : QueueSwitcherRequest {
+        /** Whether a queue of [account] may hold every one of [tracks] (D84: a queue holds its own account's tracks). */
+        fun fits(account: String?): Boolean =
+            tracks.all { it.ref.fitsQueueOf(account?.let { org.tegro.yamp.domain.account.AccountId(it) }) }
+    }
+
+    /**
+     * "Start radio" (D51): the radios to re-seed and "New radio". [track] is the seed track to play first, when
+     * the seed is a track.
+     */
+    data class StartRadio(
+        val seed: RadioSeed,
+        val track: Track? = null,
+        val car: Boolean = false,
+        val side: PanelSide = PanelSide.RIGHT
+    ) : QueueSwitcherRequest {
+        companion object {
+            fun of(track: Track, car: Boolean = false, side: PanelSide = PanelSide.RIGHT) = StartRadio(
+                RadioSeed(MediaRef(MediaRef.PROVIDER_YANDEX, MediaRef.KIND_TRACK, track.id), track.title),
+                track, car, side
+            )
+        }
+    }
+}
+
+/** Opens the queue switcher from anywhere in the app; MainScreen provides it (the `LocalTrackMenu` precedent). */
+fun interface QueueSwitcherLauncher {
+    fun open(request: QueueSwitcherRequest)
+}
+
+val LocalQueueSwitcher = staticCompositionLocalOf<QueueSwitcherLauncher?> { null }
+
+/** What the switcher has open on top of its list. */
+private sealed interface QueueDialog {
+    data object New : QueueDialog
+    data class Menu(val row: QueueRowState, val removed: Boolean = false) : QueueDialog
+
+    /** A removed account's queue opened (D62): its tracks, unavailable; nothing plays. */
+    data class Removed(val row: QueueRowState) : QueueDialog
+    data class Rename(val row: QueueRowState) : QueueDialog
+    data class Delete(val row: QueueRowState) : QueueDialog
+}
+
+/**
+ * The queue switcher and the "Add to queue…" picker, drawn once in MainScreen. The open request lives in the
+ * ViewModel, so a turn of the phone re-draws the sheet as a panel with nothing lost.
+ */
+@Composable
+fun QueueSwitcherHost(viewModel: QueueSwitcherViewModel, snackbar: SnackbarHostState) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val request = state.mode ?: return
+    var dialog by remember(request) { mutableStateOf<QueueDialog?>(null) }
+    val scope = rememberCoroutineScope()
+    val resources = LocalResources.current
+    val adding = request as? QueueSwitcherRequest.AddTo
+    val radio = request as? QueueSwitcherRequest.StartRadio
+    val car = (request as? QueueSwitcherRequest.Switch)?.car == true || radio?.car == true
+    val side = (request as? QueueSwitcherRequest.Switch)?.side ?: radio?.side ?: PanelSide.RIGHT
+    var keep by remember(request) { mutableStateOf(false) }
+    // The account of a new queue or radio (D57): the active queue's until the user picks another
+    var newAccount by remember(request) { mutableStateOf<String?>(null) }
+    // "Add to queue…" offers only accounts whose queues can hold the tracks (D84)
+    val chosenAccount = newAccount ?: state.contextAccount?.takeIf { adding == null || adding.fits(it) }
+        ?: state.addAccounts.firstOrNull()?.key ?: state.contextAccount
+    val addedTo = { name: String -> scope.launch { snackbar.showSnackbar(resources.getString(R.string.queue_added_to, name)) } }
+    val defaultName = stringResource(R.string.queue_default_name, state.queues.size + 1)
+
+    QueueSwitcherSheet(
+        state = state,
+        car = car,
+        side = side,
+        onDismiss = viewModel::close,
+        keepHistory = keep,
+        onKeepHistory = { keep = it },
+        newAccount = chosenAccount,
+        onNewAccount = { newAccount = it },
+        onRemoved = { row -> dialog = QueueDialog.Removed(row) },
+        onRemovedMenu = { row -> dialog = QueueDialog.Menu(row, removed = true) },
+        onSelect = { row ->
+            if (radio != null) {
+                viewModel.startRadioIn(row.id, keep)
+            } else if (adding != null) {
+                viewModel.addTo(row.id)
+                addedTo(row.name)
+            } else {
+                viewModel.switchTo(row.id)
+            }
+            viewModel.close()
+        },
+        onLongPress = if (car || radio != null) null else ({ row -> dialog = QueueDialog.Menu(row) }),
+        onNew = {
+            when {
+                // A radio is named after its seed: nothing to type
+                radio != null -> {
+                    viewModel.startRadioIn(null, keep, chosenAccount.takeIf { state.multiAccount })
+                    viewModel.close()
+                }
+                // In the car nothing is typed (D32): the queue is named on the spot and renamed on the phone
+                car -> viewModel.create(defaultName)
+                else -> dialog = QueueDialog.New
+            }
+        }
+    )
+
+    when (val open = dialog) {
+        null -> Unit
+        QueueDialog.New -> QueueNameDialog(
+            title = stringResource(R.string.queue_new),
+            confirmLabel = stringResource(R.string.queue_create),
+            hint = if (adding == null) stringResource(R.string.queue_new_hint) else null,
+            accounts = if (adding != null) state.addAccounts else state.accounts,
+            selectedAccount = chosenAccount,
+            onAccount = { newAccount = it },
+            onConfirm = { name ->
+                // A Jellyfin track's new queue always names its account, even with one account per service
+                val account = chosenAccount.takeIf { state.multiAccount || adding?.fits(null) == false }
+                if (adding != null) {
+                    viewModel.createAndAdd(name, account)
+                    addedTo(name)
+                    viewModel.close()
+                } else {
+                    viewModel.create(name, account)
+                }
+                dialog = null
+            },
+            onDismiss = { dialog = null }
+        )
+        is QueueDialog.Menu -> {
+            val copyName = stringResource(R.string.queue_duplicate_name, open.row.name)
+            QueueMenuSheet(
+                // The live row, so the Keep switch follows its own taps
+                row = state.queues.firstOrNull { it.id == open.row.id } ?: open.row,
+                side = side,
+                onRename = { dialog = QueueDialog.Rename(open.row) },
+                onDuplicate = {
+                    viewModel.duplicate(open.row.id, copyName)
+                    dialog = null
+                },
+                onClear = {
+                    viewModel.clear(open.row.id)
+                    dialog = null
+                },
+                onDelete = { dialog = QueueDialog.Delete(open.row) },
+                onKeepHistory = { on -> viewModel.setKeepHistory(open.row.id, on) },
+                removed = open.removed,
+                mark = if (open.removed) state.removedTagOf(open.row.account) else null,
+                removedAccountName = open.row.account?.let { state.removedNames[it] },
+                onDismiss = { dialog = null }
+            )
+        }
+        is QueueDialog.Removed -> {
+            val view by produceState<RemovedQueueView?>(null, open.row.id) { value = viewModel.removedQueue(open.row.id) }
+            RemovedQueueSheet(
+                row = open.row,
+                mark = state.removedTagOf(open.row.account),
+                view = view,
+                side = side,
+                removedAccountName = open.row.account?.let { state.removedNames[it] },
+                onQueues = { dialog = null },
+                onDismiss = viewModel::close
+            )
+        }
+        is QueueDialog.Rename -> QueueNameDialog(
+            title = stringResource(R.string.queue_rename),
+            confirmLabel = stringResource(R.string.queue_rename),
+            initialName = open.row.name,
+            onConfirm = { name ->
+                viewModel.rename(open.row.id, name)
+                dialog = null
+            },
+            onDismiss = { dialog = null }
+        )
+        is QueueDialog.Delete -> DeleteQueueDialog(
+            name = open.row.name,
+            trackCount = open.row.total,
+            onConfirm = {
+                viewModel.delete(open.row.id)
+                dialog = null
+            },
+            onDismiss = { dialog = null }
+        )
+    }
+}

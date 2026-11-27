@@ -1,0 +1,86 @@
+{
+  "Items": [
+    {
+      "Name": "Дорога",
+      "ServerId": "0123456789abcdef0123456789abcdef",
+      "Id": "0000000000000000000000000000b001",
+      "PremiereDate": "2008-01-01T00:00:00.0000000Z",
+      "ChannelId": null,
+      "RunTimeTicks": 3566759180,
+      "ProductionYear": 2008,
+      "IsFolder": true,
+      "Type": "MusicAlbum",
+      "UserData": {
+        "PlaybackPositionTicks": 0,
+        "PlayCount": 0,
+        "IsFavorite": false,
+        "Played": false,
+        "ItemId": "0000000000000000000000000000b001"
+      },
+      "RecursiveItemCount": 2,
+      "ChildCount": 2,
+      "Artists": [
+        "Kevin MacLeod"
+      ],
+      "ArtistItems": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000b002"
+        }
+      ],
+      "AlbumArtist": "Kevin MacLeod",
+      "AlbumArtists": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000b002"
+        }
+      ],
+      "ImageTags": {},
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown"
+    },
+    {
+      "Name": "Carefree",
+      "ServerId": "0123456789abcdef0123456789abcdef",
+      "Id": "0000000000000000000000000000b003",
+      "HasLyrics": false,
+      "Container": "mp3",
+      "PremiereDate": "2008-01-01T00:00:00.0000000Z",
+      "ChannelId": null,
+      "RunTimeTicks": 2051395920,
+      "ProductionYear": 2008,
+      "IndexNumber": 1,
+      "IsFolder": false,
+      "Type": "Audio",
+      "UserData": {
+        "PlaybackPositionTicks": 0,
+        "PlayCount": 0,
+        "IsFavorite": false,
+        "Played": false,
+        "ItemId": "0000000000000000000000000000b003"
+      },
+      "Artists": [
+        "Kevin MacLeod"
+      ],
+      "ArtistItems": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000b002"
+        }
+      ],
+      "Album": "Сборники - разное",
+      "AlbumArtist": "Kevin MacLeod",
+      "AlbumArtists": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000b002"
+        }
+      ],
+      "ImageTags": {},
+      "LocationType": "FileSystem",
+      "MediaType": "Audio"
+    }
+  ],
+  "TotalRecordCount": 2,
+  "StartIndex": 0
+}

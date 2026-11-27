@@ -1,0 +1,3 @@
+# Files outside data/dto and data/provider/yandex that still use Yandex DTOs (ARCHITECTURE B2/B4, D77).
+# This list may only shrink: ArchitectureTest fails when a new file starts using a DTO, and when a listed file
+# no longer does (remove it here). Paths are relative to app/src/main/java/org/tegro/yamp.

@@ -1,0 +1,443 @@
+package org.tegro.yamp.presentation.main
+
+import org.tegro.yamp.presentation.main.components.MainTab
+import org.tegro.yamp.presentation.main.components.SettingsActions
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import org.tegro.yamp.domain.media.Track
+import org.tegro.yamp.presentation.common.id
+import org.tegro.yamp.presentation.common.isRadio
+import org.tegro.yamp.data.player.PlaylistSource
+import org.tegro.yamp.domain.model.RadioCategory
+import org.tegro.yamp.domain.queue.QueueKind
+import org.tegro.yamp.domain.queue.QueueEntry
+import org.tegro.yamp.data.queue.ActiveQueue
+import org.tegro.yamp.presentation.account.AccountViewModel
+import org.tegro.yamp.presentation.queues.LocalQueueSwitcher
+import org.tegro.yamp.presentation.catalog.CatalogViewModel
+import org.tegro.yamp.presentation.crash.CrashLogViewModel
+import org.tegro.yamp.presentation.radio.RadioScreen
+import org.tegro.yamp.presentation.radio.RadioViewModel
+import org.tegro.yamp.presentation.update.UpdateViewModel
+
+/**
+ * What every tab needs to know about playback. Each tab collects the rest of its state itself, so a
+ * change on one tab (search results, a download's progress) recomposes only that tab, not the app.
+ */
+@Immutable
+data class NowPlaying(
+    val track: Track?,
+    val isPlaying: Boolean,
+    val isBuffering: Boolean,
+    val source: PlaylistSource,
+    val likedTrackIds: Set<String>
+) {
+    val trackId: String? get() = track?.id
+    val hasTrack: Boolean get() = track != null
+    /** The wave is what plays (or is paused) right now. */
+    val waveActive: Boolean get() = source == PlaylistSource.VIBE && track != null
+}
+
+/** The tracks after the current one (at most [limit]). Pure; unit-tested. */
+fun upcomingOf(queue: List<Track>, currentId: String?, limit: Int = 10): List<Track> {
+    val index = queue.indexOfFirst { it.id == currentId }
+    return if (index < 0) emptyList() else queue.drop(index + 1).take(limit)
+}
+
+/**
+ * The first tab shows what the player holds (D49): the wave on the wave's page; on a queue's page, the queue's
+ * track — a live station plays beside the queues (D41) and is not it. Then the page is the player: the
+ * mini-player stays away and the knob toggles. Pure; unit-tested.
+ */
+fun homePagePlays(mode: HomeMode, now: NowPlaying): Boolean = when (mode) {
+    HomeMode.Wave -> now.waveActive
+    is HomeMode.Queue -> now.track != null && !now.track.isRadio
+}
+
+/**
+ * A queue's page under the knob: the tracks after the cursor (a queue without a cursor counts from its first
+ * entry). While the queue is not what plays, the cursor track is what the knob starts with. Nothing is ever
+ * being fetched for a static queue, so the shelf is never "loading".
+ */
+fun queueShelfOf(active: ActiveQueue, playing: Boolean, limit: Int = 10): WaveShelfState {
+    val start = active.cursorIndex.coerceAtLeast(0)
+    return WaveShelfState(
+        startsWith = if (playing) null else active.tracks.getOrNull(start),
+        shelf = active.tracks.drop(start + 1).take(limit),
+        loading = false
+    )
+}
+
+/** The entry a shelf card stands for: the first occurrence of the track after the cursor. */
+fun shelfEntryOf(active: ActiveQueue, trackId: String): QueueEntry? {
+    val from = active.cursorIndex.coerceAtLeast(0) + 1
+    val index = (from until active.tracks.size).firstOrNull { active.tracks[it].ref.id == trackId } ?: return null
+    return active.entries.getOrNull(index)
+}
+
+@Composable
+internal fun HomeTab(
+    viewModel: MainViewModel,
+    now: NowPlaying,
+    progress: () -> Long,
+    isLandscape: Boolean,
+    contentBottom: Dp,
+    onOpenPlayer: (() -> Unit)?,
+    /** The empty queue's card sends the user to Library or Search. */
+    onOpenTab: (MainTab) -> Unit = {},
+    /** Home's Jellyfin groups (gap (e)): their pages open on the catalog stack, their folders play at once. */
+    onOpenPage: (org.tegro.yamp.presentation.catalog.CatalogPage) -> Unit = {},
+    onPlayFolder: (org.tegro.yamp.domain.account.AccountId, String, Boolean) -> Unit = { _, _, _ -> },
+    /** The hero scrolled off (the mini player comes back). */
+    onHeroHidden: (Boolean) -> Unit = {},
+    homeVm: HomeJellyfinViewModel = hiltViewModel()
+) {
+    val queue by viewModel.currentPlaylist.collectAsStateWithLifecycle()
+    val wavePreview by viewModel.wavePreview.collectAsStateWithLifecycle()
+    val isFetchingWave by viewModel.isFetchingMoreQueue.collectAsStateWithLifecycle()
+    val active by viewModel.activeQueue.collectAsStateWithLifecycle()
+    val mode = remember(active) { homeModeOf(active) }
+    val wavePage = mode is HomeMode.Wave
+    val pagePlays = homePagePlays(mode, now)
+    val upcoming = remember(queue, now.trackId) { upcomingOf(queue, now.trackId) }
+    val shelf = remember(mode, active, pagePlays, upcoming, wavePreview) {
+        val queuePage = active?.takeIf { !wavePage }
+        if (queuePage == null) waveShelfOf(pagePlays, upcoming, wavePreview) else queueShelfOf(queuePage, pagePlays)
+    }
+    val tuning by viewModel.waveTuning.collectAsStateWithLifecycle()
+    val seed by viewModel.waveSeed.collectAsStateWithLifecycle()
+    val accountTags by viewModel.accountTags.collectAsStateWithLifecycle()
+    val likeGestures by viewModel.likeGestures.collectAsStateWithLifecycle()
+    val steeringWheelOnLeft by viewModel.steeringWheelOnLeft.collectAsStateWithLifecycle()
+    var tuneOpen by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    if (tuneOpen) {
+        org.tegro.yamp.presentation.main.components.WaveTuneSheet(tuning, onChange = viewModel::setWaveTuning, onDismiss = { tuneOpen = false }, onLeft = steeringWheelOnLeft)
+    }
+    val groups by homeVm.groups.collectAsStateWithLifecycle()
+    val shownGroups = remember(groups) { groups.filterNot { it.isEmpty } }
+    val yandex by viewModel.isAuthorized.collectAsStateWithLifecycle()
+    val homeBottom = if (pagePlays && !isLandscape) 100.dp else contentBottom
+    val screen: @Composable (Dp) -> Unit = { bottom -> HomeScreen(
+        waveTrack = remember(now.track, pagePlays) { if (pagePlays) now.track else null },
+        isPlaying = now.isPlaying,
+        // The ring loads the page's own music: the wave, or the queue's track (never a station's stream)
+        isLoading = now.isBuffering && if (wavePage) now.source == PlaylistSource.VIBE else now.source != PlaylistSource.RADIO,
+        isLiked = now.trackId?.let { it in now.likedTrackIds } == true,
+        progress = progress,
+        shelf = shelf,
+        shimmer = isFetchingWave || now.isBuffering,
+        // Like Yandex Music: the knob controls what the page shows; from any other context it starts it
+        onPlayPause = { viewModel.homeKnob(wavePage, pagePlays) },
+        onLike = { now.track?.let { viewModel.toggleLike(it) } },
+        onDislike = { now.track?.let { viewModel.dislikeTrack(it) } },
+        onOpenPlayer = onOpenPlayer,
+        onShelfClick = { track ->
+            val queuePage = active?.takeIf { !wavePage }
+            when {
+                queuePage != null -> shelfEntryOf(queuePage, track.id)?.let { viewModel.playEntry(it.entryId) }
+                pagePlays -> viewModel.playTrack(track.id, queue, PlaylistSource.VIBE)
+                else -> viewModel.playWaveFrom(track.id)
+            }
+        },
+        contentBottom = bottom,
+        tuning = tuning,
+        trackWaveSeed = remember(seed, wavePage, pagePlays) { seed?.takeIf { wavePage && pagePlays } },
+        onTune = { tuneOpen = true },
+        onBackToMyWave = viewModel::returnToMyWave,
+        queueName = active?.queue?.name.orEmpty(),
+        likeButtons = !likeGestures,
+        controlsOnLeft = steeringWheelOnLeft,
+        account = viewModel.markOf(accountTags, active?.queue?.account),
+        mode = mode,
+        // A queue of the user's own with nothing in it yet (a new Jellyfin account's default queue, D83)
+        emptyQueue = !wavePage && active?.entries?.isEmpty() == true,
+        onOpenLibrary = { onOpenTab(MainTab.LIBRARY) },
+        onOpenSearch = { onOpenTab(MainTab.SEARCH) }
+    ) }
+    // Yandex only (or the phone on its side): the first tab as it was, never scrolling (canvas `hj-home-a`)
+    if (shownGroups.isEmpty() || isLandscape) {
+        LaunchedEffect(Unit) { onHeroHidden(false) }
+        screen(homeBottom)
+        return
+    }
+    val actions = remember(homeVm) {
+        HomeJellyfinActions(onOpen = onOpenPage, onPlayFolder = onPlayFolder, onPlayFavourites = homeVm::playFavourites)
+    }
+    HomeWithGroups(
+        groups = shownGroups,
+        tags = accountTags,
+        // One Jellyfin account without Yandex needs no name over its group (canvas `hj-home-b`)
+        headers = yandex || shownGroups.size > 1,
+        // The groups scroll under the mini player once it is back
+        contentBottom = contentBottom,
+        heroBottom = homeBottom,
+        collapsedTitle = when (mode) {
+            is HomeMode.Queue -> mode.name
+            HomeMode.Wave -> androidx.compose.ui.res.stringResource(org.tegro.yamp.R.string.wave_title)
+        },
+        queueName = active?.queue?.name.orEmpty(),
+        controlsOnLeft = steeringWheelOnLeft,
+        actions = actions,
+        onHeroHidden = onHeroHidden
+    ) { bottom -> screen(bottom) }
+}
+
+@Composable
+internal fun SearchTab(
+    viewModel: MainViewModel,
+    searchVm: SearchViewModel,
+    catalogVm: CatalogViewModel,
+    now: NowPlaying
+) {
+    val query by searchVm.query.collectAsStateWithLifecycle()
+    val results by searchVm.results.collectAsStateWithLifecycle()
+    val isSearching by searchVm.isSearching.collectAsStateWithLifecycle()
+    val found by searchVm.found.collectAsStateWithLifecycle()
+    val history by searchVm.history.collectAsStateWithLifecycle()
+    val weeklyHits by searchVm.weeklyHits.collectAsStateWithLifecycle()
+    val trendTracks by searchVm.trendTracks.collectAsStateWithLifecycle()
+    SearchScreen(
+        query = query,
+        onQueryChange = { searchVm.onQueryChange(it) },
+        results = results,
+        weeklyHits = weeklyHits,
+        trendTracks = trendTracks,
+        isSearching = isSearching,
+        currentTrackId = now.trackId,
+        isPlaying = now.isPlaying,
+        likedTrackIds = now.likedTrackIds,
+        onTrackClick = { id, playlist ->
+            searchVm.rememberQuery()
+            viewModel.playTrack(id, playlist, PlaylistSource.SEARCH)
+        },
+        onToggleLike = { track -> viewModel.toggleLike(track) },
+        onLoadMoreHits = { searchVm.loadMoreHits() },
+        onLoadMoreTrends = { searchVm.loadMoreTrends() },
+        hasActiveTrack = now.hasTrack,
+        artists = remember(found.artists) { found.artists.map { it.item } },
+        albums = remember(found.albums) { found.albums.map { it.item } },
+        history = history,
+        // A Jellyfin artist or album opens on its own account's pages (step 24)
+        onArtistClick = { artist ->
+            searchVm.rememberQuery()
+            val account = found.artists.firstOrNull { it.item.ref == artist.ref }?.account?.takeIf { it.provider != org.tegro.yamp.domain.account.Provider.YANDEX }
+            catalogVm.open(org.tegro.yamp.presentation.catalog.CatalogPage.Artist(artist.ref.id, artist.name, account))
+        },
+        onAlbumClick = { album ->
+            searchVm.rememberQuery()
+            val account = found.albums.firstOrNull { it.item.ref == album.ref }?.account?.takeIf { it.provider != org.tegro.yamp.domain.account.Provider.YANDEX }
+            catalogVm.open(org.tegro.yamp.presentation.catalog.CatalogPage.Album(album.ref.id, album.title, account))
+        },
+        badges = found.showBadges,
+        yandex = viewModel.isAuthorized.collectAsStateWithLifecycle().value,
+        onRemoveFromHistory = { searchVm.removeFromHistory(it) },
+        onClearHistory = { searchVm.clearHistory() },
+        onSubmit = { searchVm.rememberQuery() }
+    )
+}
+
+@Composable
+internal fun LibraryTab(
+    viewModel: MainViewModel,
+    accountVm: AccountViewModel,
+    playlistsVm: PlaylistsViewModel,
+    updateVm: UpdateViewModel,
+    crashVm: CrashLogViewModel,
+    now: NowPlaying,
+    onOpenAccounts: () -> Unit,
+    onOpenCrashLog: () -> Unit,
+    onAddAccount: () -> Unit,
+    settingsVm: SettingsViewModel = hiltViewModel(),
+    historyVm: org.tegro.yamp.presentation.history.HistoryViewModel = hiltViewModel(),
+    /** Opens a page of the catalog stack: an account's browse list or its Folders (gap (e)). */
+    onOpenPage: (org.tegro.yamp.presentation.catalog.CatalogPage) -> Unit = {},
+    jellyfinVm: org.tegro.yamp.presentation.catalog.JellyfinLibraryViewModel = hiltViewModel()
+) {
+    val sections by jellyfinVm.sections.collectAsStateWithLifecycle()
+    val accountTags by viewModel.accountTags.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { jellyfinVm.refresh() }
+    val tracks by viewModel.tracks.collectAsStateWithLifecycle()
+    val historyState by historyVm.state.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val loadFailed by viewModel.libraryLoadFailed.collectAsStateWithLifecycle()
+    val downloadState by viewModel.downloadAllState.collectAsStateWithLifecycle()
+    val downloadedTrackIds by viewModel.downloadedTrackIds.collectAsStateWithLifecycle()
+    val downloadProgress by viewModel.downloadProgress.collectAsStateWithLifecycle()
+    val settingsState by settingsVm.state.collectAsStateWithLifecycle()
+    val accountName by accountVm.accountName.collectAsStateWithLifecycle()
+    val contextAccount by accountVm.contextAccount.collectAsStateWithLifecycle()
+    val accountAvatarUrl by accountVm.accountAvatarUrl.collectAsStateWithLifecycle()
+    val allAccounts by accountVm.allAccounts.collectAsStateWithLifecycle()
+    val jellyfinRows by accountVm.jellyfinRows.collectAsStateWithLifecycle()
+    val activeQueue by viewModel.activeQueue.collectAsStateWithLifecycle()
+    val updateStatusMessage by updateVm.statusMessage.collectAsStateWithLifecycle()
+    val crashReports by crashVm.reports.collectAsStateWithLifecycle()
+    val userPlaylists by playlistsVm.playlists.collectAsStateWithLifecycle()
+    val openedPlaylist by playlistsVm.opened.collectAsStateWithLifecycle()
+
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        if (viewModel.tracks.value.isEmpty()) viewModel.loadLikedTracks()
+    }
+
+    // Without a Yandex account the card shows the active queue's Jellyfin account (or the first one)
+    val jellyfinCard = if (contextAccount == null) {
+        jellyfinRows.firstOrNull { it.tag.key == activeQueue?.queue?.account } ?: jellyfinRows.firstOrNull()
+    } else null
+    val settings = settingsState.copy(
+        accountName = jellyfinCard?.tag?.name ?: accountName,
+        avatarUrl = if (jellyfinCard != null) null else accountAvatarUrl,
+        hasPlus = contextAccount?.hasPlus == true,
+        plusMissing = contextAccount?.plusMissing == true,
+        accountSubtitle = jellyfinCard?.let { if (it.sub.contains("Jellyfin")) it.sub else listOf("Jellyfin", it.sub).filter(String::isNotBlank).joinToString(" · ") },
+        multiAccount = allAccounts.size > 1,
+        updateStatus = updateStatusMessage,
+        crashReports = crashReports.size
+    )
+    val settingsActions = remember(settingsVm, accountVm, updateVm, viewModel) {
+        SettingsActions(
+            onAccountManagement = onOpenAccounts,
+            onAddAccount = onAddAccount,
+            onLogout = { accountVm.logoutCurrentAccount() },
+            onGroupQueuesChange = settingsVm::setGroupQueues,
+            onCheckForUpdates = { updateVm.checkForUpdates(silent = false) },
+            onOpenCrashLog = onOpenCrashLog,
+            onShareJournal = settingsVm::shareJournal,
+            onClearJournal = settingsVm::clearJournal,
+            onDiagnosticLogChange = settingsVm::setDiagnosticLog,
+            onAnrWatchdogChange = settingsVm::setAnrWatchdog,
+            onDeveloperSectionChange = settingsVm::setDeveloperSection,
+            onAllowYandexWithoutPlusChange = settingsVm::setAllowYandexWithoutPlus,
+            onHideDeveloper = settingsVm::hideDeveloper,
+            onShareDiagnosticLog = settingsVm::shareDiagnosticLog,
+            onClearDiagnosticLog = settingsVm::clearDiagnosticLog,
+            onCompatibleSoundChange = settingsVm::setCompatibleSound,
+            onCrossfadeChange = settingsVm::setCrossfade,
+            onPlayPauseChange = settingsVm::setPlayPause,
+            onSeekChange = settingsVm::setSeek,
+            onDuckForAnnouncementsChange = settingsVm::setDuckForAnnouncements,
+            onResumeWhenQuietChange = settingsVm::setResumeWhenQuiet,
+            onTransitionFadeThenRiseChange = settingsVm::setTransitionFadeThenRise,
+            onNormalizeVolumeChange = settingsVm::setNormalizeVolume,
+            onOpenEqualizer = settingsVm::openEqualizer,
+            onOpenPowerampEqualizer = settingsVm::openPowerampEqualizer,
+            onStartMusicChange = settingsVm::setStartMusic,
+            onBluetoothAutoplayChange = settingsVm::setBluetoothAutoplay,
+            onSkipExplicitChange = settingsVm::setSkipExplicit,
+            onListeningHistoryChange = settingsVm::setListeningHistory,
+            onReserveChange = settingsVm::setReserveMb,
+            onClearReserve = settingsVm::clearReserve,
+            onStreamCacheChange = settingsVm::setStreamCacheMb,
+            onClearStreamCache = settingsVm::clearStreamCache,
+            onDownloadAll = { viewModel.downloadAllLikedTracks() },
+            onUpgradeDownloads = settingsVm::upgradeDownloads,
+            onDownloadsOnCardChange = settingsVm::setDownloadsOnCard,
+            onClearDownloads = { viewModel.clearMusicCache() },
+            onStartPageChange = settingsVm::setStartPage,
+            onExpandPlayerChange = settingsVm::setExpandPlayer,
+            onSwipeToCloseChange = settingsVm::setSwipeToClose,
+            onSteeringWheelChange = settingsVm::setSteeringWheelOnLeft,
+            onCarClockChange = settingsVm::setCarClock,
+            onPlayerCarLayoutChange = settingsVm::setPlayerCarLayout,
+            onPlayerNextThreeChange = settingsVm::setPlayerNextThree,
+            onLikeGesturesChange = settingsVm::setLikeGestures,
+            onUiScaleAutoChange = settingsVm::setUiScaleAuto,
+            onUiScaleManualChange = settingsVm::setUiScaleManual,
+            onAnimationModeChange = settingsVm::setAnimationMode
+        )
+    }
+
+    LibraryScreen(
+        tracks = tracks,
+        controlsOnLeft = viewModel.steeringWheelOnLeft.collectAsStateWithLifecycle().value,
+        isLoading = isLoading,
+        loadFailed = loadFailed,
+        downloadState = downloadState,
+        currentTrackId = now.trackId,
+        isPlaying = now.isPlaying,
+        likedTrackIds = now.likedTrackIds,
+        downloadedTrackIds = downloadedTrackIds,
+        downloadProgress = downloadProgress,
+        onTrackClick = { id -> viewModel.playTrack(id, tracks, PlaylistSource.LIBRARY) },
+        onPlayAllClick = { viewModel.playAllLikedTracks() },
+        onShuffleClick = { viewModel.shuffleLikedTracks() },
+        onDownloadAllClick = { viewModel.downloadAllLikedTracks() },
+        onCancelDownload = { viewModel.cancelDownloadAll() },
+        settings = settings,
+        settingsActions = settingsActions,
+        onToggleLike = { track -> viewModel.toggleLike(track) },
+        onRefresh = { viewModel.loadLikedTracks() },
+        hasActiveTrack = now.hasTrack,
+        playlists = userPlaylists,
+        openedPlaylist = openedPlaylist,
+        onOpenPlaylist = { playlistsVm.open(it) },
+        onClosePlaylist = { playlistsVm.close() },
+        onPlayPlaylist = { playlistsVm.play(it) },
+        onPlaylistTrackClick = { playlistsVm.playTrack(it) },
+        onCreatePlaylist = { playlistsVm.create(it) },
+        onRenamePlaylist = { playlist, title -> playlistsVm.rename(playlist, title) },
+        onDeletePlaylist = { playlistsVm.delete(it) },
+        onReorderPlaylist = { playlist, shown, new -> playlistsVm.reorder(playlist, shown, new) },
+        onSetPlaylistPublic = { playlist, public -> playlistsVm.setPublic(playlist, public) },
+        onAddToEnd = viewModel::addToEnd,
+        historyCount = historyState.weekCount,
+        historyPage = { modifier, contentBottom, onBack ->
+            org.tegro.yamp.presentation.history.HistoryScreen(
+                state = historyState,
+                currentTrackId = now.trackId,
+                isPlaying = now.isPlaying,
+                likedTrackIds = now.likedTrackIds,
+                downloadedTrackIds = downloadedTrackIds,
+                contentBottom = contentBottom,
+                onBack = onBack,
+                onOpened = historyVm::opened,
+                onSelectFilter = historyVm::select,
+                onTrackClick = viewModel::playNowKeepQueue,
+                onToggleLike = viewModel::toggleLike,
+                onClear = historyVm::clear,
+                modifier = modifier
+            )
+        },
+        sections = sections,
+        accountTags = accountTags,
+        yandex = viewModel.isAuthorized.collectAsStateWithLifecycle().value,
+        onOpenPage = onOpenPage,
+        onPlayFavourites = jellyfinVm::playFavourites
+    )
+}
+
+@Composable
+internal fun RadioTab(viewModel: MainViewModel, radioVm: RadioViewModel, now: NowPlaying) {
+    val stations by radioVm.stations.collectAsStateWithLifecycle()
+    val favoriteStationIds by radioVm.favoriteStationIds.collectAsStateWithLifecycle()
+    var selectedCategory by rememberSaveable { mutableStateOf(RadioCategory.ALL) }
+    val filtered = remember(stations, favoriteStationIds, selectedCategory) {
+        stations.filter {
+            selectedCategory == RadioCategory.ALL ||
+                (selectedCategory == RadioCategory.FAVORITES && it.id in favoriteStationIds) ||
+                it.category == selectedCategory
+        }
+    }
+    RadioScreen(
+        stations = filtered,
+        allStations = stations,
+        selectedCategory = selectedCategory,
+        onCategorySelect = { selectedCategory = it },
+        currentStationId = now.track?.takeIf { it.isRadio }?.id?.removePrefix("radio_"),
+        isPlaying = now.isPlaying,
+        favoriteStationIds = favoriteStationIds,
+        onStationClick = { radioVm.play(it) },
+        onToggleFavorite = { radioVm.toggleFavorite(it) },
+        onPlayPause = { viewModel.togglePlayPause() },
+        hasActiveTrack = now.hasTrack
+    )
+}

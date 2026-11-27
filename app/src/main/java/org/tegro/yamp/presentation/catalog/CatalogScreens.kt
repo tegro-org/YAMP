@@ -1,0 +1,416 @@
+package org.tegro.yamp.presentation.catalog
+
+import org.tegro.yamp.domain.queue.MediaRef
+import org.tegro.yamp.domain.queue.RadioSeed
+import org.tegro.yamp.presentation.hifi.HiFiWideHeader
+import androidx.compose.ui.platform.LocalContext
+import coil3.request.ImageRequest
+import org.tegro.yamp.utils.cover
+import org.tegro.yamp.utils.CoverSize
+import org.tegro.yamp.presentation.hifi.HiFiSectionHeader
+import androidx.compose.ui.semantics.Role
+import org.tegro.yamp.presentation.hifi.hifiPress
+import androidx.compose.foundation.lazy.itemsIndexed
+import org.tegro.yamp.presentation.hifi.HiFiType
+import org.tegro.yamp.presentation.hifi.GlassCircleButton
+import org.tegro.yamp.presentation.queues.AddToQueueMenu
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import org.tegro.yamp.presentation.hifi.HiFiErrorState
+import org.tegro.yamp.presentation.hifi.HiFiSkeletonRows
+import org.tegro.yamp.presentation.hifi.appearOnce
+import org.tegro.yamp.presentation.hifi.rememberAppearance
+import org.tegro.yamp.presentation.hifi.predictiveBack
+import org.tegro.yamp.presentation.hifi.rememberPredictiveBack
+import org.tegro.yamp.presentation.hifi.HiFi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import coil3.compose.AsyncImage
+import org.tegro.yamp.presentation.hifi.GlassPillButton
+import org.tegro.yamp.presentation.hifi.MetalPillButton
+import org.tegro.yamp.R
+import org.tegro.yamp.domain.media.Album
+import org.tegro.yamp.domain.media.Track
+import org.tegro.yamp.presentation.common.id
+import org.tegro.yamp.presentation.main.components.TrackItem
+import org.tegro.yamp.utils.russianQuantityString
+
+/** What every catalog page needs from the main screen. */
+class CatalogActions(
+    val onBack: () -> Unit,
+    val onRetry: () -> Unit,
+    val onOpenArtist: (id: String, name: String) -> Unit,
+    val onOpenAlbum: (id: String, title: String) -> Unit,
+    val onPlay: (tracks: List<Track>, trackId: String?, shuffle: Boolean) -> Unit,
+    val onToggleLike: (Track) -> Unit,
+    val onAddToEnd: (List<Track>) -> Unit = {},
+    /** Any page of the stack — a Jellyfin page names its account (step 22). */
+    val onOpen: (CatalogPage) -> Unit = {},
+    /** The browse list on top wants its next page. */
+    val onLoadMore: () -> Unit = {}
+)
+
+/** The page on top of the catalog stack: an artist or an album. Back returns to the previous page. */
+@Composable
+fun CatalogPageScreen(
+    state: CatalogPageState,
+    currentTrackId: String?,
+    isPlaying: Boolean,
+    likedTrackIds: Set<String>,
+    contentBottom: Dp,
+    actions: CatalogActions,
+    /** Pinned folders per account key (Phase 4b). */
+    folderPins: Map<String, List<org.tegro.yamp.data.folders.PinnedFolder>> = emptyMap(),
+    accountTags: List<org.tegro.yamp.presentation.account.AccountTag> = emptyList(),
+    folderActions: org.tegro.yamp.presentation.folders.FolderActions? = null
+) {
+    if (state.page is CatalogPage.Browse) {
+        BrowsePageScreen(state, contentBottom, actions, currentTrackId, isPlaying)
+        return
+    }
+    if (state.page is FolderPage && folderActions != null) {
+        val landscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        org.tegro.yamp.presentation.folders.FolderPageScreen(
+            state = state,
+            pins = folderPins[state.page.account.value].orEmpty(),
+            accountTag = accountTags.firstOrNull { it.key == state.page.account.value },
+            contentBottom = contentBottom,
+            actions = actions,
+            folderActions = folderActions,
+            currentTrackId = currentTrackId,
+            isPlaying = isPlaying,
+            landscape = landscape
+        )
+        return
+    }
+    val back = rememberPredictiveBack(enabled = true, onBack = actions.onBack)
+    val isArtist = state.page is CatalogPage.Artist
+    val jellyfin = state.page.isOtherService
+    val tracks = state.artist?.popularTracks ?: state.album?.tracks ?: state.playlist?.tracks.orEmpty()
+    // A Jellyfin page opens its artists and albums on the same server; a Yandex page as before
+    val openArtist: (String, String) -> Unit = { id, name ->
+        state.page.account?.let { actions.onOpen(CatalogPage.Artist(id, name, it)) } ?: actions.onOpenArtist(id, name)
+    }
+    val openAlbum: (String, String) -> Unit = { id, title ->
+        state.page.account?.let { actions.onOpen(CatalogPage.Album(id, title, it)) } ?: actions.onOpenAlbum(id, title)
+    }
+    val pageTitle = state.artist?.artist?.name?.ifEmpty { null } ?: state.album?.title?.ifEmpty { null }
+        ?: state.playlist?.title?.ifEmpty { null } ?: state.page.title
+    val coverKey = if (isArtist) state.artist?.artist?.cover?.key else state.album?.cover?.key ?: state.playlist?.cover?.key
+    val appearance = rememberAppearance(state.page)
+    // The ⋮ of an album or artist page opens its actions (canvas am-album-page-menu / am-artist-page-menu), both
+    // providers; a playlist page keeps its list menu
+    val mediaMenu = org.tegro.yamp.presentation.media.LocalMediaMenu.current
+    val albumWord = stringResource(R.string.media_album_word)
+    val artistWord = stringResource(R.string.media_artist_word)
+    val pageTarget = state.album?.let { org.tegro.yamp.presentation.media.MediaTarget.of(it, albumWord) }
+        ?: state.artist?.artist?.let { org.tegro.yamp.presentation.media.MediaTarget.of(it, artistWord) }
+    val holdAlbum: (Album) -> (() -> Unit)? = { album -> mediaMenu?.let { m -> { m.open(org.tegro.yamp.presentation.media.MediaTarget.of(album, albumWord)) } } }
+    val isLandscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation ==
+        android.content.res.Configuration.ORIENTATION_LANDSCAPE
+
+    LazyColumn(
+        contentPadding = PaddingValues(bottom = contentBottom),
+        modifier = Modifier
+            .fillMaxSize()
+            .predictiveBack(back)
+            .navigationBarsPadding()
+    ) {
+        item(key = "header") {
+            if (isLandscape) {
+                HiFiWideHeader(
+                    title = pageTitle,
+                    modifier = Modifier
+                        .statusBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    back = {
+                        GlassCircleButton(onClick = actions.onBack, contentDescription = stringResource(R.string.cd_nazad)) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+                        }
+                    },
+                    cover = { size ->
+                        Cover(
+                            uri = coverKey,
+                            placeholder = if (isArtist) Icons.Default.Person else Icons.Default.Album,
+                            shape = if (isArtist) CircleShape else RoundedCornerShape(12.dp),
+                            size = size
+                        )
+                    },
+                    details = {
+                        state.album?.let { album -> AlbumSubtitle(album, openArtist) }
+                        state.playlist?.let { playlist -> TrackCountLine(playlist.tracks.size.takeIf { it > 0 } ?: playlist.trackCount) }
+                    },
+                    actions = {
+                        if (tracks.isNotEmpty()) {
+                            PlayButton(Icons.Default.PlayArrow, stringResource(R.string.cd_slushat), primary = true, Modifier.weight(1f)) {
+                                actions.onPlay(tracks, null, false)
+                            }
+                            PlayButton(Icons.Default.Shuffle, stringResource(R.string.cd_peremeshat), primary = false, Modifier.weight(1f)) {
+                                actions.onPlay(tracks, null, true)
+                            }
+                        }
+                    },
+                    trailing = {
+                        if (pageTarget != null && mediaMenu != null) {
+                            Spacer(Modifier.width(12.dp))
+                            MediaMenuButton { mediaMenu.open(pageTarget) }
+                        } else if (tracks.isNotEmpty() && !jellyfin) {
+                            Spacer(Modifier.width(12.dp))
+                            ListMenuButton(tracks, state.page.title, actions.onAddToEnd, radioSeedOf(state.page))
+                        }
+                    }
+                )
+            } else Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    GlassCircleButton(onClick = actions.onBack, contentDescription = stringResource(R.string.cd_nazad)) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+                    }
+                    Spacer(Modifier.weight(1f))
+                    // The list's queue actions sit where the playlist page keeps its menu
+                    if (pageTarget != null && mediaMenu != null) MediaMenuButton { mediaMenu.open(pageTarget) }
+                    else if (tracks.isNotEmpty() && !jellyfin) ListMenuButton(tracks, state.page.title, actions.onAddToEnd, radioSeedOf(state.page))
+                }
+                Spacer(Modifier.height(12.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Cover(
+                        uri = coverKey,
+                        placeholder = if (isArtist) Icons.Default.Person else Icons.Default.Album,
+                        shape = if (isArtist) CircleShape else RoundedCornerShape(12.dp),
+                        size = 112.dp
+                    )
+                    Spacer(Modifier.width(16.dp))
+                    Column {
+                        Text(
+                            text = pageTitle,
+                            style = HiFiType.LargeTitle.copy(fontSize = 26.sp, lineHeight = 32.sp),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        state.album?.let { album -> AlbumSubtitle(album, openArtist) }
+                        state.playlist?.let { playlist -> TrackCountLine(playlist.tracks.size.takeIf { it > 0 } ?: playlist.trackCount) }
+                    }
+                }
+                Spacer(Modifier.height(14.dp))
+                if (tracks.isNotEmpty()) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        PlayButton(Icons.Default.PlayArrow, stringResource(R.string.cd_slushat), primary = true, Modifier.weight(1f)) {
+                            actions.onPlay(tracks, null, false)
+                        }
+                        PlayButton(Icons.Default.Shuffle, stringResource(R.string.cd_peremeshat), primary = false, Modifier.weight(1f)) {
+                            actions.onPlay(tracks, null, true)
+                        }
+                    }
+                }
+            }
+        }
+
+        if (state.offline) item(key = "offline") { OfflineBanner(state.serverName, actions.onRetry) }
+        when {
+            state.isLoading -> item(key = "loading") { HiFiSkeletonRows(Modifier.padding(top = 20.dp), count = 6) }
+            state.failed -> item(key = "failed") {
+                HiFiErrorState(onRetry = actions.onRetry, message = stringResource(R.string.catalog_load_failed))
+            }
+            else -> {
+                if (isArtist && tracks.isNotEmpty()) {
+                    item(key = "popular_title") { SectionTitle(stringResource(R.string.catalog_popular_tracks)) }
+                }
+                itemsIndexed(tracks, key = { _, t -> "t" + t.id }, contentType = { _, _ -> "track" }) { index, track ->
+                    Box(Modifier.padding(horizontal = 8.dp).appearOnce(appearance, track.id, index)) {
+                        // A Jellyfin track has no likes yet (P5): no heart; its ⋮ menu has the queue actions (step 25)
+                        TrackItem(
+                            track = track,
+                            isPlaying = isPlaying && track.id == currentTrackId,
+                            isLiked = track.id in likedTrackIds,
+                            onToggleLike = { actions.onToggleLike(track) },
+                            onClick = { actions.onPlay(tracks, track.id, false) },
+                            showLike = !jellyfin
+                        )
+                    }
+                }
+                val albums = state.artist?.albums.orEmpty()
+                if (albums.isNotEmpty()) {
+                    item(key = "albums") {
+                        Column {
+                            SectionTitle(stringResource(R.string.catalog_albums))
+                            AlbumsRow(albums, onOpen = { album -> openAlbum(album.ref.id, album.title) }, onHold = holdAlbum)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AlbumSubtitle(album: Album, onOpenArtist: (id: String, name: String) -> Unit) {
+    val artist = album.artists.firstOrNull { it.ref != null }
+    if (artist != null) {
+        Text(
+            text = album.artists.joinToString { it.name },
+            color = Color.White.copy(alpha = 0.88f),
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.clickable(role = Role.Button) { artist.ref?.id?.let { onOpenArtist(it, artist.name) } }
+        )
+    }
+    Text(
+        text = listOfNotNull(
+            album.year?.toString(),
+            russianQuantityString(album.tracks.size.takeIf { it > 0 } ?: album.trackCount, R.string.tracks_count_one, R.string.tracks_count_few, R.string.tracks_count_many)
+        ).joinToString(" · "),
+        color = Color.White.copy(alpha = 0.7f),
+        fontSize = 13.sp
+    )
+}
+
+/** "22 tracks" under a playlist's title. */
+@Composable
+private fun TrackCountLine(count: Int) {
+    Text(
+        text = russianQuantityString(count, R.string.tracks_count_one, R.string.tracks_count_few, R.string.tracks_count_many),
+        color = Color.White.copy(alpha = 0.7f),
+        fontSize = 13.sp
+    )
+}
+
+/** A horizontal row of album covers, used on artist pages and in search results. */
+@Composable
+fun AlbumsRow(
+    albums: List<Album>,
+    onOpen: (Album) -> Unit,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp),
+    /** A long press: the album's actions (canvas am-artist-album-menu); null = none. */
+    onHold: (Album) -> (() -> Unit)? = { null }
+) {
+    LazyRow(contentPadding = contentPadding, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        items(albums, key = { it.ref.value }) { album ->
+            Column(
+                modifier = Modifier
+                    .width(120.dp)
+                    .hifiPress({ onOpen(album) }, onLongClick = onHold(album))
+            ) {
+                Cover(album.cover?.key, Icons.Default.Album, RoundedCornerShape(12.dp), 120.dp)
+                Spacer(Modifier.height(6.dp))
+                Text(album.title, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    text = album.year?.toString() ?: album.artists.joinToString { it.name },
+                    color = Color.White.copy(alpha = 0.6f),
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionTitle(text: String) {
+    // The section caps of every other page
+    HiFiSectionHeader(text, Modifier.padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 8.dp))
+}
+
+@Composable
+internal fun Cover(uri: String?, placeholder: ImageVector, shape: Shape, size: Dp) {
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(shape)
+            .background(Brush.linearGradient(listOf(HiFi.SteelLight, HiFi.SteelDark))),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(placeholder, contentDescription = null, tint = Color.White.copy(alpha = 0.35f), modifier = Modifier.size(size / 3))
+        AsyncImage(
+            model = ImageRequest.Builder(LocalContext.current).cover(uri, CoverSize.Medium).build(),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+        )
+    }
+}
+
+/** "Слушать" is the Hi-Fi metal capsule, "Перемешать" glass — the same pair as on "Моя музыка". */
+@Composable
+private fun PlayButton(icon: ImageVector, label: String, primary: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    if (primary) MetalPillButton(label, onClick, modifier, icon = icon, height = 48.dp)
+    else GlassPillButton(label, onClick, modifier, icon = icon, height = 48.dp)
+}
+
+/** "⋮" in the header: the whole list to the end of the queue, or to a chosen queue. */
+@Composable
+private fun ListMenuButton(tracks: List<Track>, title: String, onAddToEnd: (List<Track>) -> Unit, radioSeed: RadioSeed? = null) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        GlassCircleButton(onClick = { open = true }, contentDescription = stringResource(R.string.cd_playlist_menu)) {
+            Icon(Icons.Default.MoreVert, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+        }
+        AddToQueueMenu(expanded = open, onDismiss = { open = false }, tracks = tracks, title = title, onAddToEnd = onAddToEnd, radioSeed = radioSeed)
+    }
+}
+
+/** "⋮" of an album or artist page: the album / artist actions. */
+@Composable
+private fun MediaMenuButton(onClick: () -> Unit) {
+    GlassCircleButton(onClick = onClick, contentDescription = stringResource(R.string.cd_media_menu)) {
+        Icon(Icons.Default.MoreVert, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+    }
+}
+
+/** An album's or artist's radio (docs/phase-2-radio.md): the page's ref and title. */
+private fun radioSeedOf(page: CatalogPage): RadioSeed = RadioSeed(
+    MediaRef(MediaRef.PROVIDER_YANDEX, if (page is CatalogPage.Artist) "artist" else "album", page.id),
+    page.title
+)

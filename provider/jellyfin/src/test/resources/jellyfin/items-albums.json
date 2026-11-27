@@ -1,0 +1,94 @@
+{
+  "Items": [
+    {
+      "Name": "YAMP Test FLAC",
+      "ServerId": "0123456789abcdef0123456789abcdef",
+      "Id": "0000000000000000000000000000a002",
+      "PremiereDate": "2008-01-01T00:00:00.0000000Z",
+      "ChannelId": null,
+      "RunTimeTicks": 4124977960,
+      "ProductionYear": 2008,
+      "IsFolder": true,
+      "Type": "MusicAlbum",
+      "UserData": {
+        "PlaybackPositionTicks": 0,
+        "PlayCount": 0,
+        "IsFavorite": false,
+        "Played": false,
+        "Key": "00000000-0000-0000-0000-00000000a002",
+        "ItemId": "0000000000000000000000000000a002"
+      },
+      "ChildCount": 3,
+      "Artists": [
+        "Kevin MacLeod"
+      ],
+      "ArtistItems": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000a001"
+        }
+      ],
+      "AlbumArtist": "Kevin MacLeod",
+      "AlbumArtists": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000a001"
+        }
+      ],
+      "ImageTags": {
+        "Primary": "0000000000000000000000000000a003"
+      },
+      "BackdropImageTags": [],
+      "ImageBlurHashes": {
+        "Primary": {
+          "0000000000000000000000000000a003": "eH5jgrL~ozflaxL}t,a}axkCpIa#aKj[aya~aej[fkj[f6kCayj[ay"
+        }
+      },
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown"
+    },
+    {
+      "Name": "YAMP Test MP3",
+      "ServerId": "0123456789abcdef0123456789abcdef",
+      "Id": "0000000000000000000000000000a00a",
+      "PremiereDate": "2008-01-01T00:00:00.0000000Z",
+      "ChannelId": null,
+      "RunTimeTicks": 5309648979,
+      "ProductionYear": 2008,
+      "IsFolder": true,
+      "Type": "MusicAlbum",
+      "UserData": {
+        "PlaybackPositionTicks": 0,
+        "PlayCount": 0,
+        "IsFavorite": false,
+        "Played": false,
+        "Key": "00000000-0000-0000-0000-00000000a00a",
+        "ItemId": "0000000000000000000000000000a00a"
+      },
+      "ChildCount": 3,
+      "Artists": [
+        "Kevin MacLeod"
+      ],
+      "ArtistItems": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000a001"
+        }
+      ],
+      "AlbumArtist": "Kevin MacLeod",
+      "AlbumArtists": [
+        {
+          "Name": "Kevin MacLeod",
+          "Id": "0000000000000000000000000000a001"
+        }
+      ],
+      "ImageTags": {},
+      "BackdropImageTags": [],
+      "ImageBlurHashes": {},
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown"
+    }
+  ],
+  "TotalRecordCount": 2,
+  "StartIndex": 0
+}

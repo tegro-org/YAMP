@@ -1,0 +1,27 @@
+{
+  "id": "58142731",
+  "realId": "58142731",
+  "title": "Storytime",
+  "contentWarning": "explicit",
+  "available": true,
+  "availableForPremiumUsers": true,
+  "durationMs": 330810,
+  "storageDir": "",
+  "fileSize": 0,
+  "r128": {"i": -9.42, "tp": 0.52},
+  "artists": [
+    {"id": 61094, "name": "Nightwish", "various": false, "composer": false,
+     "cover": {"type": "from-artist-photos", "uri": "avatars.yandex.net/get-music-content/49707/ab12.a.61094-1/%%", "prefix": "ab12"}},
+    {"id": 0, "name": "Guest Voice", "various": false}
+  ],
+  "albums": [
+    {"id": 7536452, "title": "Imaginaerum", "type": "", "year": 2011, "coverUri": "avatars.yandex.net/get-music-content/2441215/cd.a.7536452-1/%%",
+     "trackPosition": {"volume": 1, "index": 3}}
+  ],
+  "coverUri": "avatars.yandex.net/get-music-content/2441215/cd.a.7536452-1/%%",
+  "ogImage": "avatars.yandex.net/get-music-content/2441215/cd.a.7536452-1/%%",
+  "lyricsAvailable": true,
+  "type": "music",
+  "rememberPosition": false,
+  "trackSharingFlag": "COVER_ONLY"
+}

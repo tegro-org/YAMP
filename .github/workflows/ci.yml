@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [yamp]
   pull_request:
 
 permissions:
@@ -16,23 +16,42 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # The gitleaks GitHub Action needs a paid licence for organizations; the CLI does the same scan for free.
+      # Upstream's public signing constants and the made-up tokens in tests are allowed in .gitleaks.toml.
+      - name: gitleaks
+        run: |
+          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.21.2 \
+            git /repo --config /repo/.gitleaks.toml --no-banner --redact --exit-code 1
 
   test:
     name: Unit tests, screenshots & lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the version is derived from git tags and the commit count
       - uses: actions/setup-java@v4
         with:
           java-version: '21' # Robolectric screenshot tests for SDK 35 need Java 21
           distribution: 'temurin'
           cache: gradle
+          cache-dependency-path: |
+            *.gradle*
+            gradle/wrapper/gradle-wrapper.properties
+            gradle/libs.versions.toml
+      # Robolectric downloads its Android runtimes (android-all-instrumented, SDK 28 and 35) from Maven Central at
+      # test time into ~/.m2. A Maven Central hiccup failed every Robolectric class at once in the v0.3.0 and
+      # v0.5.1 release runs (re-runs passed); keeping the jars in the Actions cache takes Maven Central out of that path.
+      - name: Cache Robolectric runtimes
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-${{ hashFiles('gradle/libs.versions.toml') }}-sdk28-35
+          restore-keys: |
+            robolectric-
       - run: chmod +x gradlew
       # verifyRoborazziDebug runs all unit tests and compares the screens with app/src/test/screenshots
-      - run: ./gradlew verifyRoborazziDebug lintDebug --no-daemon
+      - run: ./gradlew verifyRoborazziDebug lintDebug :core:domain:test :provider:jellyfin:test :provider:local:test --no-daemon
       - name: Screenshot differences
         if: failure()
         uses: actions/upload-artifact@v4
@@ -40,3 +59,20 @@ jobs:
           name: screenshot-diffs
           path: app/build/outputs/roborazzi/
           if-no-files-found: ignore
+
+  detekt:
+    name: Static analysis (detekt)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+      # The command-line build, pinned by checksum: no extra Gradle plugin in the app's own build
+      - name: Download detekt
+        run: |
+          curl -sSL -o detekt.jar https://github.com/detekt/detekt/releases/download/v1.23.8/detekt-cli-1.23.8-all.jar
+          echo "2ce2ff952e150baf28a29cda70a363b0340b3e81a55f43e51ec5edffc3d066c1  detekt.jar" | sha256sum -c -
+      # New findings fail the build; what existed before is in the baseline
+      - run: java -jar detekt.jar --input app/src/main/java,core/domain/src/main/kotlin,provider/jellyfin/src/main/kotlin,provider/local/src/main/kotlin --build-upon-default-config --config config/detekt.yml --baseline config/detekt-baseline.xml
