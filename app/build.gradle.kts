@@ -66,7 +66,12 @@ val appVersionName = when {
 }
 // Debug builds from scripts/build-apk.sh pass -Pyamp.buildNumber=<N> (a local counter, see the script) so two
 // builds of the same commit never share a versionCode; release builds keep the commit count.
-val appVersionCode = providers.gradleProperty("yamp.buildNumber").orNull?.toIntOrNull() ?: gitCount ?: 1
+// The public repository starts a new history, while the earlier releases used the old repository's count (up to
+// 167). The base keeps every new build above them, so an update installs over an existing app; the count keeps
+// the code monotonic.
+val versionCodeBase = 180
+val appVersionCode = versionCodeBase +
+    (providers.gradleProperty("yamp.buildNumber").orNull?.toIntOrNull() ?: gitCount ?: 1)
 
 android {
     namespace = "org.tegro.yamp"
